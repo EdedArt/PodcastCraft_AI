@@ -1,0 +1,187 @@
+/* ==========================================================================
+   PodcastCraft AI — Estilos Base y Sistema de Diseño
+   Sprint 1: Shell de escritorio, Tokens y Controles de Audio
+   ========================================================================== */
+
+/* 1. Tipografía Inter con fallback de sistema operativo */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* 2. Reglas generales de interacción y selección */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Permitir selección de texto en áreas designadas (usado en Sprint 4 para transcripciones) */
+.selectable {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Prevenir arrastre accidental de elementos no interactivos */
+.no-drag-select {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* 3. Barras de desplazamiento oscuras personalizadas */
+/* Track: #0f172a (slate-900), Thumb: #334155 (slate-700), Hover: #475569 (slate-600) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a; /* slate-900 */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155; /* slate-700 */
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569; /* slate-600 */
+}
+
+/* Firefox scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 #0f172a;
+}
+
+/* 4. Resplandor IA unificado (coherente con boxShadow.glow-ai en tailwind-config.js) */
+.glow-ai {
+  box-shadow: 0 0 16px 2px rgba(168, 85, 247, 0.25);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.glow-ai:hover {
+  box-shadow: 0 0 20px 4px rgba(168, 85, 247, 0.4);
+}
+
+/* 5. Keyframes reservados para Sprint 6 (Animación de recorte y análisis de IA) */
+@keyframes ai-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.02);
+  }
+}
+
+.animate-ai-pulse {
+  animation: ai-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* 6. Estilos Cross-browser para input[type=range] con variable CSS --range-progress */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 20px;
+}
+
+input[type="range"]:focus {
+  outline: none;
+}
+
+/* --- WebKit (Chrome, Safari, Edge) --- */
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    #a855f7 0%,
+    #a855f7 var(--range-progress, 50%),
+    #334155 var(--range-progress, 50%),
+    #334155 100%
+  );
+  transition: background 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #a855f7;
+  margin-top: -4px; /* Centrado vertical sobre pista de 4px */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.2);
+  background: #f3e8ff;
+}
+
+input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.25);
+  background: #c084fc;
+  border-color: #9333ea;
+}
+
+/* --- Mozilla Firefox --- */
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    #a855f7 0%,
+    #a855f7 var(--range-progress, 50%),
+    #334155 var(--range-progress, 50%),
+    #334155 100%
+  );
+  border: none;
+  transition: background 0.15s ease;
+}
+
+input[type="range"]::-moz-range-thumb {
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #a855f7;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+input[type="range"]:hover::-moz-range-thumb {
+  transform: scale(1.2);
+  background: #f3e8ff;
+}
+
+input[type="range"]:active::-moz-range-thumb {
+  transform: scale(1.25);
+  background: #c084fc;
+  border-color: #9333ea;
+}
+
+/* Focus Visible para accesibilidad */
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid #a855f7;
+  outline-offset: 3px;
+}
+
+input[type="range"]:focus-visible::-moz-range-thumb {
+  outline: 2px solid #a855f7;
+  outline-offset: 3px;
+}
+
+/* 7. Accesibilidad: Reducción de movimiento */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
