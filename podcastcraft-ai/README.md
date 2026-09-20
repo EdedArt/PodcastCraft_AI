@@ -112,12 +112,16 @@ PodcastCraft.setState({ project: { isPlaying: true } });
 ## 5. Decisiones de diseño y técnicas
 
 1. **Aviso conocido en consola sobre Tailwind Play CDN:**
-   Tailwind Play CDN emite una advertencia de desarrollo en la consola: *"cdn.tailwindcss.com should not be used in production"*. Esto es un comportamiento normal y esperado de dicha distribución cuando se usa como archivo standalone.
-2. **Resplandor unificado `.glow-ai`:**
-   Se calibró un valor unificado de sombra tanto en `tailwind-config.js` (`boxShadow['glow-ai']`) como en `styles.css` (`.glow-ai: 0 0 16px 2px rgba(168, 85, 247, 0.25)`) para mantener coherencia cromática y visual idéntica.
-3. **Sliders y variable `--range-progress`:**
-   Los controles deslizantes de volumen y zoom utilizan la propiedad CSS `--range-progress` inyectada dinámicamente desde JavaScript en el evento `input`/`change`, permitiendo rellenar el progreso en tiempo real con soporte idéntico en WebKit (Chrome, Edge) y Gecko (Firefox).
-4. **Footer en flujo normal:**
+   Tailwind Play CDN emite una advertencia de desarrollo en la consola: *"cdn.tailwindcss.com should not be used in production"*. Esto es un comportamiento normal y esperado de dicha distribución cuando se usa como script standalone.
+2. **Aviso en Chrome con protocolo `file://` ("Unsafe attempt to load URL..."):**
+   Al abrir `index.html` directamente haciendo doble clic (protocolo `file://`), Chrome trata cada archivo local como un origen de seguridad único y emite una advertencia informativa. **No afecta la funcionalidad ni el renderizado.** Para una consola 100% limpia (por ejemplo, durante la defensa del proyecto), se recomienda servir la carpeta con un servidor local (`python -m http.server 5500` o la extensión Live Server) y acceder vía `http://localhost:5500`.
+3. **Resplandor unificado `.glow-ai` y estado `:hover`:**
+   Se calibró un valor unificado de sombra tanto en `tailwind-config.js` (`boxShadow['glow-ai']`) como en `styles.css` (`.glow-ai: 0 0 16px 2px rgba(168, 85, 247, 0.25)`). Además, `.glow-ai:hover` intensifica el resplandor a `0 0 20px 4px rgba(168, 85, 247, 0.4)` proporcionando feedback visual dinámico.
+4. **Tipografía unificada y números tabulares:**
+   Se prescindió de fuentes secundarias externas como JetBrains Mono. La interfaz utiliza exclusivamente **Inter** para textos generales y la pila de fuentes monoespaciadas del sistema (`ui-monospace`, `SFMono-Regular`, `Consolas`, etc.) con la clase `font-mono tabular-nums` para que los contadores numéricos mantengan ancho fijo sin saltos de maquetación.
+5. **Sliders cross-browser y variable `--range-progress`:**
+   Los controles deslizantes de volumen y zoom utilizan la propiedad CSS `--range-progress` inyectada dinámicamente desde JavaScript en el evento `input`/`change`, permitiendo rellenar el progreso en tiempo real con soporte idéntico en WebKit (Chrome, Edge) y Gecko (Firefox con `::-moz-range-track` y `::-moz-range-thumb`).
+6. **Footer en flujo normal:**
    El elemento `<footer id="transport">` se ubica al final del contenedor flex principal (`h-full flex flex-col`), prescindiendo de `position: fixed` para evitar solapamientos con el área de trabajo y permitir que los paneles con scroll interno calculen su cota máxima mediante `min-h-0`.
 
 ---
