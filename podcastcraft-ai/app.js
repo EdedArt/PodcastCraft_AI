@@ -1,8 +1,7 @@
 /**
  * ==========================================================================
  * PodcastCraft AI — Archivo Principal de Lógica de Interfaz
- * Sprint 1: Shell de escritorio, Top Navbar, Footer de transporte, Store central
- * Sprint 2: Biblioteca de bloques, Pestañas de categoría y Fuente Drag & Drop
+ * SPRINT 4: Carriles Dinámicos Ilimitados + Import MP3 + Edición de Clips
  * ==========================================================================
  */
 
@@ -32,81 +31,22 @@ const PROJECT_STATUS = {
 };
 
 /**
- * Mapa explícito de clases CSS por categoría de track (Fuente única de verdad cromática).
- * Regla: Las clases se declaran completas como strings literales sin interpolación dinámica.
+ * Paleta cromática rotativa para carriles dinámicos (Sprint 4).
+ * Regla de oro: No incluye violet-500 puro para respetar el color reservado a IA/Play.
  */
-const TRACK_STYLES = {
-  voice: {
-    lane: 'bg-sky-900/40 border-sky-500',
-    clip: 'bg-sky-500/30 border-sky-400',
-    text: 'text-sky-300',
-    dot: 'bg-sky-500',
-    iconTile: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
-    accentBar: 'bg-sky-500',
-    badge: 'text-sky-300'
-  },
-  music: {
-    lane: 'bg-amber-900/40 border-amber-500',
-    clip: 'bg-amber-500/30 border-amber-400',
-    text: 'text-amber-300',
-    dot: 'bg-amber-500',
-    iconTile: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-    accentBar: 'bg-amber-500',
-    badge: 'text-amber-300'
-  },
-  fx: {
-    lane: 'bg-emerald-900/40 border-emerald-500',
-    clip: 'bg-emerald-500/30 border-emerald-400',
-    text: 'text-emerald-300',
-    dot: 'bg-emerald-500',
-    iconTile: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-    accentBar: 'bg-emerald-500',
-    badge: 'text-emerald-300'
-  }
-};
+const TRACK_PALETTE = [
+  { lane: 'bg-sky-900/40 border-sky-500',         clip: 'bg-sky-500/30 border-sky-400',         dot: 'bg-sky-500' },
+  { lane: 'bg-amber-900/40 border-amber-500',     clip: 'bg-amber-500/30 border-amber-400',     dot: 'bg-amber-500' },
+  { lane: 'bg-emerald-900/40 border-emerald-500', clip: 'bg-emerald-500/30 border-emerald-400', dot: 'bg-emerald-500' },
+  { lane: 'bg-fuchsia-900/40 border-fuchsia-500', clip: 'bg-fuchsia-500/30 border-fuchsia-400', dot: 'bg-fuchsia-500' },
+  { lane: 'bg-rose-900/40 border-rose-500',       clip: 'bg-rose-500/30 border-rose-400',       dot: 'bg-rose-500' },
+  { lane: 'bg-cyan-900/40 border-cyan-500',       clip: 'bg-cyan-500/30 border-cyan-400',       dot: 'bg-cyan-500' }
+];
 
 /**
  * Escala base de tiempo para la línea de tiempo (píxeles por segundo a zoom 50%).
  */
 const PIXELS_PER_SECOND_BASE = 4;
-
-/**
- * MOCK_LIBRARY: Contenido de 8 bloques de audio predefinidos (Sprint 2).
- * NOTA DE PIVOTE (Sprint 3): MOCK_LIBRARY se conserva intacto en CONSTANTS pero ya no se asigna
- * por defecto a state.library. Queda disponible únicamente como semilla de prueba opcional
- * invocable manualmente desde la consola con window.PodcastCraft.loadSampleLibrary().
- */
-const MOCK_LIBRARY = [
-  { id: 'lib-01', name: 'Bienvenida del locutor', category: 'voice', subtype: 'voice', duration: 48, icon: 'mic' },
-  { id: 'lib-02', name: 'Entrevista completa · Invitado', category: 'voice', subtype: 'voice', duration: 1260, icon: 'mic-vocal' },
-  { id: 'lib-03', name: 'Intro Synthwave', category: 'music', subtype: 'music', duration: 15, icon: 'music-2' },
-  { id: 'lib-04', name: 'Fondo Lo-fi Ambient', category: 'music', subtype: 'music', duration: 240, icon: 'music' },
-  { id: 'lib-05', name: 'Transición Whoosh', category: 'fx', subtype: 'effect', duration: 2, icon: 'zap' },
-  { id: 'lib-06', name: 'Aplausos de estudio', category: 'fx', subtype: 'effect', duration: 6, icon: 'volume-2' },
-  { id: 'lib-07', name: 'Spot Sponsor · Tech Store', category: 'fx', subtype: 'ad', duration: 30, icon: 'megaphone' },
-  { id: 'lib-08', name: 'Cuña institucional', category: 'fx', subtype: 'ad', duration: 15, icon: 'radio' }
-];
-
-/**
- * Configuración de pestañas de filtro para la biblioteca.
- */
-const LIBRARY_FILTERS = [
-  { id: 'all', label: 'Todos' },
-  { id: 'music', label: 'Música' },
-  { id: 'voice', label: 'Voz' },
-  { id: 'effect', label: 'Efectos' },
-  { id: 'ad', label: 'Anuncios' }
-];
-
-/**
- * Diccionario de etiquetas en español para los subtipos de bloques.
- */
-const SUBTYPE_LABELS = {
-  voice: 'Voz',
-  music: 'Música',
-  effect: 'Efecto',
-  ad: 'Anuncio'
-};
 
 /**
  * Tipo MIME contractual estandarizado para Drag & Drop entre la biblioteca y el timeline.
@@ -115,11 +55,11 @@ const DRAG_MIME = 'application/x-podcastcraft-block';
 
 
 /* ==========================================================================
-   2. STATE (Sprint 3: Clean Slate funcional)
+   2. STATE
    ========================================================================== */
 
 /**
- * Estado reactivo central — Clean Slate: Inicia vacío y se puebla con audio real del usuario.
+ * Estado reactivo central — Sprint 4: Carriles dinámicos e importación de MP3 reales.
  */
 const state = {
   project: {
@@ -132,16 +72,11 @@ const state = {
     volume: 80,               // 0–100
     isMuted: false
   },
-  library: [],                 // Vacío por defecto. Se llena únicamente con audio importado
+  library: [],                 // { id, name, duration, objectUrl, icon: 'file-audio', isImported: true }
   ui: {
-    libraryFilter: 'all',     // 'all' | 'music' | 'voice' | 'effect' | 'ad'
-    draggingLibraryId: null   // ID de bloque arrastrándose actualmente
+    draggingLibraryId: null   // ID de audio arrastrándose actualmente
   },
-  tracks: [
-    { id: 'track-voice', name: 'Voz Principal',  category: 'voice', clips: [] },
-    { id: 'track-music', name: 'Música & Intro', category: 'music', clips: [] },
-    { id: 'track-fx',    name: 'Anuncios & FX',  category: 'fx',    clips: [] }
-  ],
+  tracks: [],                  // Inicia VACÍO (0 a N carriles dinámicos)
   selection: {
     clipId: null,             // ID del clip activo en el timeline
     libraryId: null           // ID de la tarjeta seleccionada en la biblioteca
@@ -153,6 +88,9 @@ const state = {
     transcript: []
   }
 };
+
+let trackCounter = 0;   // Generador de nombres por defecto "Carril 1", "Carril 2"...
+let nextColorIndex = 0; // Índice rotativo de color, nunca se decrementa
 
 
 /* ==========================================================================
@@ -229,22 +167,13 @@ window.PodcastCraft = {
   getState,
   setState,
   subscribe,
-  TRACK_STYLES,
   PROJECT_STATUS,
-  MOCK_LIBRARY,
-  LIBRARY_FILTERS,
-  SUBTYPE_LABELS,
+  TRACK_PALETTE,
   DRAG_MIME,
   PIXELS_PER_SECOND_BASE,
-  /**
-   * Semilla opcional de prueba (Sprint 3 — 2.1):
-   * Permite cargar los 8 bloques mock manualmente desde la consola sin que la app
-   * los cargue sola al iniciar.
-   */
-  loadSampleLibrary() {
-    setState({ library: [...MOCK_LIBRARY] });
-    console.info('[PodcastCraft AI] Semilla MOCK_LIBRARY cargada manualmente en la biblioteca.');
-  },
+  createTrack,
+  deleteTrack,
+  renameTrack,
   recomputeProjectDuration: () => recomputeProjectDuration()
 };
 
@@ -256,7 +185,7 @@ window.PodcastCraft = {
 /**
  * Recalcula dinámicamente la duración total del proyecto a partir del tiempo final
  * (start + duration) de todos los clips colocados en todos los carriles del timeline.
- * Si no hay clips colocados, retorna 0.
+ * Si no hay clips o no hay carriles, retorna 0.
  * @param {Array} [tracksList] - Lista de carriles a inspeccionar (por defecto state.tracks)
  * @returns {number} Duración total en segundos
  */
@@ -343,19 +272,7 @@ function escapeHtml(str) {
 }
 
 /**
- * Obtiene los bloques de biblioteca visibles según el filtro activo en state.ui.libraryFilter.
- * @returns {typeof state.library}
- */
-function getVisibleLibrary() {
-  const filter = state.ui.libraryFilter;
-  if (!filter || filter === 'all') {
-    return state.library;
-  }
-  return state.library.filter((item) => item.subtype === filter);
-}
-
-/**
- * Busca un bloque de audio de la biblioteca por su identificador único.
+ * Busca un audio de la biblioteca por su identificador único.
  * @param {string} id
  * @returns {object | null}
  */
@@ -394,7 +311,92 @@ function $$(selector) {
 
 
 /* ==========================================================================
-   5. RENDER
+   5. TRACK MANAGEMENT (Sprint 4 — 2)
+   ========================================================================== */
+
+/**
+ * Crea un nuevo carril dinámico con nombre autoincremental y color rotativo.
+ * @param {string} [customName]
+ * @returns {object} El nuevo carril creado
+ */
+function createTrack(customName) {
+  const newTrack = {
+    id: `track-${crypto.randomUUID()}`,
+    name: customName || `Carril ${++trackCounter}`,
+    colorIndex: (nextColorIndex++) % TRACK_PALETTE.length,
+    clips: []
+  };
+
+  setState({
+    tracks: [...state.tracks, newTrack]
+  });
+
+  console.info('[PodcastCraft AI] Carril creado:', newTrack);
+  return newTrack;
+}
+
+/**
+ * Renombra un carril existente. Si el nombre es vacío, se mantiene el previo.
+ * @param {string} trackId
+ * @param {string} newName
+ */
+function renameTrack(trackId, newName) {
+  const trimmed = (newName || '').trim();
+  if (!trimmed) return;
+
+  const nextTracks = state.tracks.map((t) => {
+    if (t.id === trackId) {
+      return { ...t, name: trimmed };
+    }
+    return t;
+  });
+
+  setState({ tracks: nextTracks });
+  console.info(`[PodcastCraft AI] Carril ${trackId} renombrado a: ${trimmed}`);
+}
+
+/**
+ * Elimina un carril. Si contiene clips, solicita confirmación con window.confirm.
+ * @param {string} trackId
+ */
+function deleteTrack(trackId) {
+  const track = state.tracks.find((t) => t.id === trackId);
+  if (!track) return;
+
+  if (track.clips && track.clips.length > 0) {
+    const confirmMsg = `Este carril tiene ${track.clips.length} clip(s). ¿Eliminarlo de todas formas?`;
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+  }
+
+  const nextTracks = state.tracks.filter((t) => t.id !== trackId);
+
+  // Limpiar selección de clip si pertenecía al carril eliminado
+  let nextClipId = state.selection.clipId;
+  if (track.clips && track.clips.some((c) => c.id === nextClipId)) {
+    nextClipId = null;
+  }
+
+  const nextDuration = recomputeProjectDuration(nextTracks);
+
+  setState({
+    tracks: nextTracks,
+    selection: {
+      ...state.selection,
+      clipId: nextClipId
+    },
+    project: {
+      duration: nextDuration
+    }
+  });
+
+  console.info(`[PodcastCraft AI] Carril ${trackId} eliminado.`);
+}
+
+
+/* ==========================================================================
+   6. RENDER
    ========================================================================== */
 
 /**
@@ -437,7 +439,7 @@ function renderTransport() {
     durationLabel.textContent = formatTime(state.project.duration);
   }
 
-  // Comprobar presencia de clips en el timeline (Sprint 3 — 5.1)
+  // Comprobar presencia de clips en el timeline (Sprint 4 — 5.1 contextual)
   const totalClips = state.tracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
   const hasClips = totalClips > 0;
 
@@ -483,10 +485,8 @@ function renderTransport() {
       }
     }
     if (!activeClip && hasClips) {
-      const trackOrder = ['track-voice', 'track-music', 'track-fx'];
-      for (const tId of trackOrder) {
-        const t = state.tracks.find((x) => x.id === tId || x.category === tId.replace('track-', ''));
-        if (t && t.clips.length > 0) {
+      for (const t of state.tracks) {
+        if (t.clips && t.clips.length > 0) {
           activeClip = t.clips[0];
           break;
         }
@@ -496,8 +496,7 @@ function renderTransport() {
     if (activeClip) {
       nowPlayingName.textContent = activeClip.name;
       nowPlayingName.setAttribute('title', activeClip.name);
-      const audioTag = activeClip.objectUrl ? 'Audio real' : 'Demo (sin audio)';
-      nowPlayingMeta.textContent = `${formatDuration(activeClip.duration)} · ${audioTag}`;
+      nowPlayingMeta.textContent = `${formatDuration(activeClip.duration)} · MP3`;
     } else {
       nowPlayingName.textContent = 'Ningún clip en la línea de tiempo';
       nowPlayingName.setAttribute('title', 'Ningún clip en la línea de tiempo');
@@ -546,66 +545,18 @@ function renderTransport() {
 function renderLibraryCount() {
   const libraryCount = $('#library-count');
   if (libraryCount) {
-    const count = getVisibleLibrary().length;
-    libraryCount.textContent = count === 1 ? '1 ítem' : `${count} ítems`;
+    const count = state.library.length;
+    libraryCount.textContent = count === 1 ? '1 audio' : `${count} audios`;
   }
 }
 
 /**
- * Renderiza las pestañas de filtro de categoría (#library-tabs).
- * Regla: Sin uso de tonos violeta; active usa slate-800 con borde inferior slate-100.
- */
-function renderLibraryTabs() {
-  const tabsContainer = $('#library-tabs');
-  if (!tabsContainer) return;
-
-  const currentFilter = state.ui.libraryFilter;
-
-  // Conteo reactivo por categoría/subtipo
-  const counts = {
-    all: state.library.length,
-    music: state.library.filter((i) => i.subtype === 'music').length,
-    voice: state.library.filter((i) => i.subtype === 'voice').length,
-    effect: state.library.filter((i) => i.subtype === 'effect').length,
-    ad: state.library.filter((i) => i.subtype === 'ad').length
-  };
-
-  const tabsHtml = LIBRARY_FILTERS.map((f) => {
-    const isActive = currentFilter === f.id;
-    const count = counts[f.id] ?? 0;
-    const activeClasses = 'bg-slate-800 text-white border-b-2 border-slate-100 font-semibold';
-    const inactiveClasses = 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 font-medium border-b-2 border-transparent';
-
-    return `
-      <button
-        type="button"
-        role="tab"
-        id="library-tab-${f.id}"
-        data-filter="${f.id}"
-        aria-selected="${isActive ? 'true' : 'false'}"
-        tabindex="${isActive ? '0' : '-1'}"
-        class="px-2.5 py-1.5 text-xs whitespace-nowrap flex items-center gap-1.5 transition-colors focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 outline-none shrink-0 ${isActive ? activeClasses : inactiveClasses}"
-      >
-        <span>${f.label}</span>
-        <span class="font-mono text-[10px] tabular-nums ${isActive ? 'text-slate-200' : 'text-slate-500'}">${count}</span>
-      </button>
-    `;
-  }).join('');
-
-  tabsContainer.innerHTML = tabsHtml;
-}
-
-/**
- * Renderiza la lista de tarjetas de audio (#library-list) o los estados vacíos correspondientes.
+ * Renderiza la lista de tarjetas de audio (#library-list) con estilo neutro (Sprint 4).
  */
 function renderLibraryList() {
   const listContainer = $('#library-list');
   if (!listContainer) return;
 
-  // Vinculación semántica con la pestaña activa
-  listContainer.setAttribute('aria-labelledby', `library-tab-${state.ui.libraryFilter}`);
-
-  // Estado vacío 1: Biblioteca sin bloques cargados (ej. library: [])
   if (state.library.length === 0) {
     listContainer.className = 'flex-1 min-h-0 p-3 overflow-y-auto flex flex-col';
     listContainer.innerHTML = `
@@ -615,44 +566,19 @@ function renderLibraryList() {
         </div>
         <h3 class="text-xs font-semibold text-slate-300 mb-1">Tu biblioteca aparecerá aquí</h3>
         <p class="text-[11px] text-slate-500 leading-relaxed max-w-[190px]">
-          Organiza clips de voz, pistas de fondo y efectos para componer tu episodio.
+          Importa archivos MP3 desde tu computador para estructurar tu episodio.
         </p>
       </div>
     `;
     return;
   }
 
-  const visibleItems = getVisibleLibrary();
-
-  // Estado vacío 2: Filtro activo sin resultados
-  if (visibleItems.length === 0) {
-    listContainer.className = 'flex-1 min-h-0 p-3 overflow-y-auto flex flex-col';
-    listContainer.innerHTML = `
-      <div id="library-empty" class="flex-1 flex flex-col items-center justify-center p-6 text-center border-2 border-dashed border-slate-800/80 rounded-xl bg-slate-950/40">
-        <div class="w-12 h-12 rounded-full bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400 mb-3 shadow-inner">
-          <i data-lucide="search-x" class="w-6 h-6"></i>
-        </div>
-        <h3 class="text-xs font-semibold text-slate-300 mb-1">No hay bloques en esta categoría</h3>
-        <p class="text-[11px] text-slate-500 leading-relaxed max-w-[190px]">
-          No se encontraron audios correspondientes al filtro seleccionado.
-        </p>
-      </div>
-    `;
-    return;
-  }
-
-  // Lista con elementos: maquetación con espacio vertical constante
   listContainer.className = 'flex-1 min-h-0 p-3 overflow-y-auto space-y-2';
-  const cardsHtml = visibleItems.map((item) => {
-    const style = TRACK_STYLES[item.category] || TRACK_STYLES.voice;
-    const subtypeLabel = SUBTYPE_LABELS[item.subtype] || item.subtype;
+  const cardsHtml = state.library.map((item) => {
     const isSelected = state.selection.libraryId === item.id;
     const formattedDuration = formatDuration(item.duration);
-    const fullAriaLabel = `${subtypeLabel}: ${item.name}, duración ${formattedDuration}. Arrastra para añadir a la línea de tiempo`;
-
-    // Regla cromática: tarjeta seleccionada usa border-slate-400 bg-slate-800 (neutro sin violeta)
     const borderBgClasses = isSelected
-      ? 'border-slate-400 bg-slate-800'
+      ? 'border-slate-400 bg-slate-800 shadow-md'
       : 'border-slate-800 bg-slate-900';
 
     return `
@@ -663,28 +589,25 @@ function renderLibraryList() {
         tabindex="0"
         role="button"
         aria-pressed="${isSelected ? 'true' : 'false'}"
-        aria-label="${escapeHtml(fullAriaLabel)}"
-        title="Arrastra a un carril de la línea de tiempo"
-        class="group relative min-h-[64px] rounded-lg border ${borderBgClasses} hover:border-slate-600 hover:bg-slate-800/60 active:cursor-grabbing cursor-grab flex items-center gap-3 px-3 py-2 select-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 outline-none"
+        aria-label="${escapeHtml(item.name)}, duración ${formattedDuration}. Arrastra a un carril"
+        title="Arrastra a cualquier carril del timeline"
+        class="group relative min-h-[58px] rounded-lg border ${borderBgClasses} hover:border-slate-600 hover:bg-slate-800/60 active:cursor-grabbing cursor-grab flex items-center gap-3 px-3 py-2 select-none transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
       >
-        <!-- Barra de acento izquierda de 2px según categoría -->
-        <span class="absolute left-0 top-0 bottom-0 w-0.5 rounded-l ${style.accentBar} pointer-events-none" aria-hidden="true"></span>
-
-        <!-- Ícono: Recuadro 36x36 con estilo iconTile -->
-        <div class="w-9 h-9 rounded-md border flex items-center justify-center shrink-0 ${style.iconTile} pointer-events-none" aria-hidden="true">
-          <i data-lucide="${item.icon}" class="w-4 h-4"></i>
+        <!-- Ícono neutro 32x32 -->
+        <div class="w-8 h-8 rounded-md border border-slate-700/70 bg-slate-800 text-slate-300 flex items-center justify-center shrink-0 pointer-events-none">
+          <i data-lucide="file-audio" class="w-4 h-4"></i>
         </div>
 
-        <!-- Centro: Nombre truncado y etiqueta con badge -->
+        <!-- Nombre y tipo -->
         <div class="flex-1 min-w-0 flex flex-col justify-center pointer-events-none">
           <span class="text-xs font-medium text-slate-100 truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
-          <span class="text-[10px] uppercase tracking-wider font-semibold ${style.badge}">${subtypeLabel}</span>
+          <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400">MP3</span>
         </div>
 
-        <!-- Derecha: Duración mono y grip indicativo de arrastre -->
+        <!-- Duración y Grip -->
         <div class="flex items-center gap-2 shrink-0 pointer-events-none">
           <span class="font-mono tabular-nums text-[11px] text-slate-400">${formattedDuration}</span>
-          <i data-lucide="grip-vertical" class="w-4 h-4 text-slate-600 group-hover:text-slate-300 transition-colors" aria-hidden="true"></i>
+          <i data-lucide="grip-vertical" class="w-4 h-4 text-slate-600 group-hover:text-slate-300 transition-colors"></i>
         </div>
       </article>
     `;
@@ -694,81 +617,129 @@ function renderLibraryList() {
 }
 
 /**
- * Renderiza los clips visuales en los 3 carriles del timeline (#timeline-tracks).
- * Sprint 3 (4.6): Muestra la posición (start * pps) y ancho (duration * pps) de cada clip,
- * junto con el nombre truncado, el badge "(sin audio)" si es mock, y los estados vacíos.
+ * Renderiza los carriles dinámicos (0 a N) en el timeline (#timeline-tracks).
+ * Sprint 4: Estado vacío general si tracks.length === 0, o carriles con asas de recorte y clips coloreados.
  */
 function renderTimelineTracks() {
-  const totalClips = state.tracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
-  const allTracksEmpty = totalClips === 0;
+  const container = $('#timeline-tracks');
+  if (!container) return;
+
+  // Estado vacío 1: Cero carriles creados
+  if (state.tracks.length === 0) {
+    container.className = 'flex-1 min-h-0 p-4 lg:p-6 overflow-y-auto flex flex-col justify-center';
+    container.innerHTML = `
+      <div class="flex-1 flex flex-col items-center justify-center p-8 text-center border-2 border-dashed border-slate-800/60 rounded-xl bg-slate-900/20 max-w-xl mx-auto w-full my-auto">
+        <div class="w-14 h-14 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-center text-slate-400 mb-3 shadow-inner">
+          <i data-lucide="layers" class="w-7 h-7"></i>
+        </div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-1">Aún no tienes carriles</h3>
+        <p class="text-xs text-slate-500 max-w-sm leading-relaxed mb-4">
+          Crea un carril para empezar a construir tu episodio y arrastrar archivos de audio.
+        </p>
+        <button id="btn-empty-add-track" type="button" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-violet-600 hover:bg-violet-500 active:scale-95 shadow-md glow-ai transition-all">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>Crear Primer Carril</span>
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  container.className = 'flex-1 min-h-0 p-4 lg:p-6 overflow-y-auto space-y-3.5 flex flex-col';
   const pps = getPixelsPerSecond();
 
-  const laneElements = {
-    voice: $('#timeline-track-voice'),
-    music: $('#timeline-track-music'),
-    fx: $('#timeline-track-fx')
-  };
-
-  for (const track of state.tracks) {
-    const lane = laneElements[track.category];
-    if (!lane) continue;
-
+  const tracksHtml = state.tracks.map((track) => {
+    const palette = TRACK_PALETTE[track.colorIndex % TRACK_PALETTE.length];
     const clips = track.clips || [];
 
-    if (clips.length === 0) {
-      if (allTracksEmpty) {
-        lane.innerHTML = `
-          <div class="h-full flex items-center justify-center gap-2 text-slate-500 px-4 select-none pointer-events-none">
-            <i data-lucide="film" class="w-4 h-4 text-slate-600 shrink-0"></i>
-            <span class="text-xs font-medium">Arrastra bloques desde la biblioteca para empezar</span>
-          </div>
-        `;
-      } else {
-        lane.innerHTML = `
-          <div class="h-full flex items-center justify-center text-slate-600 px-4 select-none pointer-events-none">
-            <span class="text-xs italic">Carril vacío</span>
-          </div>
-        `;
-      }
-    } else {
-      const clipsHtml = clips.map((clip) => {
-        const leftPx = Math.round((clip.start || 0) * pps);
-        const widthPx = Math.max(38, Math.round((clip.duration || 0) * pps));
-        const isSelected = state.selection.clipId === clip.id;
-        const style = TRACK_STYLES[clip.category] || TRACK_STYLES.voice;
-        const hasAudio = Boolean(clip.objectUrl);
-        const formattedDuration = formatDuration(clip.duration);
-        const startFormatted = formatDuration(clip.start);
-        const endFormatted = formatDuration((clip.start || 0) + (clip.duration || 0));
-        const fullAriaLabel = `${clip.name}, de ${startFormatted} a ${endFormatted}`;
+    const clipsHtml = clips.map((clip) => {
+      const leftPx = Math.round((clip.start || 0) * pps);
+      const widthPx = Math.max(32, Math.round((clip.duration || 0) * pps));
+      const isSelected = state.selection.clipId === clip.id;
+      const formattedDuration = formatDuration(clip.duration);
+      const startFormatted = formatDuration(clip.start);
+      const endFormatted = formatDuration((clip.start || 0) + (clip.duration || 0));
+      const fullAriaLabel = `${clip.name}, de ${startFormatted} a ${endFormatted}`;
 
-        const selectionClasses = isSelected
-          ? 'ring-2 ring-white border-white shadow-lg z-20'
-          : 'hover:brightness-110 z-10';
-
-        return `
+      return `
+        <div
+          id="timeline-clip-${clip.id}"
+          data-clip-id="${clip.id}"
+          data-track-id="${track.id}"
+          role="button"
+          tabindex="0"
+          aria-label="${escapeHtml(fullAriaLabel)}"
+          title="${escapeHtml(clip.name)} (${formattedDuration}) — Doble clic para dividir"
+          class="timeline-clip absolute top-1.5 bottom-1.5 rounded-md border flex items-center px-2 gap-1 cursor-pointer select-none transition-all duration-100 ${palette.clip} ${isSelected ? 'is-selected' : ''}"
+          style="left: ${leftPx}px; width: ${widthPx}px;"
+        >
+          <!-- Asa de recorte izquierda -->
           <div
-            id="timeline-clip-${clip.id}"
+            class="clip-handle-left"
+            data-handle="left"
             data-clip-id="${clip.id}"
             data-track-id="${track.id}"
-            role="button"
-            tabindex="0"
-            aria-label="${escapeHtml(fullAriaLabel)}"
-            title="${escapeHtml(clip.name)} (${formattedDuration})"
-            class="timeline-clip absolute top-1.5 bottom-1.5 rounded-md border flex items-center px-2.5 gap-2 cursor-pointer select-none transition-all duration-150 ${style.clip} ${selectionClasses}"
-            style="left: ${leftPx}px; width: ${widthPx}px;"
-          >
-            <span class="text-xs font-semibold truncate ${style.text} flex-1 min-w-0">${escapeHtml(clip.name)}</span>
-            ${!hasAudio
-              ? '<span class="text-[9px] text-slate-400 font-mono shrink-0 whitespace-nowrap bg-slate-900/70 px-1 py-0.5 rounded border border-slate-700/60 leading-none">(sin audio)</span>'
-              : '<span class="text-[10px] font-mono text-slate-200 shrink-0 opacity-80 tabular-nums leading-none">' + formattedDuration + '</span>'}
-          </div>
-        `;
-      }).join('');
+            title="Arrastra para recortar inicio"
+          ></div>
 
-      lane.innerHTML = clipsHtml;
-    }
-  }
+          <!-- Nombre y duración -->
+          <span class="text-xs font-semibold truncate text-slate-100 flex-1 min-w-0 ml-1.5 pointer-events-none">${escapeHtml(clip.name)}</span>
+          <span class="text-[10px] font-mono text-slate-300 shrink-0 opacity-80 tabular-nums mr-1.5 pointer-events-none">${formattedDuration}</span>
+
+          <!-- Asa de recorte derecha -->
+          <div
+            class="clip-handle-right"
+            data-handle="right"
+            data-clip-id="${clip.id}"
+            data-track-id="${track.id}"
+            title="Arrastra para recortar final"
+          ></div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="timeline-row flex items-stretch gap-3 group/track" data-track-id="${track.id}">
+        <!-- Cabecera del Carril -->
+        <div class="w-40 lg:w-44 shrink-0 flex items-center justify-between px-3 py-2 bg-slate-900/90 border border-slate-800 rounded-lg select-none gap-2">
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <span class="w-2.5 h-2.5 rounded-full ${palette.dot} shrink-0"></span>
+            <span
+              id="track-name-${track.id}"
+              class="track-title text-xs font-semibold text-slate-200 truncate cursor-text hover:text-white"
+              title="Doble clic para renombrar"
+              data-track-id="${track.id}"
+            >${escapeHtml(track.name)}</span>
+          </div>
+          <button
+            type="button"
+            id="track-delete-${track.id}"
+            data-delete-track="${track.id}"
+            aria-label="Eliminar carril ${escapeHtml(track.name)}"
+            title="Eliminar carril"
+            class="w-6 h-6 rounded flex items-center justify-center text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 active:scale-90 transition-colors"
+          >
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+
+        <!-- Zona de Carril / Drop zone -->
+        <div
+          data-track-id="${track.id}"
+          class="timeline-lane flex-1 min-w-0 h-16 relative rounded-lg border transition-all duration-150 overflow-x-auto overflow-y-hidden ${palette.lane}"
+        >
+          ${clips.length === 0
+            ? `<div class="h-full flex items-center justify-center text-xs text-slate-500/80 italic select-none pointer-events-none px-4">
+                 <span>Carril vacío — Arrastra un audio aquí</span>
+               </div>`
+            : clipsHtml
+          }
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = tracksHtml;
 }
 
 /**
@@ -782,7 +753,6 @@ function renderIcons() {
 
 /**
  * Ciclo completo de renderizado sincronizado con el Store central.
- * Utiliza comparación de estado previo para evitar re-renderizados innecesarios.
  * @param {typeof state} [currentState]
  * @param {typeof state} [prevState]
  */
@@ -795,7 +765,6 @@ function renderAll(currentState = state, prevState) {
 
   const libraryChanged = isInitial || (
     currentState.library !== prevState.library ||
-    currentState.ui.libraryFilter !== prevState.ui.libraryFilter ||
     currentState.selection.libraryId !== prevState.selection.libraryId
   );
 
@@ -805,17 +774,12 @@ function renderAll(currentState = state, prevState) {
     currentState.project.zoom !== prevState?.project?.zoom
   );
 
-  // CRÍTICO: Nótese que currentState.ui.draggingLibraryId NO dispara libraryChanged.
-  // Durante el arrastre, cambiar draggingLibraryId NO debe destruir ni regenerar
-  // el nodo de la tarjeta en el DOM, ya que de lo contrario el navegador aborta el dragstart.
-
   if (projectChanged) {
     renderTopbar();
     renderTransport();
   }
 
   if (libraryChanged) {
-    renderLibraryTabs();
     renderLibraryList();
     renderLibraryCount();
   }
@@ -829,9 +793,8 @@ function renderAll(currentState = state, prevState) {
 }
 
 
-
 /* ==========================================================================
-   6. EVENTS
+   7. AUDIO ENGINE & TRANSPORT EVENTS
    ========================================================================== */
 
 /**
@@ -854,38 +817,30 @@ function syncGlobalAudioVolume() {
 }
 
 /**
- * Conecta los eventos de controles de transporte y audio (Sprint 3 — 5.2).
+ * Conecta los controles de transporte.
  */
 function bindTransportEvents() {
-  // Play / Pausa contextual y reproducción de audio real
   const btnPlay = $('#btn-play');
   if (btnPlay) {
     btnPlay.addEventListener('click', () => {
       const totalClips = state.tracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
-      if (totalClips === 0) return; // Deshabilitado si no hay clips
+      if (totalClips === 0) return;
 
       if (state.project.isPlaying) {
         globalAudio.pause();
-        setState({
-          project: { isPlaying: false }
-        });
+        setState({ project: { isPlaying: false } });
       } else {
-        // Localizar clip a reproducir: clip seleccionado o primer clip en orden voice -> music -> fx
+        // Encontrar clip a reproducir
         let targetClip = null;
         if (state.selection.clipId) {
           for (const t of state.tracks) {
             const found = t.clips.find((c) => c.id === state.selection.clipId);
-            if (found) {
-              targetClip = found;
-              break;
-            }
+            if (found) { targetClip = found; break; }
           }
         }
         if (!targetClip) {
-          const trackOrder = ['track-voice', 'track-music', 'track-fx'];
-          for (const tId of trackOrder) {
-            const t = state.tracks.find((x) => x.id === tId || x.category === tId.replace('track-', ''));
-            if (t && t.clips.length > 0) {
+          for (const t of state.tracks) {
+            if (t.clips && t.clips.length > 0) {
               targetClip = t.clips[0];
               break;
             }
@@ -901,20 +856,13 @@ function bindTransportEvents() {
           globalAudio.play().catch((err) => {
             console.warn('[PodcastCraft AI] Error en reproducción de audio real:', err);
           });
-        } else {
-          // Si el clip no tiene objectUrl (viene de MOCK_LIBRARY vía loadSampleLibrary()),
-          // simula la reproducción como en el Sprint 1 (solo cambia el ícono y el estado, sin audio real)
-          globalAudio.pause();
         }
 
-        setState({
-          project: { isPlaying: true }
-        });
+        setState({ project: { isPlaying: true } });
       }
     });
   }
 
-  // Retroceder 5 segundos
   const btnRewind = $('#btn-rewind');
   if (btnRewind) {
     btnRewind.addEventListener('click', () => {
@@ -922,15 +870,10 @@ function bindTransportEvents() {
       if (globalAudio.src && !isNaN(globalAudio.currentTime)) {
         globalAudio.currentTime = Math.max(0, globalAudio.currentTime - 5);
       }
-      setState({
-        project: {
-          currentTime: nextTime
-        }
-      });
+      setState({ project: { currentTime: nextTime } });
     });
   }
 
-  // Avanzar 5 segundos
   const btnForward = $('#btn-forward');
   if (btnForward) {
     btnForward.addEventListener('click', () => {
@@ -938,15 +881,10 @@ function bindTransportEvents() {
       if (globalAudio.src && !isNaN(globalAudio.currentTime)) {
         globalAudio.currentTime = Math.min(globalAudio.duration || 0, globalAudio.currentTime + 5);
       }
-      setState({
-        project: {
-          currentTime: nextTime
-        }
-      });
+      setState({ project: { currentTime: nextTime } });
     });
   }
 
-  // Slider de volumen
   const volumeSlider = $('#volume-slider');
   if (volumeSlider) {
     const updateVolumeFromInput = (e) => {
@@ -963,23 +901,68 @@ function bindTransportEvents() {
     volumeSlider.addEventListener('change', updateVolumeFromInput);
   }
 
-  // Alternar Mute
   const btnMute = $('#btn-mute');
   if (btnMute) {
     btnMute.addEventListener('click', () => {
       const nextMuted = !state.project.isMuted;
-      setState({
-        project: {
-          isMuted: nextMuted
-        }
-      });
+      setState({ project: { isMuted: nextMuted } });
       syncGlobalAudioVolume();
     });
   }
 }
 
 /**
- * Conecta los eventos de importación de audio real del sistema de archivos (Sprint 3 — 3.1 & 3.2).
+ * Conecta los controles de la barra superior.
+ */
+function bindTopbarEvents() {
+  const zoomSlider = $('#zoom-slider');
+  if (zoomSlider) {
+    const updateZoomFromInput = (e) => {
+      const newZoom = clamp(parseInt(e.target.value, 10) || 0, 0, 100);
+      setState({ project: { zoom: newZoom } });
+    };
+    zoomSlider.addEventListener('input', updateZoomFromInput);
+    zoomSlider.addEventListener('change', updateZoomFromInput);
+  }
+
+  const btnAiAnalysis = $('#btn-ai-analysis');
+  if (btnAiAnalysis) {
+    btnAiAnalysis.addEventListener('click', () => {
+      console.info('[PodcastCraft AI] Análisis de IA solicitado.');
+    });
+  }
+
+  const btnExport = $('#btn-export');
+  if (btnExport) {
+    btnExport.addEventListener('click', () => {
+      const nextStatus = state.project.status === 'draft' ? 'saved' : 'draft';
+      setState({ project: { status: nextStatus } });
+    });
+  }
+}
+
+
+/* ==========================================================================
+   8. MP3 IMPORT & LIBRARY EVENTS (Sprint 4 — 3)
+   ========================================================================== */
+
+let feedbackTimeout = null;
+
+function showImportFeedback(msg) {
+  const feedbackEl = $('#import-feedback');
+  if (!feedbackEl) return;
+
+  clearTimeout(feedbackTimeout);
+  feedbackEl.textContent = msg;
+  feedbackEl.classList.remove('hidden');
+
+  feedbackTimeout = setTimeout(() => {
+    feedbackEl.classList.add('hidden');
+  }, 3500);
+}
+
+/**
+ * Conecta la importación exclusiva de archivos MP3.
  */
 function bindImportAudioEvents() {
   const btnImport = $('#btn-import-audio');
@@ -991,20 +974,43 @@ function bindImportAudioEvents() {
     });
 
     fileInput.addEventListener('change', async (e) => {
-      const files = e.target.files;
-      if (!files || files.length === 0) return;
+      const files = Array.from(e.target.files || []);
+      if (files.length === 0) return;
+
+      const validFiles = [];
+      let rejectedCount = 0;
+
+      for (const file of files) {
+        const isMp3 = file.type === 'audio/mpeg' || file.name.toLowerCase().endsWith('.mp3');
+        if (isMp3) {
+          validFiles.push(file);
+        } else {
+          rejectedCount++;
+        }
+      }
+
+      if (rejectedCount > 0) {
+        showImportFeedback(
+          rejectedCount === 1
+            ? 'Solo se permiten archivos MP3'
+            : `${rejectedCount} archivo(s) no eran MP3 y fueron ignorados`
+        );
+      }
+
+      if (validFiles.length === 0) {
+        fileInput.value = '';
+        return;
+      }
 
       const newItems = [];
-      for (const file of Array.from(files)) {
+      for (const file of validFiles) {
         const objectUrl = URL.createObjectURL(file);
         const audio = new Audio(objectUrl);
 
-        // Esperar evento loadedmetadata para leer la duración real del archivo
         const duration = await new Promise((resolve) => {
           const onLoaded = () => {
             cleanup();
             let dur = audio.duration;
-            // Fallback documentado: en ciertos formatos comprimidos o streaming, duration puede reportar Infinity o NaN
             if (!isFinite(dur) || isNaN(dur)) {
               dur = 0;
             }
@@ -1029,83 +1035,256 @@ function bindImportAudioEvents() {
           audio.addEventListener('error', onError);
         });
 
-        // Simplificación documentada (Sprint 3): todo archivo importado entra por defecto como 'voice'
-        // Regla de memoria para sprints futuros: URL.revokeObjectURL(item.objectUrl) al eliminar ítems
-        const newItem = {
+        newItems.push({
           id: `lib-import-${crypto.randomUUID()}`,
-          name: file.name.replace(/\.[^/.]+$/, ''), // sin extensión
-          category: 'voice',
-          subtype: 'voice',
+          name: file.name.replace(/\.mp3$/i, ''),
           duration: duration,
-          icon: 'file-audio',
           objectUrl,
+          icon: 'file-audio',
           isImported: true
-        };
-        newItems.push(newItem);
+        });
       }
 
       setState({
         library: [...state.library, ...newItems]
       });
 
-      // Limpiar input.value para permitir reimportar el mismo archivo
       fileInput.value = '';
-      console.info(`[PodcastCraft AI] ${newItems.length} archivo(s) de audio importado(s) a la biblioteca.`);
+      console.info(`[PodcastCraft AI] ${newItems.length} archivo(s) MP3 importado(s) exitosamente.`);
+    });
+  }
+
+  // Delegación de selección en la biblioteca
+  const listContainer = $('#library-list');
+  if (listContainer) {
+    listContainer.addEventListener('click', (e) => {
+      const card = e.target.closest('[data-library-id]');
+      if (!card) {
+        if (state.selection.libraryId !== null) {
+          setState({ selection: { libraryId: null } });
+        }
+        return;
+      }
+
+      const id = card.dataset.libraryId;
+      const nextId = state.selection.libraryId === id ? null : id;
+      setState({ selection: { libraryId: nextId } });
+    });
+
+    listContainer.addEventListener('dragstart', (e) => {
+      const card = e.target.closest('[data-library-id]');
+      if (!card) return;
+
+      const id = card.dataset.libraryId;
+      const item = getLibraryItem(id);
+      if (!item) return;
+
+      const payload = {
+        libraryId: item.id,
+        name: item.name,
+        duration: item.duration
+      };
+
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
+      e.dataTransfer.setData('text/plain', item.name);
+
+      card.classList.add('is-dragging');
+      setState({ ui: { draggingLibraryId: id } });
+    });
+
+    listContainer.addEventListener('dragend', (e) => {
+      const card = e.target.closest('[data-library-id]');
+      if (card) {
+        card.classList.remove('is-dragging');
+      } else {
+        $$('.is-dragging').forEach((c) => c.classList.remove('is-dragging'));
+      }
+      setState({ ui: { draggingLibraryId: null } });
     });
   }
 }
 
+
+/* ==========================================================================
+   9. TIMELINE & CLIP INTERACTIONS (Sprint 4 — 2, 4, 5, 6, 7)
+   ========================================================================== */
+
+// Sesión activa de recorte (Trim)
+let activeTrim = null;
+
 /**
- * Conecta los eventos del Timeline: drop zones delegadas, prevención de colisión y selección (Sprint 3 — 4.3 & 4.4).
+ * Conecta todos los eventos del Timeline: creación de carriles, drag & drop genérico,
+ * recorte por asas, división por doble clic, renombrado in situ y borrado.
  */
 function bindTimelineEvents() {
-  const timelineTracks = $('#timeline-tracks');
-  if (!timelineTracks) return;
+  // 1. Botón de agregar carril en cabecera
+  const btnAddTrack = $('#btn-add-track');
+  if (btnAddTrack) {
+    btnAddTrack.addEventListener('click', () => {
+      createTrack();
+    });
+  }
 
-  // 1. dragover delegado sobre los carriles
-  timelineTracks.addEventListener('dragover', (e) => {
-    // e.preventDefault() ÚNICAMENTE si dataTransfer incluye DRAG_MIME (Sprint 3 — 4.3)
-    if (!e.dataTransfer.types.includes(DRAG_MIME)) {
+  const timelineContainer = $('#timeline-tracks');
+  if (!timelineContainer) return;
+
+  // Botón de agregar carril dentro del estado vacío
+  timelineContainer.addEventListener('click', (e) => {
+    const emptyBtn = e.target.closest('#btn-empty-add-track');
+    if (emptyBtn) {
+      createTrack();
       return;
     }
+
+    // Botón de eliminar carril
+    const deleteBtn = e.target.closest('[data-delete-track]');
+    if (deleteBtn) {
+      const trackId = deleteBtn.dataset.deleteTrack;
+      deleteTrack(trackId);
+      return;
+    }
+
+    // Clic en clip para selección
+    const clipEl = e.target.closest('[data-clip-id]');
+    if (clipEl && !e.target.closest('[data-handle]')) {
+      const clipId = clipEl.dataset.clipId;
+      const nextId = state.selection.clipId === clipId ? null : clipId;
+      setState({ selection: { clipId: nextId } });
+      return;
+    }
+
+    // Clic en área vacía del timeline deselecciona
+    if (!e.target.closest('[data-clip-id]') && !e.target.closest('.track-title')) {
+      if (state.selection.clipId !== null) {
+        setState({ selection: { clipId: null } });
+      }
+    }
+  });
+
+  // 2. Renombrar carril con doble clic in situ
+  timelineContainer.addEventListener('dblclick', (e) => {
+    // Si el doble clic es en el título del carril
+    const titleEl = e.target.closest('.track-title');
+    if (titleEl) {
+      const trackId = titleEl.dataset.trackId;
+      const track = state.tracks.find((t) => t.id === trackId);
+      if (!track) return;
+
+      const currentName = track.name;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'track-rename-input';
+      input.value = currentName;
+
+      titleEl.replaceWith(input);
+      input.focus();
+      input.select();
+
+      let committed = false;
+      const finishRename = (save) => {
+        if (committed) return;
+        committed = true;
+        if (save) {
+          renameTrack(trackId, input.value);
+        } else {
+          renderTimelineTracks();
+          renderIcons();
+        }
+      };
+
+      input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          finishRename(true);
+        } else if (ev.key === 'Escape') {
+          ev.preventDefault();
+          finishRename(false);
+        }
+      });
+
+      input.addEventListener('blur', () => {
+        finishRename(true);
+      });
+
+      return;
+    }
+
+    // 3. División (Split) de clip por doble clic (Sprint 4 — 7.2)
+    const clipEl = e.target.closest('[data-clip-id]');
+    if (clipEl && !e.target.closest('[data-handle]')) {
+      const clipId = clipEl.dataset.clipId;
+      const trackId = clipEl.dataset.trackId;
+
+      const track = state.tracks.find((t) => t.id === trackId);
+      if (!track) return;
+      const clip = track.clips.find((c) => c.id === clipId);
+      if (!clip) return;
+
+      const rect = clipEl.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const pps = getPixelsPerSecond();
+      const splitSec = Math.round(clickX / pps);
+
+      // Restricción: ambas mitades resultantes deben tener al menos 1 segundo
+      if (splitSec >= 1 && (clip.duration - splitSec) >= 1) {
+        const clip1 = {
+          ...clip,
+          duration: splitSec
+        };
+        const clip2 = {
+          ...clip,
+          id: `clip-${crypto.randomUUID()}`,
+          start: clip.start + splitSec,
+          duration: clip.duration - splitSec
+        };
+
+        const nextClips = [];
+        for (const c of track.clips) {
+          if (c.id === clipId) {
+            nextClips.push(clip1, clip2);
+          } else {
+            nextClips.push(c);
+          }
+        }
+
+        const nextTracks = state.tracks.map((t) => (t.id === trackId ? { ...t, clips: nextClips } : t));
+        const nextDuration = recomputeProjectDuration(nextTracks);
+
+        setState({
+          tracks: nextTracks,
+          selection: { clipId: clip2.id },
+          project: { duration: nextDuration }
+        });
+
+        console.info(`[PodcastCraft AI] Clip dividido en dos mitades (${splitSec}s y ${clip2.duration}s).`);
+      }
+    }
+  });
+
+  // 4. Drag & Drop genérico sobre carriles
+  timelineContainer.addEventListener('dragover', (e) => {
+    if (!e.dataTransfer.types.includes(DRAG_MIME)) return;
+    const lane = e.target.closest('.timeline-lane');
+    if (!lane) return;
+
     e.preventDefault();
-
-    const lane = e.target.closest('#timeline-track-voice, #timeline-track-music, #timeline-track-fx');
-    if (!lane) return;
-
-    const draggingId = state.ui.draggingLibraryId;
-    const draggingItem = draggingId ? getLibraryItem(draggingId) : null;
-    const laneCategory = lane.dataset.category;
-
-    // Resalta visualmente el carril activo solo si coincide la categoría
-    if (draggingItem && draggingItem.category === laneCategory) {
-      e.dataTransfer.dropEffect = 'copy';
-      lane.classList.add(`lane-highlight-${laneCategory}`);
-      lane.style.cursor = '';
-    } else {
-      e.dataTransfer.dropEffect = 'none';
-      lane.classList.remove('lane-highlight-voice', 'lane-highlight-music', 'lane-highlight-fx');
-      lane.style.cursor = 'not-allowed';
-    }
+    e.dataTransfer.dropEffect = 'copy';
+    lane.classList.add('lane-dragover');
   });
 
-  // 2. dragleave delegado sobre los carriles
-  timelineTracks.addEventListener('dragleave', (e) => {
-    const lane = e.target.closest('#timeline-track-voice, #timeline-track-music, #timeline-track-fx');
+  timelineContainer.addEventListener('dragleave', (e) => {
+    const lane = e.target.closest('.timeline-lane');
     if (lane && !lane.contains(e.relatedTarget)) {
-      lane.classList.remove('lane-highlight-voice', 'lane-highlight-music', 'lane-highlight-fx');
-      lane.style.cursor = '';
+      lane.classList.remove('lane-dragover');
     }
   });
 
-  // 3. drop delegado sobre un carril
-  timelineTracks.addEventListener('drop', (e) => {
-    const lane = e.target.closest('#timeline-track-voice, #timeline-track-music, #timeline-track-fx');
+  timelineContainer.addEventListener('drop', (e) => {
+    const lane = e.target.closest('.timeline-lane');
     if (!lane) return;
 
-    lane.classList.remove('lane-highlight-voice', 'lane-highlight-music', 'lane-highlight-fx');
-    lane.style.cursor = '';
-
+    lane.classList.remove('lane-dragover');
     if (!e.dataTransfer.types.includes(DRAG_MIME)) return;
     e.preventDefault();
 
@@ -1117,20 +1296,13 @@ function bindTimelineEvents() {
       return;
     }
 
-    if (!payload || !payload.category) return;
-    const destinationCategory = lane.dataset.category;
+    if (!payload || !payload.libraryId) return;
 
-    // Validación de categoría destino: rechazo con parpadeo rojo breve de 200ms
-    if (payload.category !== destinationCategory) {
-      lane.classList.add('lane-reject-flash');
-      setTimeout(() => {
-        lane.classList.remove('lane-reject-flash');
-      }, 200);
-      setState({ ui: { draggingLibraryId: null } });
-      return;
-    }
+    const trackId = lane.dataset.trackId;
+    const track = state.tracks.find((t) => t.id === trackId);
+    if (!track) return;
 
-    // Calcular posición horizontal (start) a partir de X del drop convertida a segundos
+    // Calcular posición X convertida a segundos
     const rect = lane.getBoundingClientRect();
     const dropX = e.clientX - rect.left + lane.scrollLeft;
     const pps = getPixelsPerSecond();
@@ -1138,11 +1310,8 @@ function bindTimelineEvents() {
     const duration = Math.round(payload.duration || 0);
     let end = start + duration;
 
-    // Evitar overlap simple: si se solapa con un clip existente, mover al final del clip más cercano
-    const targetTrack = state.tracks.find((t) => t.category === destinationCategory);
-    if (!targetTrack) return;
-
-    const existingClips = [...targetTrack.clips].sort((a, b) => a.start - b.start);
+    // Acomodo automático sin pisar (Sprint 4 — 4)
+    const existingClips = [...track.clips].sort((a, b) => a.start - b.start);
     for (const c of existingClips) {
       const cStart = c.start || 0;
       const cEnd = cStart + (c.duration || 0);
@@ -1152,24 +1321,20 @@ function bindTimelineEvents() {
       }
     }
 
-    // Traer objectUrl del ítem de biblioteca original si existe
     const libItem = getLibraryItem(payload.libraryId);
     const objectUrl = libItem ? (libItem.objectUrl ?? null) : null;
 
-    // Construir nuevo clip para el carril
     const newClip = {
       id: `clip-${crypto.randomUUID()}`,
       libraryId: payload.libraryId,
       name: payload.name,
-      category: payload.category,
       duration: duration,
       start: start,
       objectUrl: objectUrl
     };
 
-    // Actualización inmutable de tracks y recálculo de duración total
     const nextTracks = state.tracks.map((t) => {
-      if (t.id === targetTrack.id) {
+      if (t.id === track.id) {
         return {
           ...t,
           clips: [...t.clips, newClip].sort((a, b) => a.start - b.start)
@@ -1182,295 +1347,189 @@ function bindTimelineEvents() {
 
     setState({
       tracks: nextTracks,
-      project: {
-        duration: nextDuration
-      },
-      ui: {
-        draggingLibraryId: null
-      },
-      selection: {
-        clipId: newClip.id
-      }
+      project: { duration: nextDuration },
+      ui: { draggingLibraryId: null },
+      selection: { clipId: newClip.id }
     });
 
-    console.info('[PodcastCraft AI] Clip colocado en carril:', newClip);
+    console.info(`[PodcastCraft AI] Clip añadido al carril "${track.name}":`, newClip);
   });
 
-  // 4. Delegación de selección por clic sobre clips del timeline
-  timelineTracks.addEventListener('click', (e) => {
-    const clipEl = e.target.closest('[data-clip-id]');
-    if (clipEl) {
-      const clipId = clipEl.dataset.clipId;
-      const nextClipId = state.selection.clipId === clipId ? null : clipId;
-      setState({ selection: { clipId: nextClipId } });
-    } else {
-      // Clic en área vacía del timeline deselecciona
-      if (state.selection.clipId !== null) {
-        setState({ selection: { clipId: null } });
-      }
-    }
-  });
+  // 5. Recorte de bordes con asas (Sprint 4 — 7.1 Pointer Events)
+  timelineContainer.addEventListener('pointerdown', (e) => {
+    const handleEl = e.target.closest('[data-handle]');
+    if (!handleEl) return;
 
-  // 5. Navegación por teclado en clips del timeline
-  timelineTracks.addEventListener('keydown', (e) => {
-    const clipEl = e.target.closest('[data-clip-id]');
-    if (e.key === 'Enter' || e.key === ' ') {
-      if (clipEl) {
-        e.preventDefault();
-        const clipId = clipEl.dataset.clipId;
-        const nextClipId = state.selection.clipId === clipId ? null : clipId;
-        setState({ selection: { clipId: nextClipId } });
-      }
-    } else if (e.key === 'Escape') {
-      if (state.selection.clipId !== null) {
-        e.preventDefault();
-        setState({ selection: { clipId: null } });
-      }
-    }
-  });
-}
+    e.preventDefault();
+    e.stopPropagation();
 
+    const handleType = handleEl.dataset.handle; // 'left' | 'right'
+    const clipId = handleEl.dataset.clipId;
+    const trackId = handleEl.dataset.trackId;
 
-/**
- * Conecta los eventos de la barra superior (Zoom, Exportar y Análisis IA).
- */
-function bindTopbarEvents() {
-  // Slider de Zoom
-  const zoomSlider = $('#zoom-slider');
-  if (zoomSlider) {
-    const updateZoomFromInput = (e) => {
-      const newZoom = clamp(parseInt(e.target.value, 10) || 0, 0, 100);
-      setState({
-        project: {
-          zoom: newZoom
-        }
-      });
+    const track = state.tracks.find((t) => t.id === trackId);
+    if (!track) return;
+    const clip = track.clips.find((c) => c.id === clipId);
+    if (!clip) return;
+
+    const clipEl = $(`#timeline-clip-${clipId}`);
+    if (!clipEl) return;
+
+    // Calcular límites basados en clips vecinos en el mismo carril
+    const sorted = [...track.clips].sort((a, b) => a.start - b.start);
+    const clipIndex = sorted.findIndex((c) => c.id === clipId);
+    const prevClip = clipIndex > 0 ? sorted[clipIndex - 1] : null;
+    const nextClip = clipIndex < sorted.length - 1 ? sorted[clipIndex + 1] : null;
+
+    activeTrim = {
+      handleType,
+      clipId,
+      trackId,
+      initialX: e.clientX,
+      initialStart: clip.start,
+      initialDuration: clip.duration,
+      pps: getPixelsPerSecond(),
+      prevClipEnd: prevClip ? prevClip.start + prevClip.duration : 0,
+      nextClipStart: nextClip ? nextClip.start : Infinity,
+      clipEl,
+      pendingStart: clip.start,
+      pendingDuration: clip.duration
     };
-    zoomSlider.addEventListener('input', updateZoomFromInput);
-    zoomSlider.addEventListener('change', updateZoomFromInput);
-  }
 
-  // Botón de Análisis de IA
-  const btnAiAnalysis = $('#btn-ai-analysis');
-  if (btnAiAnalysis) {
-    btnAiAnalysis.addEventListener('click', () => {
-      console.info('[PodcastCraft AI] Acción: Análisis de IA solicitado.');
-    });
-  }
+    handleEl.setPointerCapture(e.pointerId);
+    document.body.classList.add('is-trimming');
 
-  // Botón de Exportar (Alterna Borrador <-> Guardado como demo de estado reactivo)
-  const btnExport = $('#btn-export');
-  if (btnExport) {
-    btnExport.addEventListener('click', () => {
-      console.info('[PodcastCraft AI] Acción: Exportar Podcast solicitado.');
-      const nextStatus = state.project.status === 'draft' ? 'saved' : 'draft';
+    const onPointerMove = (ev) => {
+      if (!activeTrim) return;
+
+      const deltaX = ev.clientX - activeTrim.initialX;
+      const deltaSec = deltaX / activeTrim.pps;
+
+      if (activeTrim.handleType === 'right') {
+        let newDuration = Math.round(activeTrim.initialDuration + deltaSec);
+        newDuration = Math.max(1, newDuration);
+
+        // No invadir clip vecino derecho
+        if (activeTrim.nextClipStart !== Infinity) {
+          const maxAllowed = activeTrim.nextClipStart - activeTrim.initialStart;
+          newDuration = Math.min(newDuration, Math.max(1, maxAllowed));
+        }
+
+        activeTrim.pendingDuration = newDuration;
+        activeTrim.clipEl.style.width = Math.max(30, Math.round(newDuration * activeTrim.pps)) + 'px';
+      } else if (activeTrim.handleType === 'left') {
+        let newStart = Math.round(activeTrim.initialStart + deltaSec);
+        newStart = Math.max(0, newStart);
+
+        // No invadir clip vecino izquierdo
+        if (activeTrim.prevClipEnd > 0) {
+          newStart = Math.max(newStart, activeTrim.prevClipEnd);
+        }
+
+        // Duración mínima de 1 segundo
+        const maxStart = (activeTrim.initialStart + activeTrim.initialDuration) - 1;
+        newStart = Math.min(newStart, maxStart);
+
+        const newDuration = (activeTrim.initialStart + activeTrim.initialDuration) - newStart;
+
+        activeTrim.pendingStart = newStart;
+        activeTrim.pendingDuration = newDuration;
+
+        activeTrim.clipEl.style.left = Math.round(newStart * activeTrim.pps) + 'px';
+        activeTrim.clipEl.style.width = Math.max(30, Math.round(newDuration * activeTrim.pps)) + 'px';
+      }
+    };
+
+    const onPointerUp = (ev) => {
+      handleEl.removeEventListener('pointermove', onPointerMove);
+      handleEl.removeEventListener('pointerup', onPointerUp);
+      handleEl.removeEventListener('pointercancel', onPointerCancel);
+      document.body.classList.remove('is-trimming');
+
+      if (!activeTrim) return;
+
+      const { trackId: tId, clipId: cId, pendingStart, pendingDuration } = activeTrim;
+      activeTrim = null;
+
+      // Actualizar estado central con una sola mutación
+      const nextTracks = state.tracks.map((t) => {
+        if (t.id === tId) {
+          return {
+            ...t,
+            clips: t.clips.map((c) => {
+              if (c.id === cId) {
+                return { ...c, start: pendingStart, duration: pendingDuration };
+              }
+              return c;
+            }).sort((a, b) => a.start - b.start)
+          };
+        }
+        return t;
+      });
+
+      const nextDuration = recomputeProjectDuration(nextTracks);
+
       setState({
-        project: {
-          status: nextStatus
-        }
+        tracks: nextTracks,
+        project: { duration: nextDuration }
       });
-    });
-  }
-}
 
-/**
- * Conecta todos los eventos de la biblioteca de medios:
- * Filtro por pestañas, selección de tarjeta, navegación por teclado y fuente Drag & Drop.
- */
-function bindLibraryEvents() {
-  const tabsContainer = $('#library-tabs');
-  const listContainer = $('#library-list');
+      console.info(`[PodcastCraft AI] Recorte confirmado: start=${pendingStart}s, dur=${pendingDuration}s`);
+    };
 
-  // 1. Delegación sobre pestañas de categorías
-  if (tabsContainer) {
-    // Clic en pestaña
-    tabsContainer.addEventListener('click', (e) => {
-      const tabBtn = e.target.closest('[data-filter]');
-      if (!tabBtn) return;
+    const onPointerCancel = () => {
+      handleEl.removeEventListener('pointermove', onPointerMove);
+      handleEl.removeEventListener('pointerup', onPointerUp);
+      handleEl.removeEventListener('pointercancel', onPointerCancel);
+      document.body.classList.remove('is-trimming');
+      activeTrim = null;
+      renderTimelineTracks();
+      renderIcons();
+    };
 
-      const filter = tabBtn.dataset.filter;
-      if (filter && filter !== state.ui.libraryFilter) {
-        setState({ ui: { libraryFilter: filter } });
-      }
-    });
+    handleEl.addEventListener('pointermove', onPointerMove);
+    handleEl.addEventListener('pointerup', onPointerUp);
+    handleEl.addEventListener('pointercancel', onPointerCancel);
+  });
 
-    // Navegación por teclado en pestañas (patrón WAI-ARIA roving tabindex)
-    tabsContainer.addEventListener('keydown', (e) => {
-      const tabButtons = Array.from(tabsContainer.querySelectorAll('[role="tab"]'));
-      const activeEl = document.activeElement;
-      const currentIndex = tabButtons.indexOf(activeEl);
+  // 6. Borrado de clip con Delete / Backspace (Sprint 4 — 6)
+  document.addEventListener('keydown', (e) => {
+    // Guardia: si el usuario está escribiendo en un input o editable, ignorar
+    const activeTag = document.activeElement ? document.activeElement.tagName : '';
+    if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable)) {
+      return;
+    }
 
-      if (currentIndex === -1) return;
-
-      let nextIndex = currentIndex;
-      if (e.key === 'ArrowRight') {
-        nextIndex = (currentIndex + 1) % tabButtons.length;
-      } else if (e.key === 'ArrowLeft') {
-        nextIndex = (currentIndex - 1 + tabButtons.length) % tabButtons.length;
-      } else if (e.key === 'Home') {
-        nextIndex = 0;
-      } else if (e.key === 'End') {
-        nextIndex = tabButtons.length - 1;
-      } else {
-        return;
-      }
-
+    if ((e.key === 'Delete' || e.key === 'Backspace') && state.selection.clipId) {
       e.preventDefault();
-      const targetTab = tabButtons[nextIndex];
-      if (targetTab) {
-        const filter = targetTab.dataset.filter;
-        setState({ ui: { libraryFilter: filter } });
+      const clipIdToDelete = state.selection.clipId;
 
-        // Enfocar la nueva pestaña activa tras el render
-        requestAnimationFrame(() => {
-          const newActiveTab = $(`#library-tab-${filter}`);
-          if (newActiveTab) newActiveTab.focus();
-        });
-      }
-    });
-  }
-
-  // 2. Delegación sobre la lista de tarjetas
-  if (listContainer) {
-    // Selección por clic
-    listContainer.addEventListener('click', (e) => {
-      const card = e.target.closest('[data-library-id]');
-      if (!card) {
-        // Clic en el área vacía de la lista deselecciona cualquier tarjeta activa
-        if (state.selection.libraryId !== null) {
-          setState({ selection: { libraryId: null } });
+      let found = false;
+      const nextTracks = state.tracks.map((t) => {
+        const filtered = t.clips.filter((c) => c.id !== clipIdToDelete);
+        if (filtered.length !== t.clips.length) {
+          found = true;
+          return { ...t, clips: filtered };
         }
-        return;
-      }
-
-      const id = card.dataset.libraryId;
-      // Toggle de selección: segundo clic deselecciona
-      const nextId = state.selection.libraryId === id ? null : id;
-      setState({ selection: { libraryId: nextId } });
-    });
-
-    // Navegación por teclado y selección en la lista
-    listContainer.addEventListener('keydown', (e) => {
-      const card = e.target.closest('[data-library-id]');
-      const cards = Array.from(listContainer.querySelectorAll('[data-library-id]'));
-      const currentIndex = cards.indexOf(card);
-
-      if (e.key === 'Enter' || e.key === ' ') {
-        if (card) {
-          e.preventDefault();
-          const id = card.dataset.libraryId;
-          const nextId = state.selection.libraryId === id ? null : id;
-          setState({ selection: { libraryId: nextId } });
-        }
-      } else if (e.key === 'Escape') {
-        if (state.selection.libraryId !== null) {
-          e.preventDefault();
-          setState({ selection: { libraryId: null } });
-        }
-      } else if (e.key === 'ArrowDown') {
-        if (cards.length > 0) {
-          e.preventDefault();
-          const nextIndex = currentIndex < cards.length - 1 ? currentIndex + 1 : 0;
-          cards[nextIndex].focus();
-        }
-      } else if (e.key === 'ArrowUp') {
-        if (cards.length > 0) {
-          e.preventDefault();
-          const prevIndex = currentIndex > 0 ? currentIndex - 1 : cards.length - 1;
-          cards[prevIndex].focus();
-        }
-      }
-    });
-
-    // 3. Inicio del arrastre (dragstart)
-    listContainer.addEventListener('dragstart', (e) => {
-      const card = e.target.closest('[data-library-id]');
-      if (!card) return;
-
-      const id = card.dataset.libraryId;
-      const item = getLibraryItem(id);
-      if (!item) return;
-
-      // Payload estandarizado según contrato con Sprint 3
-      const payload = {
-        libraryId: item.id,
-        name: item.name,
-        category: item.category,
-        subtype: item.subtype,
-        duration: item.duration,
-        icon: item.icon
-      };
-
-      e.dataTransfer.effectAllowed = 'copy';
-      e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
-
-      // Requisito indispensable para Firefox: sin setData('text/plain') no se inicia el arrastre
-      e.dataTransfer.setData('text/plain', item.name);
-
-      // Píldora visual compacta como imagen de arrastre (ícono + nombre, fondo slate-800, borde de categoría)
-      const pill = document.createElement('div');
-      const borderClass = item.category === 'voice' ? 'border-sky-500' :
-                          item.category === 'music' ? 'border-amber-500' :
-                          'border-emerald-500';
-
-      pill.className = `fixed -top-[9999px] -left-[9999px] z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border ${borderClass} shadow-xl pointer-events-none select-none`;
-
-      const cardIcon = card.querySelector('svg');
-      if (cardIcon) {
-        const iconClone = cardIcon.cloneNode(true);
-        iconClone.setAttribute('class', 'w-3.5 h-3.5 shrink-0 text-slate-200');
-        pill.appendChild(iconClone);
-      }
-
-      const nameEl = document.createElement('span');
-      nameEl.className = 'text-xs font-medium truncate max-w-[160px] text-slate-100';
-      nameEl.textContent = item.name;
-      pill.appendChild(nameEl);
-
-      document.body.appendChild(pill);
-      e.dataTransfer.setDragImage(pill, 20, 16);
-
-      // Limpieza de la píldora en el siguiente ciclo de render
-      requestAnimationFrame(() => {
-        pill.remove();
+        return t;
       });
 
-      // ÚNICA EXCEPCIÓN DOCUMENTADA DE MANIPULACIÓN DIRECTA DEL DOM:
-      // Se aplica la clase is-dragging directamente en la tarjeta de audio sin provocar
-      // un re-renderizado del contenedor. Si el DOM destruyese la tarjeta mientras se arrastra,
-      // el motor del navegador cancelaría el evento de arrastre de inmediato.
-      card.classList.add('is-dragging');
-
-      // Actualizamos el estado para que el Sprint 3 pueda identificar el bloque en dragover
-      setState({ ui: { draggingLibraryId: id } });
-
-      console.info('[PodcastCraft AI] dragstart', payload);
-    });
-
-    // 4. Fin del arrastre (dragend)
-    listContainer.addEventListener('dragend', (e) => {
-      const card = e.target.closest('[data-library-id]');
-      if (card) {
-        card.classList.remove('is-dragging');
-      } else {
-        // Fallback defensivo por si el puntero finalizó fuera del elemento
-        const draggingCards = listContainer.querySelectorAll('.is-dragging');
-        draggingCards.forEach((c) => c.classList.remove('is-dragging'));
+      if (found) {
+        const nextDuration = recomputeProjectDuration(nextTracks);
+        setState({
+          tracks: nextTracks,
+          selection: { ...state.selection, clipId: null },
+          project: { duration: nextDuration }
+        });
+        console.info(`[PodcastCraft AI] Clip ${clipIdToDelete} eliminado del timeline.`);
       }
-
-      setState({ ui: { draggingLibraryId: null } });
-
-      console.info('[PodcastCraft AI] dragend');
-    });
-  }
+    }
+  });
 }
 
 /**
- * Guardia global de escritorio obligatoria:
- * Previene que arrastrar y soltar un bloque o un archivo externo del sistema operativo
- * sobre cualquier punto de la ventana provoque que el navegador navegue a file:// o abra el archivo.
- * En un empaquetado de escritorio con Electron o Tauri, esta guardia es esencial para
- * evitar la pérdida del estado de la aplicación o caídas de ejecución.
+ * Guardia global de escritorio:
+ * Previene arrastrar archivos del explorador de Windows fuera de zonas válidas.
  */
 function bindGlobalDragGuard() {
   window.addEventListener('dragover', (e) => {
@@ -1501,40 +1560,27 @@ function bindViewportGuard() {
   };
 
   window.addEventListener('resize', checkViewport);
-  checkViewport(); // Evaluación inicial al cargar
+  checkViewport();
 }
 
 
 /* ==========================================================================
-   7. INIT
+   10. INIT
    ========================================================================== */
 
-// Suscribir el ciclo de renderizado a cambios del Store central
 subscribe(renderAll);
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. Renderizado inicial de datos reactivos (Clean slate)
+  // Renderizado inicial (Clean slate, 0 carriles, 0 audios)
   renderAll();
 
-  // 2. Vinculación de escuchadores de eventos
+  // Vinculación de escuchadores de eventos
   bindTransportEvents();
   bindTopbarEvents();
-  bindLibraryEvents();
   bindImportAudioEvents();
   bindTimelineEvents();
   bindGlobalDragGuard();
   bindViewportGuard();
 
-  // Soporte opcional por parámetro URL (?sample=true o ?demo=true) para evaluación y testing rápido
-  try {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('sample') === 'true' || urlParams.get('demo') === 'true') {
-      window.PodcastCraft.loadSampleLibrary();
-    }
-  } catch (err) {
-    // Entorno sin soporte de URLSearchParams
-  }
-
-  console.info('[PodcastCraft AI] Sprint 3 (Pivote local funcional) inicializado correctamente. Sistema listo.');
+  console.info('[PodcastCraft AI] Sprint 4 (Carriles dinámicos ilimitados + MP3) inicializado.');
 });
-

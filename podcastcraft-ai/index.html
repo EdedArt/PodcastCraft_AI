@@ -89,40 +89,48 @@
     
     <!-- Columna Izquierda: Biblioteca de Medios (20%, min 260px, max 320px) -->
     <aside id="col-library" aria-label="Biblioteca de bloques de audio" class="w-[20%] min-w-[260px] max-w-[320px] bg-slate-900/60 border-r border-slate-800 flex flex-col min-h-0">
-      <!-- Encabezado de Biblioteca con Botón de Importar Audio (Sprint 3) -->
+      <!-- Encabezado de Biblioteca con Botón de Importar MP3 (Sprint 4) -->
       <div class="border-b border-slate-800 shrink-0 bg-slate-900/90">
         <div class="h-11 px-3.5 flex items-center justify-between">
           <div class="flex items-center gap-2">
             <i data-lucide="library" class="w-4 h-4 text-slate-400"></i>
             <h2 class="text-xs font-bold uppercase tracking-wider text-slate-200">Biblioteca</h2>
           </div>
-          <span id="library-count" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 tabular-nums">0 ítems</span>
+          <span id="library-count" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 tabular-nums">0 audios</span>
         </div>
         
-        <!-- Zona de Importación de Audio Real (Sprint 3) -->
-        <div class="px-3 pb-2.5">
-          <input type="file" id="audio-file-input" accept="audio/*" multiple hidden>
-          <button id="btn-import-audio" type="button" aria-label="Importar archivos de audio desde tu computador" title="Importar archivos de audio" class="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 hover:border-slate-600 active:scale-[0.98] transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500 shadow-sm">
+        <!-- Zona de Importación de MP3 Real (Sprint 4) -->
+        <div class="px-3 pb-2.5 flex flex-col gap-1.5">
+          <input type="file" id="audio-file-input" accept=".mp3,audio/mpeg" multiple hidden>
+          <button id="btn-import-audio" type="button" aria-label="Importar archivos MP3 desde tu computador" title="Importar archivos MP3" class="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 hover:border-slate-600 active:scale-[0.98] transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500 shadow-sm">
             <i data-lucide="upload" class="w-3.5 h-3.5 text-slate-400"></i>
-            <span>Importar Audio</span>
+            <span>Importar MP3</span>
           </button>
+          
+          <!-- Mensaje accesible y no bloqueante para rechazo de archivos no-MP3 -->
+          <div id="import-feedback" aria-live="polite" class="hidden text-[11px] text-amber-400 font-medium text-center bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1 transition-opacity duration-200"></div>
         </div>
       </div>
 
-      <!-- Pestañas de filtro de biblioteca (renderizadas dinámicamente desde JS) -->
-      <div id="library-tabs" role="tablist" aria-label="Filtrar biblioteca por tipo" class="flex shrink-0 border-b border-slate-800 bg-slate-900/70 overflow-x-auto no-scrollbar"></div>
-
-      <!-- Lista de Bloques y Estados Vacíos (renderizada dinámicamente desde JS) -->
-      <div id="library-list" role="tabpanel" aria-labelledby="library-tab-all" class="flex-1 min-h-0 p-3 overflow-y-auto"></div>
+      <!-- Lista de Audios y Estados Vacíos (renderizada dinámicamente desde JS) -->
+      <div id="library-list" role="region" aria-label="Audios importados" class="flex-1 min-h-0 p-3 overflow-y-auto"></div>
     </aside>
 
     <!-- Columna Central: Línea de Tiempo / Escaleta (flex-1, min-w-0) -->
     <section id="col-timeline" aria-label="Línea de tiempo multipista" class="flex-1 min-w-0 bg-slate-950 flex flex-col min-h-0">
-      <!-- Encabezado de Línea de Tiempo y Slider de Zoom -->
-      <div class="h-11 px-4 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-900/50 backdrop-blur-sm">
-        <div class="flex items-center gap-2">
-          <i data-lucide="layers" class="w-4 h-4 text-slate-400"></i>
-          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-200">Línea de tiempo</h2>
+      <!-- Encabezado de Línea de Tiempo, Botón de Nuevo Carril y Slider de Zoom -->
+      <div class="h-11 px-4 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-900/50 backdrop-blur-sm gap-3">
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <i data-lucide="layers" class="w-4 h-4 text-slate-400"></i>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-200">Línea de tiempo</h2>
+          </div>
+
+          <!-- Botón de Crear Carril Dinámico (Sprint 4 — 2.1) -->
+          <button id="btn-add-track" type="button" aria-label="Agregar nuevo carril" title="Agregar nuevo carril" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-all shadow-sm">
+            <i data-lucide="plus" class="w-3.5 h-3.5 text-violet-400"></i>
+            <span>Nuevo Carril</span>
+          </button>
         </div>
 
         <!-- Control de Zoom -->
@@ -137,7 +145,7 @@
         </div>
       </div>
 
-      <!-- Regla de tiempo (Punto de anclaje para Sprint 3) -->
+      <!-- Regla de tiempo -->
       <div id="timeline-ruler" class="h-7 border-b border-slate-800/80 bg-slate-900/40 shrink-0 px-4 flex items-center justify-between text-[10px] font-mono text-slate-600 select-none">
         <span>00:00:00</span>
         <span>00:10:00</span>
@@ -146,59 +154,8 @@
         <span>00:40:00</span>
       </div>
 
-      <!-- Carriles de la línea de tiempo con Drop Zones (Sprint 3) -->
-      <div id="timeline-tracks" class="flex-1 min-h-0 p-4 lg:p-6 overflow-y-auto space-y-3.5 flex flex-col">
-        <!-- Carril 1: Voz Principal -->
-        <div class="timeline-row flex items-stretch gap-3">
-          <div class="w-36 lg:w-40 shrink-0 flex flex-col justify-center px-3 py-2 bg-slate-900/90 border border-slate-800 rounded-lg select-none">
-            <div class="flex items-center gap-2 mb-0.5">
-              <span class="w-2 h-2 rounded-full bg-sky-500 shrink-0"></span>
-              <span class="text-xs font-semibold text-slate-200 truncate">Voz Principal</span>
-            </div>
-            <span class="text-[10px] uppercase font-mono tracking-wider text-sky-400">voice</span>
-          </div>
-          <div
-            id="timeline-track-voice"
-            data-category="voice"
-            data-track-id="track-voice"
-            class="timeline-lane flex-1 min-w-0 h-16 relative bg-sky-900/40 border border-sky-500/40 rounded-lg overflow-x-auto overflow-y-hidden transition-all duration-150"
-          ></div>
-        </div>
-
-        <!-- Carril 2: Música & Intro -->
-        <div class="timeline-row flex items-stretch gap-3">
-          <div class="w-36 lg:w-40 shrink-0 flex flex-col justify-center px-3 py-2 bg-slate-900/90 border border-slate-800 rounded-lg select-none">
-            <div class="flex items-center gap-2 mb-0.5">
-              <span class="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
-              <span class="text-xs font-semibold text-slate-200 truncate">Música & Intro</span>
-            </div>
-            <span class="text-[10px] uppercase font-mono tracking-wider text-amber-400">music</span>
-          </div>
-          <div
-            id="timeline-track-music"
-            data-category="music"
-            data-track-id="track-music"
-            class="timeline-lane flex-1 min-w-0 h-16 relative bg-amber-900/40 border border-amber-500/40 rounded-lg overflow-x-auto overflow-y-hidden transition-all duration-150"
-          ></div>
-        </div>
-
-        <!-- Carril 3: Anuncios & FX -->
-        <div class="timeline-row flex items-stretch gap-3">
-          <div class="w-36 lg:w-40 shrink-0 flex flex-col justify-center px-3 py-2 bg-slate-900/90 border border-slate-800 rounded-lg select-none">
-            <div class="flex items-center gap-2 mb-0.5">
-              <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-              <span class="text-xs font-semibold text-slate-200 truncate">Anuncios & FX</span>
-            </div>
-            <span class="text-[10px] uppercase font-mono tracking-wider text-emerald-400">fx</span>
-          </div>
-          <div
-            id="timeline-track-fx"
-            data-category="fx"
-            data-track-id="track-fx"
-            class="timeline-lane flex-1 min-w-0 h-16 relative bg-emerald-900/40 border border-emerald-500/40 rounded-lg overflow-x-auto overflow-y-hidden transition-all duration-150"
-          ></div>
-        </div>
-      </div>
+      <!-- Contenedor dinámico de carriles (Renderizado por renderTimelineTracks() en app.js) -->
+      <div id="timeline-tracks" class="flex-1 min-h-0 p-4 lg:p-6 overflow-y-auto space-y-3.5 flex flex-col"></div>
     </section>
 
     <!-- Columna Derecha: Asistente de IA (24%, min 300px, max 380px) -->
