@@ -636,8 +636,8 @@ function renderTimelineTracks() {
         <p class="text-xs text-slate-500 max-w-sm leading-relaxed mb-4">
           Crea un carril para empezar a construir tu episodio y arrastrar archivos de audio.
         </p>
-        <button id="btn-empty-add-track" type="button" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-violet-600 hover:bg-violet-500 active:scale-95 shadow-md glow-ai transition-all">
-          <i data-lucide="plus" class="w-4 h-4"></i>
+        <button id="btn-empty-add-track" type="button" aria-label="Crear primer carril" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-slate-900 bg-slate-100 hover:bg-white active:scale-95 shadow-md transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+          <i data-lucide="plus" class="w-4 h-4 text-slate-800"></i>
           <span>Crear Primer Carril</span>
         </button>
       </div>

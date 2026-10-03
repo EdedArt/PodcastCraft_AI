@@ -82,6 +82,21 @@ podcastcraft-ai/
    - Valida que ambas mitades resultantes tengan al menos 1 segundo de duración.
    - Ambas mitades heredan el archivo físico de audio y el color del carril.
 
+### 3.5 Decisiones Técnicas y Regla de Oro Cromática (Sprint 4)
+1. **Resaltado de carril en dragover (`.lane-dragover`):**
+   - **Opción elegida:** Resaltado neutro sutil en `slate-100` (`background-color: rgba(241, 245, 249, 0.08); outline: 2px dashed rgba(241, 245, 249, 0.35); outline-offset: -2px;`).
+   - **Justificación:** Cumple estrictamente la regla de oro cromática de diseño del proyecto (el color violeta/fucsia queda 100% reservado a Inteligencia Artificial, botón Play y anillos de foco accesible `focus-visible`). Además, este enfoque no requiere recalcular clases ni estilos en línea durante eventos de alta frecuencia como `dragover`, otorgando excelente visibilidad y contraste sobre cualquier carril sin interferir con la paleta de clips.
+2. **Auditoría cromática y corrección integral:**
+   - `.track-rename-input`: Se eliminó el borde violeta (#a855f7), reemplazándolo por borde neutro `slate-600` (`#475569`) y foco en `slate-400`.
+   - Controles `input[type="range"]` (Zoom y Volumen): Se removió el relleno y bordes violetas del track/thumb en estado normal/hover/active, utilizando la gama neutra `slate-400` y `slate-600` (manteniendo violeta únicamente en `:focus-visible` por accesibilidad).
+   - `#btn-empty-add-track`: Se removieron clases de IA (`bg-violet-600`, `glow-ai`) del botón de creación del primer carril en el estado vacío, adoptando el diseño primario neutro en `slate-100` coherente con `#btn-export`.
+   - `#btn-add-track`: El ícono `plus` se ajustó a `text-slate-400` (removiendo `text-violet-400`).
+3. **Gestión de memoria en eliminación de carriles (`deleteTrack`):**
+   - Al eliminar un carril con clips, **NO se ejecuta `URL.revokeObjectURL()`**. Los `objectUrl` son propiedad exclusiva del ítem en la biblioteca (`state.library`). Al borrar un carril o un clip del timeline, el audio físico permanece en la biblioteca para ser reutilizado en cualquier otro carril sin recargas ni descargas.
+4. **Resguardo y fallbacks robustos:**
+   - **Duración de audio (`loadedmetadata`):** Validación con fallback a `0` ante valores no finitos (`Infinity`), `NaN`, eventos de error en el audio o un timeout de 3 segundos.
+   - **Renombrado de carril:** Si el usuario ingresa un valor vacío o presiona `Escape`, se cancela la edición y se restaura el nombre anterior del carril sin alterar el estado.
+
 ---
 
 ## 4. Contrato de IDs (Sprint 1 a Sprint 4)
