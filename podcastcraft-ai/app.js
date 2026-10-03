@@ -1441,6 +1441,11 @@ function bindTimelineEvents() {
     };
 
     const onPointerUp = (ev) => {
+      if (handleEl.hasPointerCapture && handleEl.hasPointerCapture(ev.pointerId)) {
+        try {
+          handleEl.releasePointerCapture(ev.pointerId);
+        } catch (_) {}
+      }
       handleEl.removeEventListener('pointermove', onPointerMove);
       handleEl.removeEventListener('pointerup', onPointerUp);
       handleEl.removeEventListener('pointercancel', onPointerCancel);
@@ -1477,7 +1482,12 @@ function bindTimelineEvents() {
       console.info(`[PodcastCraft AI] Recorte confirmado: start=${pendingStart}s, dur=${pendingDuration}s`);
     };
 
-    const onPointerCancel = () => {
+    const onPointerCancel = (ev) => {
+      if (ev && handleEl.hasPointerCapture && handleEl.hasPointerCapture(ev.pointerId)) {
+        try {
+          handleEl.releasePointerCapture(ev.pointerId);
+        } catch (_) {}
+      }
       handleEl.removeEventListener('pointermove', onPointerMove);
       handleEl.removeEventListener('pointerup', onPointerUp);
       handleEl.removeEventListener('pointercancel', onPointerCancel);
