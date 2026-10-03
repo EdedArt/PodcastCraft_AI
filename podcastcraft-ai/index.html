@@ -98,21 +98,11 @@
         <span id="library-count" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 tabular-nums">0 ítems</span>
       </div>
 
-      <!-- Pestañas de filtro de biblioteca (Punto de anclaje para Sprint 2) -->
-      <div id="library-tabs" class="hidden"></div>
+      <!-- Pestañas de filtro de biblioteca (renderizadas dinámicamente desde JS) -->
+      <div id="library-tabs" role="tablist" aria-label="Filtrar biblioteca por tipo" class="flex shrink-0 border-b border-slate-800 bg-slate-900/70 overflow-x-auto no-scrollbar"></div>
 
-      <!-- Lista de Bloques y Estado Vacío -->
-      <div id="library-list" class="flex-1 min-h-0 p-4 overflow-y-auto flex flex-col">
-        <div class="flex-1 flex flex-col items-center justify-center p-6 text-center border-2 border-dashed border-slate-800/80 rounded-xl bg-slate-950/40">
-          <div class="w-12 h-12 rounded-full bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400 mb-3 shadow-inner">
-            <i data-lucide="file-audio" class="w-6 h-6"></i>
-          </div>
-          <h3 class="text-xs font-semibold text-slate-300 mb-1">Tu biblioteca aparecerá aquí</h3>
-          <p class="text-[11px] text-slate-500 leading-relaxed max-w-[190px]">
-            Organiza clips de voz, pistas de fondo y efectos para componer tu episodio.
-          </p>
-        </div>
-      </div>
+      <!-- Lista de Bloques y Estados Vacíos (renderizada dinámicamente desde JS) -->
+      <div id="library-list" role="tabpanel" aria-labelledby="library-tab-all" class="flex-1 min-h-0 p-3 overflow-y-auto"></div>
     </aside>
 
     <!-- Columna Central: Línea de Tiempo / Escaleta (flex-1, min-w-0) -->

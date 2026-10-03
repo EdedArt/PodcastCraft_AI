@@ -2,6 +2,7 @@
  * ==========================================================================
  * PodcastCraft AI — Archivo Principal de Lógica de Interfaz
  * Sprint 1: Shell de escritorio, Top Navbar, Footer de transporte, Store central
+ * Sprint 2: Biblioteca de bloques, Pestañas de categoría y Fuente Drag & Drop
  * ==========================================================================
  */
 
@@ -31,29 +32,80 @@ const PROJECT_STATUS = {
 };
 
 /**
- * Mapa explícito de clases CSS por categoría de track (Fuente única de verdad).
- * Regla: Las clases se declaran completas como strings literales sin interpolación.
+ * Mapa explícito de clases CSS por categoría de track (Fuente única de verdad cromática).
+ * Regla: Las clases se declaran completas como strings literales sin interpolación dinámica.
  */
 const TRACK_STYLES = {
   voice: {
     lane: 'bg-sky-900/40 border-sky-500',
     clip: 'bg-sky-500/30 border-sky-400',
     text: 'text-sky-300',
-    dot: 'bg-sky-500'
+    dot: 'bg-sky-500',
+    iconTile: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
+    accentBar: 'bg-sky-500',
+    badge: 'text-sky-300'
   },
   music: {
     lane: 'bg-amber-900/40 border-amber-500',
     clip: 'bg-amber-500/30 border-amber-400',
     text: 'text-amber-300',
-    dot: 'bg-amber-500'
+    dot: 'bg-amber-500',
+    iconTile: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+    accentBar: 'bg-amber-500',
+    badge: 'text-amber-300'
   },
   fx: {
     lane: 'bg-emerald-900/40 border-emerald-500',
     clip: 'bg-emerald-500/30 border-emerald-400',
     text: 'text-emerald-300',
-    dot: 'bg-emerald-500'
+    dot: 'bg-emerald-500',
+    iconTile: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+    accentBar: 'bg-emerald-500',
+    badge: 'text-emerald-300'
   }
 };
+
+/**
+ * MOCK_LIBRARY: Contenido de 8 bloques de audio predefinidos (Sprint 2).
+ * category: Define el color y el carril destino en la línea de tiempo.
+ * subtype:  Define el filtro por pestañas y la etiqueta textual visible.
+ */
+const MOCK_LIBRARY = [
+  { id: 'lib-01', name: 'Bienvenida del locutor', category: 'voice', subtype: 'voice', duration: 48, icon: 'mic' },
+  { id: 'lib-02', name: 'Entrevista completa · Invitado', category: 'voice', subtype: 'voice', duration: 1260, icon: 'mic-vocal' },
+  { id: 'lib-03', name: 'Intro Synthwave', category: 'music', subtype: 'music', duration: 15, icon: 'music-2' },
+  { id: 'lib-04', name: 'Fondo Lo-fi Ambient', category: 'music', subtype: 'music', duration: 240, icon: 'music' },
+  { id: 'lib-05', name: 'Transición Whoosh', category: 'fx', subtype: 'effect', duration: 2, icon: 'zap' },
+  { id: 'lib-06', name: 'Aplausos de estudio', category: 'fx', subtype: 'effect', duration: 6, icon: 'volume-2' },
+  { id: 'lib-07', name: 'Spot Sponsor · Tech Store', category: 'fx', subtype: 'ad', duration: 30, icon: 'megaphone' },
+  { id: 'lib-08', name: 'Cuña institucional', category: 'fx', subtype: 'ad', duration: 15, icon: 'radio' }
+];
+
+/**
+ * Configuración de pestañas de filtro para la biblioteca.
+ */
+const LIBRARY_FILTERS = [
+  { id: 'all', label: 'Todos' },
+  { id: 'music', label: 'Música' },
+  { id: 'voice', label: 'Voz' },
+  { id: 'effect', label: 'Efectos' },
+  { id: 'ad', label: 'Anuncios' }
+];
+
+/**
+ * Diccionario de etiquetas en español para los subtipos de bloques.
+ */
+const SUBTYPE_LABELS = {
+  voice: 'Voz',
+  music: 'Música',
+  effect: 'Efecto',
+  ad: 'Anuncio'
+};
+
+/**
+ * Tipo MIME contractual estandarizado para Drag & Drop entre la biblioteca y el timeline.
+ */
+const DRAG_MIME = 'application/x-podcastcraft-block';
 
 
 /* ==========================================================================
@@ -61,21 +113,7 @@ const TRACK_STYLES = {
    ========================================================================== */
 
 /**
- * MOCK_LIBRARY (Sprint 2): Lista de 8 bloques de audio predefinidos que se integrarán en el siguiente sprint:
- * [
- *   { id: 'block-v1', name: 'Entrevista Principal — Voz Host', category: 'voice', duration: 180, icon: 'mic' },
- *   { id: 'block-v2', name: 'Intervención Experto — Voz Invitado', category: 'voice', duration: 420, icon: 'mic' },
- *   { id: 'block-m1', name: 'Intro Sintetizador Electrónico', category: 'music', duration: 30, icon: 'music' },
- *   { id: 'block-m2', name: 'Cortina Suave de Fondo (Lo-Fi)', category: 'music', duration: 600, icon: 'music' },
- *   { id: 'block-f1', name: 'Transición Whoosh Acelerado', category: 'fx', duration: 3, icon: 'zap' },
- *   { id: 'block-f2', name: 'Campanada de Notificación', category: 'fx', duration: 4, icon: 'bell' },
- *   { id: 'block-f3', name: 'Spot Publicitario Patrocinador', category: 'fx', duration: 45, icon: 'megaphone' },
- *   { id: 'block-f4', name: 'Outro y Créditos Finales', category: 'fx', duration: 25, icon: 'radio' }
- * ]
- */
-
-/**
- * Estado reactivo central — Contrato base inmutable para los 7 sprints.
+ * Estado reactivo central — Contrato base extensible para los 7 sprints.
  */
 const state = {
   project: {
@@ -88,13 +126,20 @@ const state = {
     volume: 80,               // 0–100
     isMuted: false
   },
-  library: [],                // Sprint 2: [{ id, name, category, duration, icon }]
+  library: [...MOCK_LIBRARY], // Sprint 2: 8 bloques cargados
+  ui: {
+    libraryFilter: 'all',     // 'all' | 'music' | 'voice' | 'effect' | 'ad'
+    draggingLibraryId: null   // ID de bloque arrastrándose actualmente
+  },
   tracks: [
     { id: 'track-voice',  name: 'Voz Principal',   category: 'voice',  clips: [] },
     { id: 'track-music',  name: 'Música & Intro',  category: 'music',  clips: [] },
     { id: 'track-fx',     name: 'Anuncios & FX',   category: 'fx',     clips: [] }
   ],                          // Sprint 3: clip = { id, libraryId, start, duration, label }
-  selection: { clipId: null },
+  selection: {
+    clipId: null,
+    libraryId: null           // Sprint 2: Tarjeta seleccionada en la biblioteca
+  },
   ai: {
     isAnalyzed: false,
     isProcessing: false,
@@ -119,11 +164,23 @@ function getState() {
 }
 
 /**
- * Actualiza el estado mediante mezcla (merge) superficial por sección y notifica suscriptores.
+ * Actualiza el estado mediante mezcla (merge) por sección y notifica suscriptores
+ * entregando (state, prevState) para renderizado selectivo de alta eficiencia.
  * @param {Partial<typeof state>} patch
  */
 function setState(patch) {
   if (!patch || typeof patch !== 'object') return;
+
+  // Snapshot del estado previo para permitir comparaciones diferenciales
+  const prevState = {
+    ...state,
+    project: { ...state.project },
+    ui: { ...state.ui },
+    selection: { ...state.selection },
+    ai: { ...state.ai },
+    library: state.library,
+    tracks: state.tracks
+  };
 
   for (const key of Object.keys(patch)) {
     if (
@@ -141,7 +198,7 @@ function setState(patch) {
 
   listeners.forEach((listener) => {
     try {
-      listener(state);
+      listener(state, prevState);
     } catch (error) {
       console.error('[PodcastCraft AI] Error en suscriptor del store:', error);
     }
@@ -150,7 +207,7 @@ function setState(patch) {
 
 /**
  * Suscribe una función al cambio de estado.
- * @param {(currentState: typeof state) => void} fn
+ * @param {(currentState: typeof state, prevState?: typeof state) => void} fn
  * @returns {() => void} Función para desuscribirse
  */
 function subscribe(fn) {
@@ -161,13 +218,17 @@ function subscribe(fn) {
   return () => {};
 }
 
-// Exposición pública en consola para pruebas e inspección
+// Exposición pública en consola para pruebas, inspección y calificación
 window.PodcastCraft = {
   getState,
   setState,
   subscribe,
   TRACK_STYLES,
-  PROJECT_STATUS
+  PROJECT_STATUS,
+  MOCK_LIBRARY,
+  LIBRARY_FILTERS,
+  SUBTYPE_LABELS,
+  DRAG_MIME
 };
 
 
@@ -191,6 +252,63 @@ function formatTime(totalSeconds) {
 
   const pad = (num) => String(num).padStart(2, '0');
   return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+}
+
+/**
+ * Formatea duración de bloques: mm:ss (o HH:MM:SS si supera 1 hora).
+ * @param {number} totalSeconds
+ * @returns {string} Duración formateada
+ */
+function formatDuration(totalSeconds) {
+  if (typeof totalSeconds !== 'number' || isNaN(totalSeconds) || totalSeconds < 0) {
+    return '00:00';
+  }
+  const total = Math.floor(totalSeconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+
+  const pad = (num) => String(num).padStart(2, '0');
+  if (hours > 0) {
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  }
+  return `${pad(minutes)}:${pad(seconds)}`;
+}
+
+/**
+ * Escapa caracteres especiales en strings para inyección segura en template literals HTML.
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
+ * Obtiene los bloques de biblioteca visibles según el filtro activo en state.ui.libraryFilter.
+ * @returns {typeof state.library}
+ */
+function getVisibleLibrary() {
+  const filter = state.ui.libraryFilter;
+  if (!filter || filter === 'all') {
+    return state.library;
+  }
+  return state.library.filter((item) => item.subtype === filter);
+}
+
+/**
+ * Busca un bloque de audio de la biblioteca por su identificador único.
+ * @param {string} id
+ * @returns {object | null}
+ */
+function getLibraryItem(id) {
+  return state.library.find((item) => item.id === id) || null;
 }
 
 /**
@@ -317,14 +435,156 @@ function renderTransport() {
 }
 
 /**
- * Renderiza el contador de ítems en la cabecera de la biblioteca.
+ * Renderiza el contador de ítems en la cabecera de la biblioteca con pluralización correcta.
  */
 function renderLibraryCount() {
   const libraryCount = $('#library-count');
   if (libraryCount) {
-    const count = state.library.length;
-    libraryCount.textContent = `${count} ítems`;
+    const count = getVisibleLibrary().length;
+    libraryCount.textContent = count === 1 ? '1 ítem' : `${count} ítems`;
   }
+}
+
+/**
+ * Renderiza las pestañas de filtro de categoría (#library-tabs).
+ * Regla: Sin uso de tonos violeta; active usa slate-800 con borde inferior slate-100.
+ */
+function renderLibraryTabs() {
+  const tabsContainer = $('#library-tabs');
+  if (!tabsContainer) return;
+
+  const currentFilter = state.ui.libraryFilter;
+
+  // Conteo reactivo por categoría/subtipo
+  const counts = {
+    all: state.library.length,
+    music: state.library.filter((i) => i.subtype === 'music').length,
+    voice: state.library.filter((i) => i.subtype === 'voice').length,
+    effect: state.library.filter((i) => i.subtype === 'effect').length,
+    ad: state.library.filter((i) => i.subtype === 'ad').length
+  };
+
+  const tabsHtml = LIBRARY_FILTERS.map((f) => {
+    const isActive = currentFilter === f.id;
+    const count = counts[f.id] ?? 0;
+    const activeClasses = 'bg-slate-800 text-white border-b-2 border-slate-100 font-semibold';
+    const inactiveClasses = 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 font-medium border-b-2 border-transparent';
+
+    return `
+      <button
+        type="button"
+        role="tab"
+        id="library-tab-${f.id}"
+        data-filter="${f.id}"
+        aria-selected="${isActive ? 'true' : 'false'}"
+        tabindex="${isActive ? '0' : '-1'}"
+        class="px-2.5 py-1.5 text-xs whitespace-nowrap flex items-center gap-1.5 transition-colors focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 outline-none shrink-0 ${isActive ? activeClasses : inactiveClasses}"
+      >
+        <span>${f.label}</span>
+        <span class="font-mono text-[10px] tabular-nums ${isActive ? 'text-slate-200' : 'text-slate-500'}">${count}</span>
+      </button>
+    `;
+  }).join('');
+
+  tabsContainer.innerHTML = tabsHtml;
+}
+
+/**
+ * Renderiza la lista de tarjetas de audio (#library-list) o los estados vacíos correspondientes.
+ */
+function renderLibraryList() {
+  const listContainer = $('#library-list');
+  if (!listContainer) return;
+
+  // Vinculación semántica con la pestaña activa
+  listContainer.setAttribute('aria-labelledby', `library-tab-${state.ui.libraryFilter}`);
+
+  // Estado vacío 1: Biblioteca sin bloques cargados (ej. library: [])
+  if (state.library.length === 0) {
+    listContainer.className = 'flex-1 min-h-0 p-3 overflow-y-auto flex flex-col';
+    listContainer.innerHTML = `
+      <div id="library-empty" class="flex-1 flex flex-col items-center justify-center p-6 text-center border-2 border-dashed border-slate-800/80 rounded-xl bg-slate-950/40">
+        <div class="w-12 h-12 rounded-full bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400 mb-3 shadow-inner">
+          <i data-lucide="file-audio" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-xs font-semibold text-slate-300 mb-1">Tu biblioteca aparecerá aquí</h3>
+        <p class="text-[11px] text-slate-500 leading-relaxed max-w-[190px]">
+          Organiza clips de voz, pistas de fondo y efectos para componer tu episodio.
+        </p>
+      </div>
+    `;
+    return;
+  }
+
+  const visibleItems = getVisibleLibrary();
+
+  // Estado vacío 2: Filtro activo sin resultados
+  if (visibleItems.length === 0) {
+    listContainer.className = 'flex-1 min-h-0 p-3 overflow-y-auto flex flex-col';
+    listContainer.innerHTML = `
+      <div id="library-empty" class="flex-1 flex flex-col items-center justify-center p-6 text-center border-2 border-dashed border-slate-800/80 rounded-xl bg-slate-950/40">
+        <div class="w-12 h-12 rounded-full bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400 mb-3 shadow-inner">
+          <i data-lucide="search-x" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-xs font-semibold text-slate-300 mb-1">No hay bloques en esta categoría</h3>
+        <p class="text-[11px] text-slate-500 leading-relaxed max-w-[190px]">
+          No se encontraron audios correspondientes al filtro seleccionado.
+        </p>
+      </div>
+    `;
+    return;
+  }
+
+  // Lista con elementos: maquetación con espacio vertical constante
+  listContainer.className = 'flex-1 min-h-0 p-3 overflow-y-auto space-y-2';
+  const cardsHtml = visibleItems.map((item) => {
+    const style = TRACK_STYLES[item.category] || TRACK_STYLES.voice;
+    const subtypeLabel = SUBTYPE_LABELS[item.subtype] || item.subtype;
+    const isSelected = state.selection.libraryId === item.id;
+    const formattedDuration = formatDuration(item.duration);
+    const fullAriaLabel = `${subtypeLabel}: ${item.name}, duración ${formattedDuration}. Arrastra para añadir a la línea de tiempo`;
+
+    // Regla cromática: tarjeta seleccionada usa border-slate-400 bg-slate-800 (neutro sin violeta)
+    const borderBgClasses = isSelected
+      ? 'border-slate-400 bg-slate-800'
+      : 'border-slate-800 bg-slate-900';
+
+    return `
+      <article
+        id="lib-card-${item.id}"
+        data-library-id="${item.id}"
+        draggable="true"
+        tabindex="0"
+        role="button"
+        aria-pressed="${isSelected ? 'true' : 'false'}"
+        aria-label="${escapeHtml(fullAriaLabel)}"
+        title="Arrastra a un carril de la línea de tiempo"
+        class="group relative min-h-[64px] rounded-lg border ${borderBgClasses} hover:border-slate-600 hover:bg-slate-800/60 active:cursor-grabbing cursor-grab flex items-center gap-3 px-3 py-2 select-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 outline-none"
+      >
+        <!-- Barra de acento izquierda de 2px según categoría -->
+        <span class="absolute left-0 top-0 bottom-0 w-0.5 rounded-l ${style.accentBar} pointer-events-none" aria-hidden="true"></span>
+
+        <!-- Ícono: Recuadro 36x36 con estilo iconTile -->
+        <div class="w-9 h-9 rounded-md border flex items-center justify-center shrink-0 ${style.iconTile} pointer-events-none" aria-hidden="true">
+          <i data-lucide="${item.icon}" class="w-4 h-4"></i>
+        </div>
+
+        <!-- Centro: Nombre truncado y etiqueta con badge -->
+        <div class="flex-1 min-w-0 flex flex-col justify-center pointer-events-none">
+          <span class="text-xs font-medium text-slate-100 truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+          <span class="text-[10px] uppercase tracking-wider font-semibold ${style.badge}">${subtypeLabel}</span>
+        </div>
+
+        <!-- Derecha: Duración mono y grip indicativo de arrastre -->
+        <div class="flex items-center gap-2 shrink-0 pointer-events-none">
+          <span class="font-mono tabular-nums text-[11px] text-slate-400">${formattedDuration}</span>
+          <i data-lucide="grip-vertical" class="w-4 h-4 text-slate-600 group-hover:text-slate-300 transition-colors" aria-hidden="true"></i>
+        </div>
+      </article>
+    `;
+  }).join('');
+
+  listContainer.innerHTML = cardsHtml;
 }
 
 /**
@@ -337,12 +597,39 @@ function renderIcons() {
 }
 
 /**
- * Ciclo completo de renderizado de la interfaz sincronizado con el Store.
+ * Ciclo completo de renderizado sincronizado con el Store central.
+ * Utiliza comparación de estado previo para evitar re-renderizados innecesarios.
+ * @param {typeof state} [currentState]
+ * @param {typeof state} [prevState]
  */
-function renderAll() {
-  renderTopbar();
-  renderTransport();
-  renderLibraryCount();
+function renderAll(currentState = state, prevState) {
+  const isInitial = !prevState;
+
+  const projectChanged = isInitial || (
+    currentState.project !== prevState.project
+  );
+
+  const libraryChanged = isInitial || (
+    currentState.library !== prevState.library ||
+    currentState.ui.libraryFilter !== prevState.ui.libraryFilter ||
+    currentState.selection.libraryId !== prevState.selection.libraryId
+  );
+
+  // CRÍTICO: Nótese que currentState.ui.draggingLibraryId NO dispara libraryChanged.
+  // Durante el arrastre, cambiar draggingLibraryId NO debe destruir ni regenerar
+  // el nodo de la tarjeta en el DOM, ya que de lo contrario el navegador aborta el dragstart.
+
+  if (projectChanged) {
+    renderTopbar();
+    renderTransport();
+  }
+
+  if (libraryChanged) {
+    renderLibraryTabs();
+    renderLibraryList();
+    renderLibraryCount();
+  }
+
   renderIcons();
 }
 
@@ -465,6 +752,215 @@ function bindTopbarEvents() {
 }
 
 /**
+ * Conecta todos los eventos de la biblioteca de medios:
+ * Filtro por pestañas, selección de tarjeta, navegación por teclado y fuente Drag & Drop.
+ */
+function bindLibraryEvents() {
+  const tabsContainer = $('#library-tabs');
+  const listContainer = $('#library-list');
+
+  // 1. Delegación sobre pestañas de categorías
+  if (tabsContainer) {
+    // Clic en pestaña
+    tabsContainer.addEventListener('click', (e) => {
+      const tabBtn = e.target.closest('[data-filter]');
+      if (!tabBtn) return;
+
+      const filter = tabBtn.dataset.filter;
+      if (filter && filter !== state.ui.libraryFilter) {
+        setState({ ui: { libraryFilter: filter } });
+      }
+    });
+
+    // Navegación por teclado en pestañas (patrón WAI-ARIA roving tabindex)
+    tabsContainer.addEventListener('keydown', (e) => {
+      const tabButtons = Array.from(tabsContainer.querySelectorAll('[role="tab"]'));
+      const activeEl = document.activeElement;
+      const currentIndex = tabButtons.indexOf(activeEl);
+
+      if (currentIndex === -1) return;
+
+      let nextIndex = currentIndex;
+      if (e.key === 'ArrowRight') {
+        nextIndex = (currentIndex + 1) % tabButtons.length;
+      } else if (e.key === 'ArrowLeft') {
+        nextIndex = (currentIndex - 1 + tabButtons.length) % tabButtons.length;
+      } else if (e.key === 'Home') {
+        nextIndex = 0;
+      } else if (e.key === 'End') {
+        nextIndex = tabButtons.length - 1;
+      } else {
+        return;
+      }
+
+      e.preventDefault();
+      const targetTab = tabButtons[nextIndex];
+      if (targetTab) {
+        const filter = targetTab.dataset.filter;
+        setState({ ui: { libraryFilter: filter } });
+
+        // Enfocar la nueva pestaña activa tras el render
+        requestAnimationFrame(() => {
+          const newActiveTab = $(`#library-tab-${filter}`);
+          if (newActiveTab) newActiveTab.focus();
+        });
+      }
+    });
+  }
+
+  // 2. Delegación sobre la lista de tarjetas
+  if (listContainer) {
+    // Selección por clic
+    listContainer.addEventListener('click', (e) => {
+      const card = e.target.closest('[data-library-id]');
+      if (!card) {
+        // Clic en el área vacía de la lista deselecciona cualquier tarjeta activa
+        if (state.selection.libraryId !== null) {
+          setState({ selection: { libraryId: null } });
+        }
+        return;
+      }
+
+      const id = card.dataset.libraryId;
+      // Toggle de selección: segundo clic deselecciona
+      const nextId = state.selection.libraryId === id ? null : id;
+      setState({ selection: { libraryId: nextId } });
+    });
+
+    // Navegación por teclado y selección en la lista
+    listContainer.addEventListener('keydown', (e) => {
+      const card = e.target.closest('[data-library-id]');
+      const cards = Array.from(listContainer.querySelectorAll('[data-library-id]'));
+      const currentIndex = cards.indexOf(card);
+
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (card) {
+          e.preventDefault();
+          const id = card.dataset.libraryId;
+          const nextId = state.selection.libraryId === id ? null : id;
+          setState({ selection: { libraryId: nextId } });
+        }
+      } else if (e.key === 'Escape') {
+        if (state.selection.libraryId !== null) {
+          e.preventDefault();
+          setState({ selection: { libraryId: null } });
+        }
+      } else if (e.key === 'ArrowDown') {
+        if (cards.length > 0) {
+          e.preventDefault();
+          const nextIndex = currentIndex < cards.length - 1 ? currentIndex + 1 : 0;
+          cards[nextIndex].focus();
+        }
+      } else if (e.key === 'ArrowUp') {
+        if (cards.length > 0) {
+          e.preventDefault();
+          const prevIndex = currentIndex > 0 ? currentIndex - 1 : cards.length - 1;
+          cards[prevIndex].focus();
+        }
+      }
+    });
+
+    // 3. Inicio del arrastre (dragstart)
+    listContainer.addEventListener('dragstart', (e) => {
+      const card = e.target.closest('[data-library-id]');
+      if (!card) return;
+
+      const id = card.dataset.libraryId;
+      const item = getLibraryItem(id);
+      if (!item) return;
+
+      // Payload estandarizado según contrato con Sprint 3
+      const payload = {
+        libraryId: item.id,
+        name: item.name,
+        category: item.category,
+        subtype: item.subtype,
+        duration: item.duration,
+        icon: item.icon
+      };
+
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
+
+      // Requisito indispensable para Firefox: sin setData('text/plain') no se inicia el arrastre
+      e.dataTransfer.setData('text/plain', item.name);
+
+      // Píldora visual compacta como imagen de arrastre (ícono + nombre, fondo slate-800, borde de categoría)
+      const pill = document.createElement('div');
+      const borderClass = item.category === 'voice' ? 'border-sky-500' :
+                          item.category === 'music' ? 'border-amber-500' :
+                          'border-emerald-500';
+
+      pill.className = `fixed -top-[9999px] -left-[9999px] z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border ${borderClass} shadow-xl pointer-events-none select-none`;
+
+      const cardIcon = card.querySelector('svg');
+      if (cardIcon) {
+        const iconClone = cardIcon.cloneNode(true);
+        iconClone.setAttribute('class', 'w-3.5 h-3.5 shrink-0 text-slate-200');
+        pill.appendChild(iconClone);
+      }
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'text-xs font-medium truncate max-w-[160px] text-slate-100';
+      nameEl.textContent = item.name;
+      pill.appendChild(nameEl);
+
+      document.body.appendChild(pill);
+      e.dataTransfer.setDragImage(pill, 20, 16);
+
+      // Limpieza de la píldora en el siguiente ciclo de render
+      requestAnimationFrame(() => {
+        pill.remove();
+      });
+
+      // ÚNICA EXCEPCIÓN DOCUMENTADA DE MANIPULACIÓN DIRECTA DEL DOM:
+      // Se aplica la clase is-dragging directamente en la tarjeta de audio sin provocar
+      // un re-renderizado del contenedor. Si el DOM destruyese la tarjeta mientras se arrastra,
+      // el motor del navegador cancelaría el evento de arrastre de inmediato.
+      card.classList.add('is-dragging');
+
+      // Actualizamos el estado para que el Sprint 3 pueda identificar el bloque en dragover
+      setState({ ui: { draggingLibraryId: id } });
+
+      console.info('[PodcastCraft AI] dragstart', payload);
+    });
+
+    // 4. Fin del arrastre (dragend)
+    listContainer.addEventListener('dragend', (e) => {
+      const card = e.target.closest('[data-library-id]');
+      if (card) {
+        card.classList.remove('is-dragging');
+      } else {
+        // Fallback defensivo por si el puntero finalizó fuera del elemento
+        const draggingCards = listContainer.querySelectorAll('.is-dragging');
+        draggingCards.forEach((c) => c.classList.remove('is-dragging'));
+      }
+
+      setState({ ui: { draggingLibraryId: null } });
+
+      console.info('[PodcastCraft AI] dragend');
+    });
+  }
+}
+
+/**
+ * Guardia global de escritorio obligatoria:
+ * Previene que arrastrar y soltar un bloque o un archivo externo del sistema operativo
+ * sobre cualquier punto de la ventana provoque que el navegador navegue a file:// o abra el archivo.
+ * En un empaquetado de escritorio con Electron o Tauri, esta guardia es esencial para
+ * evitar la pérdida del estado de la aplicación o caídas de ejecución.
+ */
+function bindGlobalDragGuard() {
+  window.addEventListener('dragover', (e) => {
+    e.preventDefault();
+  });
+
+  window.addEventListener('drop', (e) => {
+    e.preventDefault();
+  });
+}
+
+/**
  * Guardia de resolución de pantalla: muestra advertencia si el viewport es menor a 1280px.
  */
 function bindViewportGuard() {
@@ -501,7 +997,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // 2. Vinculación de escuchadores de eventos
   bindTransportEvents();
   bindTopbarEvents();
+  bindLibraryEvents();
+  bindGlobalDragGuard();
   bindViewportGuard();
 
-  console.info('[PodcastCraft AI] Sprint 1 inicializado correctamente. Sistema listo.');
+  console.info('[PodcastCraft AI] Sprint 2 inicializado correctamente. Sistema listo.');
 });

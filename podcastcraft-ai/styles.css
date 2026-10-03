@@ -174,7 +174,22 @@ input[type="range"]:focus-visible::-moz-range-thumb {
   outline-offset: 3px;
 }
 
-/* 7. Accesibilidad: Reducción de movimiento */
+/* 7. Estado de arrastre para tarjetas de biblioteca (Sprint 2) */
+.is-dragging {
+  opacity: 0.4 !important;
+  transform: scale(0.98);
+}
+
+/* Ocultar barra de scroll en pestañas de biblioteca para evitar ruido visual */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 8. Accesibilidad: Reducción de movimiento */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -183,5 +198,7 @@ input[type="range"]:focus-visible::-moz-range-thumb {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+    transform: none !important;
   }
 }
+
