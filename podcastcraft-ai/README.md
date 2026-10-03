@@ -1,8 +1,17 @@
-# PodcastCraft AI — Sprint 2 de 7
+# PodcastCraft AI — Sprint 3 de 7 (Pivote Local Funcional)
 
 Estación de trabajo de audio digital (DAW) y editor de podcasts con asistencia de Inteligencia Artificial (estilo Descript / Adobe Audition), desarrollada como proyecto final para la asignatura **Diseño de Interfaces de Software** en la Universidad Cooperativa de Colombia.
 
-Este repositorio contiene el **Sprint 2 (Biblioteca de bloques, Pestañas de categoría, Fuente de Drag & Drop y Navegación por teclado)**, construido de manera aditiva sobre el Shell, Store central y Sistema de diseño establecidos en el Sprint 1.
+Este repositorio contiene el **Sprint 3 (Estado Local Funcional, Timeline con Drop Zones, Importación de Audio Real y Play Contextual)**, construido de forma aditiva y evolutiva sobre el Shell y la Biblioteca establecidos en los Sprints 1 y 2.
+
+---
+
+## 📌 Nota de pivote — Sprint 3
+- **Fecha de autorización del pivote:** 3 de octubre de 2026.
+- **Motivo del cambio de naturaleza:** La aplicación pasa formalmente de ser un prototipo con datos mock precargados a una **aplicación funcional local, sin backend**, capaz de leer y reproducir archivos de audio reales procedentes del sistema de archivos del usuario.
+- **Alcance sobre Atomic Design previo:** La tabla de Atomic Design del Taller Académico (Sprint 2) que definía la aplicación como una *"Página poblada"* queda documentada explícitamente como válida **únicamente hasta el Sprint 2**. A partir del Sprint 3, la aplicación opera bajo el concepto de **"Template / Clean Slate"**, iniciando vacía por diseño (`project.title = 'Untitled Project'`, `library = []`, `tracks[].clips = []`, `duration = 0`) hasta que el usuario importa audios reales a su estación de trabajo.
+- **Duración dinámica:** `project.duration` deja de ser un valor estático (`2535s`); ahora se calcula dinámicamente como el punto temporal máximo (`start + duration`) de los clips colocados en el timeline mediante la función `recomputeProjectDuration()`.
+- **Semilla opcional de prueba:** `MOCK_LIBRARY` se mantiene intacta en el código como constante para evaluación docente, accesible manualmente mediante el comando `window.PodcastCraft.loadSampleLibrary()`.
 
 ---
 
@@ -159,26 +168,60 @@ Este sprint actúa exclusivamente como la **fuente de arrastre (drag source)**. 
 
 ---
 
-## 7. Contrato de IDs (Sprint 1 + Sprint 2)
+---
+
+## 7. Nuevas capacidades y decisiones técnicas (Sprint 3 — Pivote)
+
+1. **Importación de Audio Real (`#btn-import-audio` + `#audio-file-input`):**
+   - Utiliza la API nativa de archivos del navegador (`HTMLInputElement[type=file]`, `accept="audio/*"`, `multiple`).
+   - Lee archivos locales con `URL.createObjectURL(file)`, permitiendo reproducir audio directamente en memoria sin backend ni servidores externos.
+   - Crea una instancia de `new Audio(objectUrl)` y aguarda el evento `loadedmetadata` para extraer la duración precisa (`audio.duration`).
+   - **Limitación conocida y fallback:** En ciertos contenedores comprimidos (ej. WebM/Opus o streams sin encabezado de duración fija), `audio.duration` puede reportar `Infinity` o `NaN`. La aplicación detecta esta condición y aplica defensivamente un fallback de `0` segundos.
+   - **Simplificación arquitectónica:** Todo archivo importado entra inicialmente clasificado como `category: 'voice', subtype: 'voice'` (la reclasificación por parte del usuario queda reservada para un sprint posterior).
+   - **Regla de liberación de recursos:** En sprints posteriores, cuando se incorpore la función de eliminación de archivos de la biblioteca, debe invocarse `URL.revokeObjectURL(item.objectUrl)` para liberar los buffers de memoria del navegador.
+
+2. **Timeline funcional con Drop Zones (`#timeline-tracks`):**
+   - Dispone de 3 carriles dedicados:
+     - `#timeline-track-voice`: Voz Principal (`voice`, acento `sky-500`)
+     - `#timeline-track-music`: Música & Intro (`music`, acento `amber-500`)
+     - `#timeline-track-fx`: Anuncios & FX (`fx`, acento `emerald-500`)
+   - Durante `dragover`, valida contractualmente el tipo MIME `application/x-podcastcraft-block` y compara la categoría del bloque arrastrado (`state.ui.draggingLibraryId`) con la del carril. Si coinciden, ilumina el carril con borde y fondo brillante (`lane-highlight-${category}`) y cursor de copia; si difieren, deniega la acción (`dropEffect = 'none'`, cursor `not-allowed`).
+   - Al soltar (`drop`), si hay discrepancia de categoría, la acción se cancela y se produce un parpadeo visual de rechazo en rojo (`lane-reject-flash`, 200ms).
+   - **Posicionamiento y escala temporal:** Se calcula `start` mediante `Math.round(dropX / getPixelsPerSecond())`, donde `PIXELS_PER_SECOND_BASE = 4` modulado por el zoom.
+   - **Prevención simple de colisión (solapamiento):** Si el nuevo clip cae dentro del rango de tiempo de un clip existente en ese carril, `start` se desplaza automáticamente al final del clip solapado, manteniendo la escaleta ordenada sin mutaciones complejas.
+   - **Recálculo dinámico de duración:** Tras cada inserción, `recomputeProjectDuration()` calcula el final máximo de todos los clips (`start + duration`) y actualiza `state.project.duration` en la barra superior y pie de transporte.
+
+3. **Play Contextual y Reproducción Real (`#btn-play`):**
+   - El botón `#btn-play` permanece estrictamente deshabilitado (`disabled`, `aria-disabled="true"`, `opacity-40 cursor-not-allowed`) mientras no exista ningún clip en el timeline.
+   - En cuanto se coloca el primer clip, el botón se habilita de inmediato (`glow-ai`, `cursor-pointer`).
+   - Al pulsar Play, se controla una única instancia global de `<audio>`:
+     - Si el clip activo (seleccionado o el primero en orden `voice → music → fx`) contiene un `objectUrl` real, se reproduce dicho archivo en el sistema de altavoces.
+     - Si el clip proviene de la semilla `MOCK_LIBRARY` (sin archivo físico vinculado), se ejecuta la simulación de reproducción reactiva (ícono Play/Pausa y estado) sin emitir audio.
+
+---
+
+## 8. Contrato de IDs (Sprint 1 + Sprint 2 + Sprint 3)
 
 Los siguientes identificadores únicos forman el contrato de integración:
 - **Navegación:** `topbar`, `project-title`, `project-status`, `total-duration`, `btn-ai-analysis`, `btn-export`
-- **Área de trabajo:** `workspace`, `col-library`, `library-tabs`, `library-count`, `library-list`, `col-timeline`, `zoom-slider`, `zoom-value`, `timeline-ruler`, `timeline-tracks`, `col-ai-panel`, `ai-transcript`, `ai-cta`
-- **Pestañas de biblioteca (Sprint 2):** `library-tab-all`, `library-tab-music`, `library-tab-voice`, `library-tab-effect`, `library-tab-ad`
-- **Estado vacío de biblioteca (Sprint 2):** `library-empty`
-- **Tarjetas de bloque (Sprint 2):** `lib-card-${item.id}` junto con el atributo contractual `data-library-id="${item.id}"`
+- **Área de trabajo y Biblioteca:** `workspace`, `col-library`, `library-tabs`, `library-count`, `library-list`, `btn-import-audio` *(Nuevo en S3)*, `audio-file-input` *(Nuevo en S3)*
+- **Pestañas de biblioteca:** `library-tab-all`, `library-tab-music`, `library-tab-voice`, `library-tab-effect`, `library-tab-ad`
+- **Estado vacío de biblioteca:** `library-empty`
+- **Tarjetas de bloque:** `lib-card-${item.id}` junto con el atributo contractual `data-library-id="${item.id}"`
+- **Línea de tiempo y Carriles:** `col-timeline`, `zoom-slider`, `zoom-value`, `timeline-ruler`, `timeline-tracks`, `timeline-track-voice` *(Nuevo en S3)*, `timeline-track-music` *(Nuevo en S3)*, `timeline-track-fx` *(Nuevo en S3)*, `timeline-clip-${clip.id}` *(Nuevo en S3)*
+- **Panel IA:** `col-ai-panel`, `ai-transcript`, `ai-cta`
 - **Transporte:** `transport`, `now-playing-name`, `now-playing-meta`, `btn-rewind`, `btn-play`, `btn-forward`, `current-time`, `duration-label`, `btn-mute`, `volume-slider`
 - **Guardia de pantalla:** `viewport-warning`
 
 ---
 
-## 8. Roadmap de desarrollo (7 Sprints)
+## 9. Roadmap de desarrollo (7 Sprints)
 
 | Sprint | Título | Estado |
 |:---:|---|:---:|
 | **1** | **Shell de escritorio + Top Navbar + Footer de transporte** | **Completado ✅** |
-| **2** | **Biblioteca de bloques de audio + Pestañas + Fuente Drag & Drop** | **Completado (Este Sprint) ✅** |
-| 3 | Timeline multipista con 3 carriles + regla de tiempo + `dragover`/`drop` | Próximo |
+| **2** | **Biblioteca de bloques de audio + Pestañas + Fuente Drag & Drop** | **Completado ✅** |
+| **3** | **Pivote Local Funcional + Timeline con Drop Zones + Audio Real** | **Completado (Este Sprint) ✅** |
 | 4 | Panel de IA + transcripción textual + detección y resaltado de muletillas | Planificado |
 | 5 | Playhead móvil + transporte funcional + atajos de teclado (Espacio, J, L, M) | Planificado |
 | 6 | Motor de simulación de IA (limpiar audio con animación y notificaciones toast) | Planificado |
@@ -186,24 +229,37 @@ Los siguientes identificadores únicos forman el contrato de integración:
 
 ---
 
-## 9. Pruebas interactivas desde la consola de desarrollo
+## 10. Pruebas interactivas desde la consola de desarrollo
 
-Puedes verificar reactividad y contratos abriendo la consola (F12):
+Abre las herramientas de desarrollador (F12 o Ctrl+Shift+I) en el navegador para verificar la API pública expuesta en `window.PodcastCraft`:
 
 ```javascript
-// 1. Consultar estado global
+// 1. Consultar estado global (inicia en Clean Slate: título Untitled Project, duración 0, biblioteca vacía)
 PodcastCraft.getState();
 
-// 2. Probar filtrado reactivo desde el Store
-PodcastCraft.setState({ ui: { libraryFilter: 'music' } }); // Muestra 2 ítems de música
-PodcastCraft.setState({ ui: { libraryFilter: 'voice' } }); // Muestra 2 ítems de voz
-PodcastCraft.setState({ ui: { libraryFilter: 'all' } });   // Restaura los 8 ítems
+// 2. Cargar semilla de bloques mock de prueba para evaluación académica (Sprint 3 — 2.1)
+PodcastCraft.loadSampleLibrary(); // Llena la biblioteca con los 8 bloques estándar
 
-// 3. Probar estado vacío de biblioteca
-PodcastCraft.setState({ library: [] });                     // Muestra "Tu biblioteca aparecerá aquí"
-PodcastCraft.setState({ library: PodcastCraft.MOCK_LIBRARY }); // Restaura los bloques
+// 3. Probar filtrado reactivo de categorías
+PodcastCraft.setState({ ui: { libraryFilter: 'music' } }); // Pestaña Música
+PodcastCraft.setState({ ui: { libraryFilter: 'voice' } }); // Pestaña Voz
+PodcastCraft.setState({ ui: { libraryFilter: 'all' } });   // Todos
 
-// 4. Probar selección de tarjeta
-PodcastCraft.setState({ selection: { libraryId: 'lib-01' } }); // Selecciona la primera tarjeta
-PodcastCraft.setState({ selection: { libraryId: null } });     // Deselecciona
+// 4. Recalcular y consultar la duración dinámica del proyecto
+PodcastCraft.recomputeProjectDuration();
+
+// 5. Simular inserción directa de un clip en el timeline desde el Store
+PodcastCraft.setState({
+  tracks: [
+    {
+      id: 'track-voice',
+      name: 'Voz Principal',
+      category: 'voice',
+      clips: [{ id: 'clip-test-1', name: 'Prueba de Voz', category: 'voice', duration: 30, start: 0, objectUrl: null }]
+    },
+    ...PodcastCraft.getState().tracks.slice(1)
+  ],
+  project: { duration: 30 }
+});
 ```
+

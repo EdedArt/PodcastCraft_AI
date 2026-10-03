@@ -46,8 +46,8 @@
       <div class="h-4 w-px bg-slate-800 shrink-0 mx-1"></div>
 
       <!-- Nombre del proyecto -->
-      <span id="project-title" class="text-xs md:text-sm font-medium text-slate-300 truncate max-w-[180px] lg:max-w-[280px]" title="Episodio 04 — Entrevista Tech">
-        Episodio 04 — Entrevista Tech
+      <span id="project-title" class="text-xs md:text-sm font-medium text-slate-300 truncate max-w-[180px] lg:max-w-[280px]" title="Untitled Project">
+        Untitled Project
       </span>
 
       <!-- Badge de Estado del Proyecto (Borrador / Guardado) -->
@@ -89,13 +89,24 @@
     
     <!-- Columna Izquierda: Biblioteca de Medios (20%, min 260px, max 320px) -->
     <aside id="col-library" aria-label="Biblioteca de bloques de audio" class="w-[20%] min-w-[260px] max-w-[320px] bg-slate-900/60 border-r border-slate-800 flex flex-col min-h-0">
-      <!-- Encabezado de Biblioteca -->
-      <div class="h-11 px-3.5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-900/90">
-        <div class="flex items-center gap-2">
-          <i data-lucide="library" class="w-4 h-4 text-slate-400"></i>
-          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-200">Biblioteca</h2>
+      <!-- Encabezado de Biblioteca con Botón de Importar Audio (Sprint 3) -->
+      <div class="border-b border-slate-800 shrink-0 bg-slate-900/90">
+        <div class="h-11 px-3.5 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="library" class="w-4 h-4 text-slate-400"></i>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-200">Biblioteca</h2>
+          </div>
+          <span id="library-count" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 tabular-nums">0 ítems</span>
         </div>
-        <span id="library-count" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 tabular-nums">0 ítems</span>
+        
+        <!-- Zona de Importación de Audio Real (Sprint 3) -->
+        <div class="px-3 pb-2.5">
+          <input type="file" id="audio-file-input" accept="audio/*" multiple hidden>
+          <button id="btn-import-audio" type="button" aria-label="Importar archivos de audio desde tu computador" title="Importar archivos de audio" class="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 hover:border-slate-600 active:scale-[0.98] transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500 shadow-sm">
+            <i data-lucide="upload" class="w-3.5 h-3.5 text-slate-400"></i>
+            <span>Importar Audio</span>
+          </button>
+        </div>
       </div>
 
       <!-- Pestañas de filtro de biblioteca (renderizadas dinámicamente desde JS) -->
@@ -135,16 +146,57 @@
         <span>00:40:00</span>
       </div>
 
-      <!-- Carriles de la línea de tiempo y Estado Vacío (Punto de anclaje para Sprint 3) -->
-      <div id="timeline-tracks" class="flex-1 min-h-0 p-6 overflow-y-auto flex flex-col">
-        <div class="flex-1 flex flex-col items-center justify-center p-8 text-center border-2 border-dashed border-slate-800/60 rounded-xl bg-slate-900/20">
-          <div class="w-14 h-14 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-center text-slate-400 mb-3 shadow-inner">
-            <i data-lucide="film" class="w-7 h-7"></i>
+      <!-- Carriles de la línea de tiempo con Drop Zones (Sprint 3) -->
+      <div id="timeline-tracks" class="flex-1 min-h-0 p-4 lg:p-6 overflow-y-auto space-y-3.5 flex flex-col">
+        <!-- Carril 1: Voz Principal -->
+        <div class="timeline-row flex items-stretch gap-3">
+          <div class="w-36 lg:w-40 shrink-0 flex flex-col justify-center px-3 py-2 bg-slate-900/90 border border-slate-800 rounded-lg select-none">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="w-2 h-2 rounded-full bg-sky-500 shrink-0"></span>
+              <span class="text-xs font-semibold text-slate-200 truncate">Voz Principal</span>
+            </div>
+            <span class="text-[10px] uppercase font-mono tracking-wider text-sky-400">voice</span>
           </div>
-          <h3 class="text-sm font-semibold text-slate-300 mb-1.5">Arrastra bloques desde la biblioteca para empezar</h3>
-          <p class="text-xs text-slate-500 max-w-sm leading-relaxed">
-            Estructura pistas de voz, ambientación musical y cortes publicitarios en la escaleta de edición.
-          </p>
+          <div
+            id="timeline-track-voice"
+            data-category="voice"
+            data-track-id="track-voice"
+            class="timeline-lane flex-1 min-w-0 h-16 relative bg-sky-900/40 border border-sky-500/40 rounded-lg overflow-x-auto overflow-y-hidden transition-all duration-150"
+          ></div>
+        </div>
+
+        <!-- Carril 2: Música & Intro -->
+        <div class="timeline-row flex items-stretch gap-3">
+          <div class="w-36 lg:w-40 shrink-0 flex flex-col justify-center px-3 py-2 bg-slate-900/90 border border-slate-800 rounded-lg select-none">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+              <span class="text-xs font-semibold text-slate-200 truncate">Música & Intro</span>
+            </div>
+            <span class="text-[10px] uppercase font-mono tracking-wider text-amber-400">music</span>
+          </div>
+          <div
+            id="timeline-track-music"
+            data-category="music"
+            data-track-id="track-music"
+            class="timeline-lane flex-1 min-w-0 h-16 relative bg-amber-900/40 border border-amber-500/40 rounded-lg overflow-x-auto overflow-y-hidden transition-all duration-150"
+          ></div>
+        </div>
+
+        <!-- Carril 3: Anuncios & FX -->
+        <div class="timeline-row flex items-stretch gap-3">
+          <div class="w-36 lg:w-40 shrink-0 flex flex-col justify-center px-3 py-2 bg-slate-900/90 border border-slate-800 rounded-lg select-none">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+              <span class="text-xs font-semibold text-slate-200 truncate">Anuncios & FX</span>
+            </div>
+            <span class="text-[10px] uppercase font-mono tracking-wider text-emerald-400">fx</span>
+          </div>
+          <div
+            id="timeline-track-fx"
+            data-category="fx"
+            data-track-id="track-fx"
+            class="timeline-lane flex-1 min-w-0 h-16 relative bg-emerald-900/40 border border-emerald-500/40 rounded-lg overflow-x-auto overflow-y-hidden transition-all duration-150"
+          ></div>
         </div>
       </div>
     </section>
@@ -194,8 +246,8 @@
         <i data-lucide="disc-3" class="w-4 h-4"></i>
       </div>
       <div class="min-w-0">
-        <div id="now-playing-name" class="text-xs font-semibold text-slate-300 truncate max-w-[180px] lg:max-w-[260px]" title="Ningún clip seleccionado">
-          Ningún clip seleccionado
+        <div id="now-playing-name" class="text-xs font-semibold text-slate-300 truncate max-w-[180px] lg:max-w-[260px]" title="Ningún clip en la línea de tiempo">
+          Ningún clip en la línea de tiempo
         </div>
         <div id="now-playing-meta" class="text-[11px] text-slate-500 truncate font-mono">
           —
@@ -210,8 +262,8 @@
         <i data-lucide="skip-back" class="w-4 h-4"></i>
       </button>
 
-      <!-- Botón Play / Pausa (Círculo violeta 36px) -->
-      <button id="btn-play" type="button" aria-label="Reproducir" title="Reproducir (Espacio)" class="w-9 h-9 rounded-full flex items-center justify-center bg-violet-600 hover:bg-violet-500 text-white shadow-md glow-ai active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 outline-none transition-all duration-150">
+      <!-- Botón Play / Pausa (Círculo violeta 36px, deshabilitado en estado limpio sin clips) -->
+      <button id="btn-play" type="button" disabled aria-disabled="true" aria-label="Reproducir (sin audio cargado)" title="Reproducir (sin audio cargado)" class="w-9 h-9 rounded-full flex items-center justify-center bg-violet-600 text-white shadow-md active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 outline-none transition-all duration-150 opacity-40 cursor-not-allowed">
         <i data-lucide="play" class="w-4 h-4 fill-white ml-0.5"></i>
       </button>
 

@@ -189,7 +189,50 @@ input[type="range"]:focus-visible::-moz-range-thumb {
   scrollbar-width: none;
 }
 
-/* 8. Accesibilidad: Reducción de movimiento */
+/* 8. Estilos para Timeline y Drop Zones (Sprint 3) */
+.timeline-lane {
+  position: relative;
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 100%;
+}
+
+/* Resaltado durante dragover según categoría */
+.lane-highlight-voice {
+  border-color: #38bdf8 !important; /* sky-400 */
+  background-color: rgba(14, 165, 233, 0.25) !important; /* sky-500/25 */
+  box-shadow: inset 0 0 16px rgba(14, 165, 233, 0.2), 0 0 12px rgba(56, 189, 248, 0.3) !important;
+}
+
+.lane-highlight-music {
+  border-color: #fbbf24 !important; /* amber-400 */
+  background-color: rgba(245, 158, 11, 0.25) !important; /* amber-500/25 */
+  box-shadow: inset 0 0 16px rgba(245, 158, 11, 0.2), 0 0 12px rgba(251, 191, 36, 0.3) !important;
+}
+
+.lane-highlight-fx {
+  border-color: #34d399 !important; /* emerald-400 */
+  background-color: rgba(16, 185, 129, 0.25) !important; /* emerald-500/25 */
+  box-shadow: inset 0 0 16px rgba(16, 185, 129, 0.2), 0 0 12px rgba(52, 211, 153, 0.3) !important;
+}
+
+/* Parpadeo rojo breve de rechazo (200ms) si se suelta en carril incompatible */
+.lane-reject-flash {
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.2) !important;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.4) !important;
+  transition: all 0.1s ease;
+}
+
+/* Clips en el carril */
+.timeline-clip {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.timeline-clip:hover {
+  filter: brightness(1.15);
+}
+
+/* 9. Accesibilidad: Reducción de movimiento */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -201,4 +244,5 @@ input[type="range"]:focus-visible::-moz-range-thumb {
     transform: none !important;
   }
 }
+
 

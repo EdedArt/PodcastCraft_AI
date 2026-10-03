@@ -66,9 +66,15 @@ const TRACK_STYLES = {
 };
 
 /**
+ * Escala base de tiempo para la línea de tiempo (píxeles por segundo a zoom 50%).
+ */
+const PIXELS_PER_SECOND_BASE = 4;
+
+/**
  * MOCK_LIBRARY: Contenido de 8 bloques de audio predefinidos (Sprint 2).
- * category: Define el color y el carril destino en la línea de tiempo.
- * subtype:  Define el filtro por pestañas y la etiqueta textual visible.
+ * NOTA DE PIVOTE (Sprint 3): MOCK_LIBRARY se conserva intacto en CONSTANTS pero ya no se asigna
+ * por defecto a state.library. Queda disponible únicamente como semilla de prueba opcional
+ * invocable manualmente desde la consola con window.PodcastCraft.loadSampleLibrary().
  */
 const MOCK_LIBRARY = [
   { id: 'lib-01', name: 'Bienvenida del locutor', category: 'voice', subtype: 'voice', duration: 48, icon: 'mic' },
@@ -109,42 +115,42 @@ const DRAG_MIME = 'application/x-podcastcraft-block';
 
 
 /* ==========================================================================
-   2. STATE
+   2. STATE (Sprint 3: Clean Slate funcional)
    ========================================================================== */
 
 /**
- * Estado reactivo central — Contrato base extensible para los 7 sprints.
+ * Estado reactivo central — Clean Slate: Inicia vacío y se puebla con audio real del usuario.
  */
 const state = {
   project: {
-    title: 'Episodio 04 — Entrevista Tech',
-    status: 'draft',          // 'draft' | 'saved'
-    duration: 2535,           // segundos (00:42:15)
+    title: 'Untitled Project',
+    status: 'draft',
+    duration: 0,              // Se recalcula dinámicamente con recomputeProjectDuration()
     currentTime: 0,
     isPlaying: false,
     zoom: 50,                 // 0–100
     volume: 80,               // 0–100
     isMuted: false
   },
-  library: [...MOCK_LIBRARY], // Sprint 2: 8 bloques cargados
+  library: [],                 // Vacío por defecto. Se llena únicamente con audio importado
   ui: {
     libraryFilter: 'all',     // 'all' | 'music' | 'voice' | 'effect' | 'ad'
     draggingLibraryId: null   // ID de bloque arrastrándose actualmente
   },
   tracks: [
-    { id: 'track-voice',  name: 'Voz Principal',   category: 'voice',  clips: [] },
-    { id: 'track-music',  name: 'Música & Intro',  category: 'music',  clips: [] },
-    { id: 'track-fx',     name: 'Anuncios & FX',   category: 'fx',     clips: [] }
-  ],                          // Sprint 3: clip = { id, libraryId, start, duration, label }
+    { id: 'track-voice', name: 'Voz Principal',  category: 'voice', clips: [] },
+    { id: 'track-music', name: 'Música & Intro', category: 'music', clips: [] },
+    { id: 'track-fx',    name: 'Anuncios & FX',  category: 'fx',    clips: [] }
+  ],
   selection: {
-    clipId: null,
-    libraryId: null           // Sprint 2: Tarjeta seleccionada en la biblioteca
+    clipId: null,             // ID del clip activo en el timeline
+    libraryId: null           // ID de la tarjeta seleccionada en la biblioteca
   },
   ai: {
     isAnalyzed: false,
     isProcessing: false,
-    fillersDetected: 14,
-    transcript: []            // Sprint 4: [{ id, time, text, isFiller, clipId, start, duration }]
+    fillersDetected: 0,
+    transcript: []
   }
 };
 
@@ -218,7 +224,7 @@ function subscribe(fn) {
   return () => {};
 }
 
-// Exposición pública en consola para pruebas, inspección y calificación
+// Exposición pública en consola para pruebas, inspección y calificación académica
 window.PodcastCraft = {
   getState,
   setState,
@@ -228,13 +234,59 @@ window.PodcastCraft = {
   MOCK_LIBRARY,
   LIBRARY_FILTERS,
   SUBTYPE_LABELS,
-  DRAG_MIME
+  DRAG_MIME,
+  PIXELS_PER_SECOND_BASE,
+  /**
+   * Semilla opcional de prueba (Sprint 3 — 2.1):
+   * Permite cargar los 8 bloques mock manualmente desde la consola sin que la app
+   * los cargue sola al iniciar.
+   */
+  loadSampleLibrary() {
+    setState({ library: [...MOCK_LIBRARY] });
+    console.info('[PodcastCraft AI] Semilla MOCK_LIBRARY cargada manualmente en la biblioteca.');
+  },
+  recomputeProjectDuration: () => recomputeProjectDuration()
 };
 
 
 /* ==========================================================================
    4. UTILS
    ========================================================================== */
+
+/**
+ * Recalcula dinámicamente la duración total del proyecto a partir del tiempo final
+ * (start + duration) de todos los clips colocados en todos los carriles del timeline.
+ * Si no hay clips colocados, retorna 0.
+ * @param {Array} [tracksList] - Lista de carriles a inspeccionar (por defecto state.tracks)
+ * @returns {number} Duración total en segundos
+ */
+function recomputeProjectDuration(tracksList = state.tracks) {
+  let maxEnd = 0;
+  if (Array.isArray(tracksList)) {
+    for (const track of tracksList) {
+      if (Array.isArray(track.clips)) {
+        for (const clip of track.clips) {
+          const clipEnd = (clip.start || 0) + (clip.duration || 0);
+          if (clipEnd > maxEnd) {
+            maxEnd = clipEnd;
+          }
+        }
+      }
+    }
+  }
+  return maxEnd;
+}
+
+/**
+ * Calcula la escala visual actual de la línea de tiempo (píxeles por segundo)
+ * en función del nivel de zoom configurado en state.project.zoom (0–100).
+ * @returns {number}
+ */
+function getPixelsPerSecond() {
+  const zoom = typeof state.project.zoom === 'number' ? state.project.zoom : 50;
+  const zoomFactor = Math.max(0.25, zoom / 50);
+  return PIXELS_PER_SECOND_BASE * zoomFactor;
+}
 
 /**
  * Convierte un total de segundos a formato estandarizado HH:MM:SS.
@@ -385,17 +437,71 @@ function renderTransport() {
     durationLabel.textContent = formatTime(state.project.duration);
   }
 
-  // Botón Play / Pausa
+  // Comprobar presencia de clips en el timeline (Sprint 3 — 5.1)
+  const totalClips = state.tracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
+  const hasClips = totalClips > 0;
+
+  // Botón Play / Pausa contextual
   const btnPlay = $('#btn-play');
   if (btnPlay) {
-    if (state.project.isPlaying) {
-      btnPlay.innerHTML = '<i data-lucide="pause" class="w-4 h-4 fill-white"></i>';
-      btnPlay.setAttribute('aria-label', 'Pausar');
-      btnPlay.setAttribute('title', 'Pausar (Espacio)');
-    } else {
+    if (!hasClips) {
+      btnPlay.setAttribute('disabled', 'true');
+      btnPlay.setAttribute('aria-disabled', 'true');
+      btnPlay.setAttribute('aria-label', 'Reproducir (sin audio cargado)');
+      btnPlay.setAttribute('title', 'Reproducir (sin audio cargado)');
+      btnPlay.className = 'w-9 h-9 rounded-full flex items-center justify-center bg-violet-600 text-white shadow-md outline-none transition-all duration-150 opacity-40 cursor-not-allowed';
       btnPlay.innerHTML = '<i data-lucide="play" class="w-4 h-4 fill-white ml-0.5"></i>';
-      btnPlay.setAttribute('aria-label', 'Reproducir');
-      btnPlay.setAttribute('title', 'Reproducir (Espacio)');
+    } else {
+      btnPlay.removeAttribute('disabled');
+      btnPlay.setAttribute('aria-disabled', 'false');
+      btnPlay.className = 'w-9 h-9 rounded-full flex items-center justify-center bg-violet-600 hover:bg-violet-500 text-white shadow-md glow-ai active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 outline-none transition-all duration-150 cursor-pointer';
+
+      if (state.project.isPlaying) {
+        btnPlay.innerHTML = '<i data-lucide="pause" class="w-4 h-4 fill-white"></i>';
+        btnPlay.setAttribute('aria-label', 'Pausar');
+        btnPlay.setAttribute('title', 'Pausar (Espacio)');
+      } else {
+        btnPlay.innerHTML = '<i data-lucide="play" class="w-4 h-4 fill-white ml-0.5"></i>';
+        btnPlay.setAttribute('aria-label', 'Reproducir');
+        btnPlay.setAttribute('title', 'Reproducir (Espacio)');
+      }
+    }
+  }
+
+  // Información del clip en reproducción activa (#now-playing-name, #now-playing-meta)
+  const nowPlayingName = $('#now-playing-name');
+  const nowPlayingMeta = $('#now-playing-meta');
+  if (nowPlayingName && nowPlayingMeta) {
+    let activeClip = null;
+    if (state.selection.clipId) {
+      for (const t of state.tracks) {
+        const found = t.clips.find((c) => c.id === state.selection.clipId);
+        if (found) {
+          activeClip = found;
+          break;
+        }
+      }
+    }
+    if (!activeClip && hasClips) {
+      const trackOrder = ['track-voice', 'track-music', 'track-fx'];
+      for (const tId of trackOrder) {
+        const t = state.tracks.find((x) => x.id === tId || x.category === tId.replace('track-', ''));
+        if (t && t.clips.length > 0) {
+          activeClip = t.clips[0];
+          break;
+        }
+      }
+    }
+
+    if (activeClip) {
+      nowPlayingName.textContent = activeClip.name;
+      nowPlayingName.setAttribute('title', activeClip.name);
+      const audioTag = activeClip.objectUrl ? 'Audio real' : 'Demo (sin audio)';
+      nowPlayingMeta.textContent = `${formatDuration(activeClip.duration)} · ${audioTag}`;
+    } else {
+      nowPlayingName.textContent = 'Ningún clip en la línea de tiempo';
+      nowPlayingName.setAttribute('title', 'Ningún clip en la línea de tiempo');
+      nowPlayingMeta.textContent = '—';
     }
   }
 
@@ -588,6 +694,84 @@ function renderLibraryList() {
 }
 
 /**
+ * Renderiza los clips visuales en los 3 carriles del timeline (#timeline-tracks).
+ * Sprint 3 (4.6): Muestra la posición (start * pps) y ancho (duration * pps) de cada clip,
+ * junto con el nombre truncado, el badge "(sin audio)" si es mock, y los estados vacíos.
+ */
+function renderTimelineTracks() {
+  const totalClips = state.tracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
+  const allTracksEmpty = totalClips === 0;
+  const pps = getPixelsPerSecond();
+
+  const laneElements = {
+    voice: $('#timeline-track-voice'),
+    music: $('#timeline-track-music'),
+    fx: $('#timeline-track-fx')
+  };
+
+  for (const track of state.tracks) {
+    const lane = laneElements[track.category];
+    if (!lane) continue;
+
+    const clips = track.clips || [];
+
+    if (clips.length === 0) {
+      if (allTracksEmpty) {
+        lane.innerHTML = `
+          <div class="h-full flex items-center justify-center gap-2 text-slate-500 px-4 select-none pointer-events-none">
+            <i data-lucide="film" class="w-4 h-4 text-slate-600 shrink-0"></i>
+            <span class="text-xs font-medium">Arrastra bloques desde la biblioteca para empezar</span>
+          </div>
+        `;
+      } else {
+        lane.innerHTML = `
+          <div class="h-full flex items-center justify-center text-slate-600 px-4 select-none pointer-events-none">
+            <span class="text-xs italic">Carril vacío</span>
+          </div>
+        `;
+      }
+    } else {
+      const clipsHtml = clips.map((clip) => {
+        const leftPx = Math.round((clip.start || 0) * pps);
+        const widthPx = Math.max(38, Math.round((clip.duration || 0) * pps));
+        const isSelected = state.selection.clipId === clip.id;
+        const style = TRACK_STYLES[clip.category] || TRACK_STYLES.voice;
+        const hasAudio = Boolean(clip.objectUrl);
+        const formattedDuration = formatDuration(clip.duration);
+        const startFormatted = formatDuration(clip.start);
+        const endFormatted = formatDuration((clip.start || 0) + (clip.duration || 0));
+        const fullAriaLabel = `${clip.name}, de ${startFormatted} a ${endFormatted}`;
+
+        const selectionClasses = isSelected
+          ? 'ring-2 ring-white border-white shadow-lg z-20'
+          : 'hover:brightness-110 z-10';
+
+        return `
+          <div
+            id="timeline-clip-${clip.id}"
+            data-clip-id="${clip.id}"
+            data-track-id="${track.id}"
+            role="button"
+            tabindex="0"
+            aria-label="${escapeHtml(fullAriaLabel)}"
+            title="${escapeHtml(clip.name)} (${formattedDuration})"
+            class="timeline-clip absolute top-1.5 bottom-1.5 rounded-md border flex items-center px-2.5 gap-2 cursor-pointer select-none transition-all duration-150 ${style.clip} ${selectionClasses}"
+            style="left: ${leftPx}px; width: ${widthPx}px;"
+          >
+            <span class="text-xs font-semibold truncate ${style.text} flex-1 min-w-0">${escapeHtml(clip.name)}</span>
+            ${!hasAudio
+              ? '<span class="text-[9px] text-slate-400 font-mono shrink-0 whitespace-nowrap bg-slate-900/70 px-1 py-0.5 rounded border border-slate-700/60 leading-none">(sin audio)</span>'
+              : '<span class="text-[10px] font-mono text-slate-200 shrink-0 opacity-80 tabular-nums leading-none">' + formattedDuration + '</span>'}
+          </div>
+        `;
+      }).join('');
+
+      lane.innerHTML = clipsHtml;
+    }
+  }
+}
+
+/**
  * ÚNICO punto de invocación de Lucide Icons en el ciclo de vida.
  */
 function renderIcons() {
@@ -615,6 +799,12 @@ function renderAll(currentState = state, prevState) {
     currentState.selection.libraryId !== prevState.selection.libraryId
   );
 
+  const tracksChanged = isInitial || (
+    currentState.tracks !== prevState.tracks ||
+    currentState.selection.clipId !== prevState?.selection?.clipId ||
+    currentState.project.zoom !== prevState?.project?.zoom
+  );
+
   // CRÍTICO: Nótese que currentState.ui.draggingLibraryId NO dispara libraryChanged.
   // Durante el arrastre, cambiar draggingLibraryId NO debe destruir ni regenerar
   // el nodo de la tarjeta en el DOM, ya que de lo contrario el navegador aborta el dragstart.
@@ -630,8 +820,14 @@ function renderAll(currentState = state, prevState) {
     renderLibraryCount();
   }
 
+  if (tracksChanged) {
+    renderTimelineTracks();
+    renderTransport();
+  }
+
   renderIcons();
 }
+
 
 
 /* ==========================================================================
@@ -639,18 +835,82 @@ function renderAll(currentState = state, prevState) {
    ========================================================================== */
 
 /**
- * Conecta los eventos de controles de transporte y audio.
+ * Instancia global y única de audio para reproducción real en la estación de trabajo.
+ */
+const globalAudio = new Audio();
+
+globalAudio.addEventListener('ended', () => {
+  setState({ project: { isPlaying: false } });
+});
+
+/**
+ * Sincroniza el volumen y estado de silencio en el elemento de audio global.
+ */
+function syncGlobalAudioVolume() {
+  if (globalAudio) {
+    globalAudio.volume = state.project.isMuted ? 0 : (state.project.volume / 100);
+    globalAudio.muted = state.project.isMuted;
+  }
+}
+
+/**
+ * Conecta los eventos de controles de transporte y audio (Sprint 3 — 5.2).
  */
 function bindTransportEvents() {
-  // Play / Pausa
+  // Play / Pausa contextual y reproducción de audio real
   const btnPlay = $('#btn-play');
   if (btnPlay) {
     btnPlay.addEventListener('click', () => {
-      setState({
-        project: {
-          isPlaying: !state.project.isPlaying
+      const totalClips = state.tracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
+      if (totalClips === 0) return; // Deshabilitado si no hay clips
+
+      if (state.project.isPlaying) {
+        globalAudio.pause();
+        setState({
+          project: { isPlaying: false }
+        });
+      } else {
+        // Localizar clip a reproducir: clip seleccionado o primer clip en orden voice -> music -> fx
+        let targetClip = null;
+        if (state.selection.clipId) {
+          for (const t of state.tracks) {
+            const found = t.clips.find((c) => c.id === state.selection.clipId);
+            if (found) {
+              targetClip = found;
+              break;
+            }
+          }
         }
-      });
+        if (!targetClip) {
+          const trackOrder = ['track-voice', 'track-music', 'track-fx'];
+          for (const tId of trackOrder) {
+            const t = state.tracks.find((x) => x.id === tId || x.category === tId.replace('track-', ''));
+            if (t && t.clips.length > 0) {
+              targetClip = t.clips[0];
+              break;
+            }
+          }
+        }
+
+        if (targetClip && targetClip.objectUrl) {
+          if (globalAudio.src !== targetClip.objectUrl) {
+            globalAudio.src = targetClip.objectUrl;
+            globalAudio.currentTime = 0;
+          }
+          syncGlobalAudioVolume();
+          globalAudio.play().catch((err) => {
+            console.warn('[PodcastCraft AI] Error en reproducción de audio real:', err);
+          });
+        } else {
+          // Si el clip no tiene objectUrl (viene de MOCK_LIBRARY vía loadSampleLibrary()),
+          // simula la reproducción como en el Sprint 1 (solo cambia el ícono y el estado, sin audio real)
+          globalAudio.pause();
+        }
+
+        setState({
+          project: { isPlaying: true }
+        });
+      }
     });
   }
 
@@ -659,6 +919,9 @@ function bindTransportEvents() {
   if (btnRewind) {
     btnRewind.addEventListener('click', () => {
       const nextTime = clamp(state.project.currentTime - 5, 0, state.project.duration);
+      if (globalAudio.src && !isNaN(globalAudio.currentTime)) {
+        globalAudio.currentTime = Math.max(0, globalAudio.currentTime - 5);
+      }
       setState({
         project: {
           currentTime: nextTime
@@ -672,6 +935,9 @@ function bindTransportEvents() {
   if (btnForward) {
     btnForward.addEventListener('click', () => {
       const nextTime = clamp(state.project.currentTime + 5, 0, state.project.duration);
+      if (globalAudio.src && !isNaN(globalAudio.currentTime)) {
+        globalAudio.currentTime = Math.min(globalAudio.duration || 0, globalAudio.currentTime + 5);
+      }
       setState({
         project: {
           currentTime: nextTime
@@ -691,6 +957,7 @@ function bindTransportEvents() {
           isMuted: newVol === 0
         }
       });
+      syncGlobalAudioVolume();
     };
     volumeSlider.addEventListener('input', updateVolumeFromInput);
     volumeSlider.addEventListener('change', updateVolumeFromInput);
@@ -700,14 +967,269 @@ function bindTransportEvents() {
   const btnMute = $('#btn-mute');
   if (btnMute) {
     btnMute.addEventListener('click', () => {
+      const nextMuted = !state.project.isMuted;
       setState({
         project: {
-          isMuted: !state.project.isMuted
+          isMuted: nextMuted
         }
       });
+      syncGlobalAudioVolume();
     });
   }
 }
+
+/**
+ * Conecta los eventos de importación de audio real del sistema de archivos (Sprint 3 — 3.1 & 3.2).
+ */
+function bindImportAudioEvents() {
+  const btnImport = $('#btn-import-audio');
+  const fileInput = $('#audio-file-input');
+
+  if (btnImport && fileInput) {
+    btnImport.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', async (e) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+
+      const newItems = [];
+      for (const file of Array.from(files)) {
+        const objectUrl = URL.createObjectURL(file);
+        const audio = new Audio(objectUrl);
+
+        // Esperar evento loadedmetadata para leer la duración real del archivo
+        const duration = await new Promise((resolve) => {
+          const onLoaded = () => {
+            cleanup();
+            let dur = audio.duration;
+            // Fallback documentado: en ciertos formatos comprimidos o streaming, duration puede reportar Infinity o NaN
+            if (!isFinite(dur) || isNaN(dur)) {
+              dur = 0;
+            }
+            resolve(Math.round(dur));
+          };
+          const onError = () => {
+            cleanup();
+            resolve(0);
+          };
+          const timer = setTimeout(() => {
+            cleanup();
+            resolve(0);
+          }, 3000);
+
+          function cleanup() {
+            clearTimeout(timer);
+            audio.removeEventListener('loadedmetadata', onLoaded);
+            audio.removeEventListener('error', onError);
+          }
+
+          audio.addEventListener('loadedmetadata', onLoaded);
+          audio.addEventListener('error', onError);
+        });
+
+        // Simplificación documentada (Sprint 3): todo archivo importado entra por defecto como 'voice'
+        // Regla de memoria para sprints futuros: URL.revokeObjectURL(item.objectUrl) al eliminar ítems
+        const newItem = {
+          id: `lib-import-${crypto.randomUUID()}`,
+          name: file.name.replace(/\.[^/.]+$/, ''), // sin extensión
+          category: 'voice',
+          subtype: 'voice',
+          duration: duration,
+          icon: 'file-audio',
+          objectUrl,
+          isImported: true
+        };
+        newItems.push(newItem);
+      }
+
+      setState({
+        library: [...state.library, ...newItems]
+      });
+
+      // Limpiar input.value para permitir reimportar el mismo archivo
+      fileInput.value = '';
+      console.info(`[PodcastCraft AI] ${newItems.length} archivo(s) de audio importado(s) a la biblioteca.`);
+    });
+  }
+}
+
+/**
+ * Conecta los eventos del Timeline: drop zones delegadas, prevención de colisión y selección (Sprint 3 — 4.3 & 4.4).
+ */
+function bindTimelineEvents() {
+  const timelineTracks = $('#timeline-tracks');
+  if (!timelineTracks) return;
+
+  // 1. dragover delegado sobre los carriles
+  timelineTracks.addEventListener('dragover', (e) => {
+    // e.preventDefault() ÚNICAMENTE si dataTransfer incluye DRAG_MIME (Sprint 3 — 4.3)
+    if (!e.dataTransfer.types.includes(DRAG_MIME)) {
+      return;
+    }
+    e.preventDefault();
+
+    const lane = e.target.closest('#timeline-track-voice, #timeline-track-music, #timeline-track-fx');
+    if (!lane) return;
+
+    const draggingId = state.ui.draggingLibraryId;
+    const draggingItem = draggingId ? getLibraryItem(draggingId) : null;
+    const laneCategory = lane.dataset.category;
+
+    // Resalta visualmente el carril activo solo si coincide la categoría
+    if (draggingItem && draggingItem.category === laneCategory) {
+      e.dataTransfer.dropEffect = 'copy';
+      lane.classList.add(`lane-highlight-${laneCategory}`);
+      lane.style.cursor = '';
+    } else {
+      e.dataTransfer.dropEffect = 'none';
+      lane.classList.remove('lane-highlight-voice', 'lane-highlight-music', 'lane-highlight-fx');
+      lane.style.cursor = 'not-allowed';
+    }
+  });
+
+  // 2. dragleave delegado sobre los carriles
+  timelineTracks.addEventListener('dragleave', (e) => {
+    const lane = e.target.closest('#timeline-track-voice, #timeline-track-music, #timeline-track-fx');
+    if (lane && !lane.contains(e.relatedTarget)) {
+      lane.classList.remove('lane-highlight-voice', 'lane-highlight-music', 'lane-highlight-fx');
+      lane.style.cursor = '';
+    }
+  });
+
+  // 3. drop delegado sobre un carril
+  timelineTracks.addEventListener('drop', (e) => {
+    const lane = e.target.closest('#timeline-track-voice, #timeline-track-music, #timeline-track-fx');
+    if (!lane) return;
+
+    lane.classList.remove('lane-highlight-voice', 'lane-highlight-music', 'lane-highlight-fx');
+    lane.style.cursor = '';
+
+    if (!e.dataTransfer.types.includes(DRAG_MIME)) return;
+    e.preventDefault();
+
+    let payload;
+    try {
+      payload = JSON.parse(e.dataTransfer.getData(DRAG_MIME));
+    } catch (err) {
+      console.warn('[PodcastCraft AI] Error parseando datos de arrastre:', err);
+      return;
+    }
+
+    if (!payload || !payload.category) return;
+    const destinationCategory = lane.dataset.category;
+
+    // Validación de categoría destino: rechazo con parpadeo rojo breve de 200ms
+    if (payload.category !== destinationCategory) {
+      lane.classList.add('lane-reject-flash');
+      setTimeout(() => {
+        lane.classList.remove('lane-reject-flash');
+      }, 200);
+      setState({ ui: { draggingLibraryId: null } });
+      return;
+    }
+
+    // Calcular posición horizontal (start) a partir de X del drop convertida a segundos
+    const rect = lane.getBoundingClientRect();
+    const dropX = e.clientX - rect.left + lane.scrollLeft;
+    const pps = getPixelsPerSecond();
+    let start = Math.max(0, Math.round(dropX / pps));
+    const duration = Math.round(payload.duration || 0);
+    let end = start + duration;
+
+    // Evitar overlap simple: si se solapa con un clip existente, mover al final del clip más cercano
+    const targetTrack = state.tracks.find((t) => t.category === destinationCategory);
+    if (!targetTrack) return;
+
+    const existingClips = [...targetTrack.clips].sort((a, b) => a.start - b.start);
+    for (const c of existingClips) {
+      const cStart = c.start || 0;
+      const cEnd = cStart + (c.duration || 0);
+      if (start < cEnd && end > cStart) {
+        start = cEnd;
+        end = start + duration;
+      }
+    }
+
+    // Traer objectUrl del ítem de biblioteca original si existe
+    const libItem = getLibraryItem(payload.libraryId);
+    const objectUrl = libItem ? (libItem.objectUrl ?? null) : null;
+
+    // Construir nuevo clip para el carril
+    const newClip = {
+      id: `clip-${crypto.randomUUID()}`,
+      libraryId: payload.libraryId,
+      name: payload.name,
+      category: payload.category,
+      duration: duration,
+      start: start,
+      objectUrl: objectUrl
+    };
+
+    // Actualización inmutable de tracks y recálculo de duración total
+    const nextTracks = state.tracks.map((t) => {
+      if (t.id === targetTrack.id) {
+        return {
+          ...t,
+          clips: [...t.clips, newClip].sort((a, b) => a.start - b.start)
+        };
+      }
+      return t;
+    });
+
+    const nextDuration = recomputeProjectDuration(nextTracks);
+
+    setState({
+      tracks: nextTracks,
+      project: {
+        duration: nextDuration
+      },
+      ui: {
+        draggingLibraryId: null
+      },
+      selection: {
+        clipId: newClip.id
+      }
+    });
+
+    console.info('[PodcastCraft AI] Clip colocado en carril:', newClip);
+  });
+
+  // 4. Delegación de selección por clic sobre clips del timeline
+  timelineTracks.addEventListener('click', (e) => {
+    const clipEl = e.target.closest('[data-clip-id]');
+    if (clipEl) {
+      const clipId = clipEl.dataset.clipId;
+      const nextClipId = state.selection.clipId === clipId ? null : clipId;
+      setState({ selection: { clipId: nextClipId } });
+    } else {
+      // Clic en área vacía del timeline deselecciona
+      if (state.selection.clipId !== null) {
+        setState({ selection: { clipId: null } });
+      }
+    }
+  });
+
+  // 5. Navegación por teclado en clips del timeline
+  timelineTracks.addEventListener('keydown', (e) => {
+    const clipEl = e.target.closest('[data-clip-id]');
+    if (e.key === 'Enter' || e.key === ' ') {
+      if (clipEl) {
+        e.preventDefault();
+        const clipId = clipEl.dataset.clipId;
+        const nextClipId = state.selection.clipId === clipId ? null : clipId;
+        setState({ selection: { clipId: nextClipId } });
+      }
+    } else if (e.key === 'Escape') {
+      if (state.selection.clipId !== null) {
+        e.preventDefault();
+        setState({ selection: { clipId: null } });
+      }
+    }
+  });
+}
+
 
 /**
  * Conecta los eventos de la barra superior (Zoom, Exportar y Análisis IA).
@@ -991,15 +1513,28 @@ function bindViewportGuard() {
 subscribe(renderAll);
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. Renderizado inicial de datos reactivos
+  // 1. Renderizado inicial de datos reactivos (Clean slate)
   renderAll();
 
   // 2. Vinculación de escuchadores de eventos
   bindTransportEvents();
   bindTopbarEvents();
   bindLibraryEvents();
+  bindImportAudioEvents();
+  bindTimelineEvents();
   bindGlobalDragGuard();
   bindViewportGuard();
 
-  console.info('[PodcastCraft AI] Sprint 2 inicializado correctamente. Sistema listo.');
+  // Soporte opcional por parámetro URL (?sample=true o ?demo=true) para evaluación y testing rápido
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('sample') === 'true' || urlParams.get('demo') === 'true') {
+      window.PodcastCraft.loadSampleLibrary();
+    }
+  } catch (err) {
+    // Entorno sin soporte de URLSearchParams
+  }
+
+  console.info('[PodcastCraft AI] Sprint 3 (Pivote local funcional) inicializado correctamente. Sistema listo.');
 });
+
