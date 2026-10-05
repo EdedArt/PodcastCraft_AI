@@ -1,0 +1,331 @@
+/* ==========================================================================
+   PodcastCraft AI — Estilos Base y Sistema de Diseño
+   Sprint 1: Shell de escritorio, Tokens y Controles de Audio
+   ========================================================================== */
+
+/* 1. Tipografía Inter con fallback de sistema operativo */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* 2. Reglas generales de interacción y selección */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Permitir selección de texto en áreas designadas (usado en Sprint 4 para transcripciones) */
+.selectable {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Prevenir arrastre accidental de elementos no interactivos */
+.no-drag-select {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* 3. Barras de desplazamiento oscuras personalizadas */
+/* Track: #0f172a (slate-900), Thumb: #334155 (slate-700), Hover: #475569 (slate-600) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a; /* slate-900 */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155; /* slate-700 */
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569; /* slate-600 */
+}
+
+/* Firefox scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 #0f172a;
+}
+
+/* 4. Resplandor IA unificado (coherente con boxShadow.glow-ai en tailwind-config.js) */
+.glow-ai {
+  box-shadow: 0 0 16px 2px rgba(168, 85, 247, 0.25);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.glow-ai:hover {
+  box-shadow: 0 0 20px 4px rgba(168, 85, 247, 0.4);
+}
+
+/* 5. Keyframes reservados para Sprint 6 (Animación de recorte y análisis de IA) */
+@keyframes ai-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.02);
+  }
+}
+
+.animate-ai-pulse {
+  animation: ai-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* 6. Estilos Cross-browser para input[type=range] con variable CSS --range-progress */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 20px;
+}
+
+input[type="range"]:focus {
+  outline: none;
+}
+
+/* --- WebKit (Chrome, Safari, Edge) --- */
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    #94a3b8 0%,
+    #94a3b8 var(--range-progress, 50%),
+    #334155 var(--range-progress, 50%),
+    #334155 100%
+  );
+  transition: background 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #64748b;
+  margin-top: -4px; /* Centrado vertical sobre pista de 4px */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.2);
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.25);
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+}
+
+/* --- Mozilla Firefox --- */
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    #94a3b8 0%,
+    #94a3b8 var(--range-progress, 50%),
+    #334155 var(--range-progress, 50%),
+    #334155 100%
+  );
+  border: none;
+  transition: background 0.15s ease;
+}
+
+input[type="range"]::-moz-range-thumb {
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #64748b;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+input[type="range"]:hover::-moz-range-thumb {
+  transform: scale(1.2);
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+input[type="range"]:active::-moz-range-thumb {
+  transform: scale(1.25);
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+}
+
+/* Focus Visible para accesibilidad */
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid #a855f7;
+  outline-offset: 3px;
+}
+
+input[type="range"]:focus-visible::-moz-range-thumb {
+  outline: 2px solid #a855f7;
+  outline-offset: 3px;
+}
+
+/* 7. Estado de arrastre para tarjetas de biblioteca (Sprint 2) */
+.is-dragging {
+  opacity: 0.4 !important;
+  transform: scale(0.98);
+}
+
+/* Ocultar barra de scroll en pestañas de biblioteca para evitar ruido visual */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 8. Estilos para Timeline y Drop Zones (Sprint 4) */
+.timeline-lane {
+  position: relative;
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 100%;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+/* Resaltado durante dragover genérico (Sprint 4: Neutro slate-100 para cumplir regla cromática) */
+.lane-dragover {
+  background-color: rgba(241, 245, 249, 0.08) !important; /* slate-100 muy sutil, neutro */
+  outline: 2px dashed rgba(241, 245, 249, 0.35) !important;
+  outline-offset: -2px;
+}
+
+/* Clips en el carril */
+.timeline-clip {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  touch-action: none;
+}
+
+.timeline-clip:hover {
+  filter: brightness(1.12);
+}
+
+.timeline-clip.is-selected {
+  border-color: #ffffff !important;
+  box-shadow: 0 0 0 2px #ffffff, 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+  transform: scale(1.02);
+  z-index: 25 !important;
+}
+
+/* Asas de recorte (Trim Handles) */
+.clip-handle-left,
+.clip-handle-right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 0.1s ease;
+}
+
+.clip-handle-left {
+  left: 0;
+  border-top-left-radius: 0.375rem;
+  border-bottom-left-radius: 0.375rem;
+}
+
+.clip-handle-right {
+  right: 0;
+  border-top-right-radius: 0.375rem;
+  border-bottom-right-radius: 0.375rem;
+}
+
+.clip-handle-left:hover,
+.clip-handle-right:hover {
+  background-color: rgba(255, 255, 255, 0.35);
+}
+
+.clip-handle-left::after,
+.clip-handle-right::after {
+  content: '';
+  width: 2px;
+  height: 14px;
+  background-color: rgba(255, 255, 255, 0.6);
+  border-radius: 9999px;
+  pointer-events: none;
+}
+
+body.is-trimming {
+  cursor: ew-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+body.is-trimming * {
+  cursor: ew-resize !important;
+  user-select: none !important;
+}
+
+/* Input para renombrar carril in situ (Sprint 4: Borde neutro slate) */
+.track-rename-input {
+  background: #0f172a; /* slate-900 */
+  border: 1px solid #475569; /* slate-600 */
+  color: #f8fafc;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  outline: none;
+  width: 100%;
+  box-shadow: 0 0 0 1px #334155;
+}
+
+.track-rename-input:focus {
+  border-color: #94a3b8; /* slate-400 */
+  box-shadow: 0 0 0 1px #94a3b8;
+}
+
+/* 9. Accesibilidad: Reducción de movimiento */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+    transform: none !important;
+  }
+}
+
+/* ==========================================================================
+   10. Playhead de Alta Fidelidad y Scrubbing (Sprint 5)
+   ========================================================================== */
+#timeline-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: #ffffff;
+  box-shadow: 0 0 4px 1px rgba(255, 255, 255, 0.5), 0 0 8px 2px rgba(239, 68, 68, 0.4);
+  pointer-events: none;
+  z-index: 30;
+  transform: translateX(0px);
+  will-change: transform;
+}
+
+
+
