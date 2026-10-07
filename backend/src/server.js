@@ -1,6 +1,7 @@
 const express = require('express');
 const { readProject } = require('./storage');
 const projectRoutes = require('./routes/project');
+const audioRoutes = require('./routes/audio');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -13,8 +14,9 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Rutas de proyecto
+// Rutas de API
 app.use('/api/project', projectRoutes);
+app.use('/api/audio', audioRoutes);
 
 async function startServer() {
   try {
