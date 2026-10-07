@@ -1,12 +1,20 @@
 const express = require('express');
 const { readProject } = require('./storage');
+const projectRoutes = require('./routes/project');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Middleware para parsear cuerpos JSON
+app.use(express.json());
+
+// Endpoint de verificación de salud
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
+
+// Rutas de proyecto
+app.use('/api/project', projectRoutes);
 
 async function startServer() {
   try {
