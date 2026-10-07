@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const { readProject } = require('./storage');
 const projectRoutes = require('./routes/project');
@@ -8,6 +9,9 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware para parsear cuerpos JSON
 app.use(express.json());
+
+// Servir archivos de audio como estáticos (específicamente la subcarpeta audio-files)
+app.use('/audio-files', express.static(path.join(__dirname, '..', 'storage', 'audio-files')));
 
 // Endpoint de verificación de salud
 app.get('/health', (req, res) => {

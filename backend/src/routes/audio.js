@@ -3,6 +3,7 @@ const multer = require('multer');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const fsPromises = require('fs').promises;
 
 const router = express.Router();
 
@@ -63,6 +64,38 @@ router.post('/', (req, res) => {
       sizeBytes: req.file.size
     });
   });
+});
+
+// DELETE /api/audio/:id — elimina el archivo físico correspondiente
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
+  const prefix = 'lib-import-';
+
+  if (!id.startsWith(prefix)) {
+    return res.status(400).json({ error: 'ID de audio con formato inválido.' });
+  }
+
+  const uuid = id.slice(prefix.length);
+  const filename = `${uuid}.mp3`;
+  const filePath = path.join(AUDIO_DIR, filename);
+
+  // Previene path traversal: confirma que el archivo resuelto sigue dentro de AUDIO_DIR
+  const resolvedPath = path.resolve(filePath);
+  const resolvedAudioDir = path.resolve(AUDIO_DIR);
+  if (!resolvedPath.startsWith(resolvedAudioDir)) {
+    return res.status(400).json({ error: 'ID de audio inválido.' });
+  }
+
+  try {
+    await fsPromises.unlink(resolvedPath);
+    res.json({ deleted: true, id });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({ error: 'El archivo de audio no existe.' });
+    }
+    console.error('[DELETE /api/audio/:id] Error:', error.message);
+    res.status(500).json({ error: 'No se pudo eliminar el archivo.' });
+  }
 });
 
 module.exports = router;
