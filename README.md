@@ -59,6 +59,29 @@ La **Regla de Oro Cromática** se respeta rigurosamente en ambos temas (el viole
 
 ---
 
+## ⏱️ Fase 9: Snap de Clips a 00:00 en Carriles Vacíos + Playhead Alineado con Inicio Real del Clip
+
+Esta fase corrige dos discrepancias críticas del timeline para alinear el comportamiento con el estándar de una estación de trabajo de audio digital (DAW) profesional:
+
+### 1. Snap a Inicio en Carriles Vacíos (`calculateDropStart`)
+- **Problema previo:** Al soltar un clip desde la biblioteca sobre un carril vacío, la posición de inicio `start` dependía de las coordenadas del puntero (`dropX / pixelsPerSecond`). Esto obligaba al usuario a tener precisión milimétrica sobre el borde izquierdo para que el clip iniciara en `00:00`.
+- **Corrección:** Se implementó `calculateDropStart(track, dropX, pixelsPerSecond, clipDuration)` como único punto de cálculo de posición al soltar:
+  - **Carril vacío (`track.clips.length === 0`):** Retorna contractualmente `0` (anclaje automático a `00:00`), permitiendo soltar el clip en cualquier punto del carril.
+  - **Carril con clips existentes:** Conserva el posicionamiento libre según `dropX` y aplica el algoritmo de detección de colisiones para desplazar el clip adyacentemente sin pisar otros clips.
+
+### 2. Playhead Alineado con el Inicio Real del Clip Activo (`activePlayingClipStart`)
+- **Problema previo:** En el loop de sincronización a 60 FPS (`requestAnimationFrame`), la traslación del playhead se calculaba como `globalAudio.currentTime * getPixelsPerSecond()`. Si el clip reproducido tenía un desplazamiento en el timeline (por ejemplo `start = 15s`), el playhead se dibujaba desfasado desde `00:00` en lugar de alinearse con el borde del clip sonando.
+- **Corrección:**
+  - Se rastrea activamente `activePlayingClipStart` y `activePlayingClipDuration` en el motor de audio.
+  - El bucle `tick()` calcula el tiempo absoluto como `absoluteSeconds = activePlayingClipStart + (globalAudio.currentTime || 0)`.
+  - La posición física en píxeles del playhead es `absoluteSeconds * getPixelsPerSecond()`, garantizando alineación visual exacta con el clip en reproducción tanto al inicio (`audioElapsed = 0`) como a lo largo de su reproducción continua.
+  - Si un clip posee una duración recortada (`activePlayingClipDuration`), la reproducción se detiene automáticamente al alcanzar el final del clip y el playhead retorna a su inicio.
+
+### 3. Scrubbing Inteligente y Decisión Contractual en Zonas Vacías (`seekTo`)
+- Al interactuar con la regla `#timeline-ruler` o hacer clic sobre cualquier clip en el timeline, `seekTo(targetSeconds)` evalúa si la marca temporal se encuentra dentro de los límites de algún clip existente (`clip.start <= seconds < clip.start + clip.duration`):
+  - **Si cae sobre un clip:** Sincroniza `globalAudio.src` con el archivo del clip, actualiza `activePlayingClipStart = clip.start`, ajusta `globalAudio.currentTime = seconds - clip.start`, selecciona el clip y reanuda la reproducción si el transporte estaba activo.
+  - **Decisión en Zonas Vacías:** Si el punto de búsqueda cae sobre un espacio vacío (huecos entre clips o áreas sin audio), el reproductor **detiene/pausa `globalAudio` de inmediato** para evitar reproducir audio fuera de contexto, pero **desplaza el playhead y el contador `#current-time` visualmente** a esa coordenada absoluta. Esto permite posicionar el cursor de edición libremente en el timeline sin generar errores en el motor de audio.
+
 ---
 
 ## 📌 Decisiones de Arquitectura y Alcance — Sprint 5

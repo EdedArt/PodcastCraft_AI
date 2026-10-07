@@ -181,18 +181,57 @@ window.PodcastCraft = {
   createTrack,
   deleteTrack,
   renameTrack,
+  calculateDropStart,
   recomputeProjectDuration: () => recomputeProjectDuration(),
   getPixelsPerSecond: () => getPixelsPerSecond(),
   seekTo: (sec) => seekTo(sec),
   startPlayheadLoop: () => startPlayheadLoop(),
   stopPlayheadLoop: () => stopPlayheadLoop(),
-  get globalAudio() { return globalAudio; }
+  get globalAudio() { return globalAudio; },
+  get activePlayingClipStart() { return activePlayingClipStart; }
 };
 
 
 /* ==========================================================================
    4. UTILS
    ========================================================================== */
+
+/**
+ * Calcula la posición de inicio (en segundos) de un clip al soltarlo en un carril (Fase 9).
+ * - Si el carril está vacío: SIEMPRE se ancla a 0 (00:00), sin importar dónde se soltó.
+ * - Si el carril ya tiene clips: calcula la posición aproximada desde dropX y aplica
+ *   el acomodo automático post-colisión para no pisar clips existentes.
+ * @param {object} track - Carril destino
+ * @param {number} dropX - Posición X del puntero en píxeles dentro del carril
+ * @param {number} pixelsPerSecond - Escala actual de píxeles por segundo
+ * @param {number} clipDuration - Duración del clip que se está soltando
+ * @returns {number} Posición de inicio en segundos
+ */
+function calculateDropStart(track, dropX, pixelsPerSecond, clipDuration) {
+  const sortedClips = [...(track.clips || [])].sort((a, b) => a.start - b.start);
+
+  if (sortedClips.length === 0) {
+    // Carril vacío: SIEMPRE se ancla a 0, sin importar dónde se soltó
+    return 0;
+  }
+
+  // Carril con clips existentes: se mantiene el comportamiento actual
+  let start = Math.max(0, Math.round(dropX / pixelsPerSecond));
+  const duration = Math.round(clipDuration || 0);
+  let end = start + duration;
+
+  // Acomodo automático sin pisar clips existentes
+  for (const c of sortedClips) {
+    const cStart = c.start || 0;
+    const cEnd = cStart + (c.duration || 0);
+    if (start < cEnd && end > cStart) {
+      start = cEnd;
+      end = start + duration;
+    }
+  }
+
+  return start;
+}
 
 /**
  * Recalcula dinámicamente la duración total del proyecto a partir del tiempo final
@@ -399,6 +438,8 @@ function deleteTrack(trackId) {
       globalAudio.src = '';
     }
     stopPlayheadLoop();
+    activePlayingClipStart = 0;
+    activePlayingClipDuration = 0;
   }
 
   setState({
@@ -1066,6 +1107,17 @@ async function loadProjectFromBackend() {
 const globalAudio = new Audio();
 
 /**
+ * Marca temporal de inicio (en segundos absolutos de la línea de tiempo)
+ * del clip actualmente cargado y reproduciéndose en globalAudio (Fase 9).
+ */
+let activePlayingClipStart = 0;
+
+/**
+ * Duración contractual (en segundos) del clip activo en reproducción (Fase 9).
+ */
+let activePlayingClipDuration = 0;
+
+/**
  * Identificador activo de requestAnimationFrame para el bucle de sincronización del playhead.
  * EXCEPCIÓN AL STORE (3ª del proyecto, tras is-dragging y pointermove de recorte):
  * Actualiza el DOM directamente a 60 FPS leyendo globalAudio.currentTime sin pasar por
@@ -1075,6 +1127,7 @@ let playheadRafId = null;
 
 /**
  * Inicia el bucle de animación del playhead a 60 FPS si el audio está en reproducción.
+ * Fase 9: Calcula la posición absoluta del playhead como (activePlayingClipStart + audioElapsed).
  */
 function startPlayheadLoop() {
   if (playheadRafId !== null) return; // ya corriendo, evita loops duplicados
@@ -1086,14 +1139,31 @@ function startPlayheadLoop() {
       playheadRafId = null;
       return; // detiene el loop solo, no necesita cancelAnimationFrame explícito aquí
     }
-    const seconds = globalAudio.currentTime || 0;
-    const px = seconds * getPixelsPerSecond();
+    const audioElapsed = globalAudio.currentTime || 0;
+
+    // Respetar duración efectiva del clip si fue recortado o dividido (Fase 9)
+    if (activePlayingClipDuration > 0 && audioElapsed >= activePlayingClipDuration) {
+      globalAudio.pause();
+      stopPlayheadLoop();
+      setState({ project: { isPlaying: false, currentTime: activePlayingClipStart } });
+      const px = activePlayingClipStart * getPixelsPerSecond();
+      if (playheadEl) {
+        playheadEl.style.transform = `translateX(${px}px)`;
+      }
+      if (currentTimeEl) {
+        currentTimeEl.textContent = formatTime(activePlayingClipStart);
+      }
+      return;
+    }
+
+    const absoluteSeconds = activePlayingClipStart + audioElapsed;
+    const px = absoluteSeconds * getPixelsPerSecond();
 
     if (playheadEl) {
       playheadEl.style.transform = `translateX(${px}px)`;
     }
     if (currentTimeEl) {
-      currentTimeEl.textContent = formatTime(seconds);
+      currentTimeEl.textContent = formatTime(absoluteSeconds);
     }
 
     playheadRafId = requestAnimationFrame(tick);
@@ -1114,7 +1184,14 @@ function stopPlayheadLoop() {
 
 /**
  * Reposiciona de forma unificada el audio real, el store y la representación visual en el DOM.
- * Utilizado por el scrubbing de la regla de tiempo y los botones de salto temporal.
+ * Utilizado por el scrubbing de la regla de tiempo, clics en clips y botones de salto temporal.
+ * Fase 9:
+ * 1. Identifica qué clip (con audio real) cubre ese punto absoluto del timeline:
+ *    clip.start <= seconds < clip.start + clip.duration.
+ * 2. Si encuentra un clip: sincroniza globalAudio.src, actualiza activePlayingClipStart = clip.start,
+ *    y fija globalAudio.currentTime = seconds - clip.start.
+ * 3. Si el punto de scrub cae sobre una zona vacía sin clips: detiene globalAudio (pausa)
+ *    si estaba sonando, pero igual mueve el playhead visualmente a esa posición absoluta.
  * @param {number} targetSeconds
  */
 function seekTo(targetSeconds) {
@@ -1122,17 +1199,57 @@ function seekTo(targetSeconds) {
   const seconds = clamp(targetSeconds, 0, maxDuration);
   const pps = getPixelsPerSecond();
 
-  // 1. Reposicionar audio real si existe fuente asignada
-  if (globalAudio && globalAudio.src && globalAudio.src !== window.location.href) {
-    try {
-      globalAudio.currentTime = seconds;
-    } catch (_) {}
+  // 1. Identificar si algún clip cubre esta posición absoluta del timeline
+  let coveringClip = null;
+  for (const t of state.tracks) {
+    if (!t.clips) continue;
+    for (const c of t.clips) {
+      const cStart = c.start || 0;
+      const cEnd = cStart + (c.duration || 0);
+      if (seconds >= cStart && seconds < cEnd) {
+        coveringClip = c;
+        break;
+      }
+    }
+    if (coveringClip) break;
   }
 
-  // 2. Actualización puntual del store (evento discreto, nunca en bucle continuo)
+  // 2. Sincronizar el audio real según si cae en un clip o en zona vacía
+  if (coveringClip && coveringClip.objectUrl) {
+    activePlayingClipStart = coveringClip.start || 0;
+    activePlayingClipDuration = coveringClip.duration || 0;
+    const clipOffset = Math.max(0, seconds - activePlayingClipStart);
+
+    if (globalAudio.src !== coveringClip.objectUrl) {
+      globalAudio.src = coveringClip.objectUrl;
+      globalAudio.currentTime = clipOffset;
+      if (state.project.isPlaying) {
+        syncGlobalAudioVolume();
+        globalAudio.play().catch((err) => console.warn('[PodcastCraft AI] Seek play error:', err));
+      }
+    } else {
+      try {
+        globalAudio.currentTime = clipOffset;
+      } catch (_) {}
+    }
+
+    if (state.selection.clipId !== coveringClip.id) {
+      setState({ selection: { clipId: coveringClip.id } });
+    }
+  } else {
+    // Zona vacía del timeline: decisión contractual Fase 9 (3.3):
+    // Detener la reproducción de audio si estaba activa y mantener posición del playhead
+    if (state.project.isPlaying) {
+      globalAudio.pause();
+      stopPlayheadLoop();
+      setState({ project: { isPlaying: false } });
+    }
+  }
+
+  // 3. Actualización puntual del store (evento discreto, nunca en bucle continuo)
   setState({ project: { currentTime: seconds } });
 
-  // 3. Reposicionar el playhead de inmediato sin esperar al siguiente frame
+  // 4. Reposicionar el playhead de inmediato sin esperar al siguiente frame
   const playheadEl = $('#timeline-playhead');
   if (playheadEl) {
     playheadEl.style.transform = `translateX(${seconds * pps}px)`;
@@ -1142,7 +1259,7 @@ function seekTo(targetSeconds) {
     currentTimeEl.textContent = formatTime(seconds);
   }
 
-  // 4. Sincronizar accesibilidad de la regla
+  // 5. Sincronizar accesibilidad de la regla
   const rulerEl = $('#timeline-ruler');
   if (rulerEl) {
     rulerEl.setAttribute('aria-valuenow', Math.round(seconds).toString());
@@ -1152,14 +1269,14 @@ function seekTo(targetSeconds) {
 
 globalAudio.addEventListener('ended', () => {
   stopPlayheadLoop();
-  setState({ project: { isPlaying: false, currentTime: 0 } });
+  setState({ project: { isPlaying: false, currentTime: activePlayingClipStart } });
   const playheadEl = $('#timeline-playhead');
   if (playheadEl) {
-    playheadEl.style.transform = 'translateX(0px)';
+    playheadEl.style.transform = `translateX(${activePlayingClipStart * getPixelsPerSecond()}px)`;
   }
   const currentTimeEl = $('#current-time');
   if (currentTimeEl) {
-    currentTimeEl.textContent = formatTime(0);
+    currentTimeEl.textContent = formatTime(activePlayingClipStart);
   }
 });
 
@@ -1186,7 +1303,8 @@ function bindTransportEvents() {
       if (state.project.isPlaying) {
         globalAudio.pause();
         stopPlayheadLoop();
-        setState({ project: { isPlaying: false, currentTime: globalAudio.currentTime || state.project.currentTime } });
+        const currentAbsolute = activePlayingClipStart + (globalAudio.currentTime || 0);
+        setState({ project: { isPlaying: false, currentTime: currentAbsolute } });
       } else {
         // Encontrar clip a reproducir (seleccionado o el primero en la línea de tiempo)
         let targetClip = null;
@@ -1206,12 +1324,34 @@ function bindTransportEvents() {
         }
 
         if (targetClip && targetClip.objectUrl) {
+          activePlayingClipStart = targetClip.start || 0;
+          activePlayingClipDuration = targetClip.duration || 0;
+
+          // Determinar offset en segundos dentro del archivo de audio
+          const currentTimelineTime = state.project.currentTime || 0;
+          let clipAudioOffset = 0;
+          if (currentTimelineTime >= activePlayingClipStart && currentTimelineTime < (activePlayingClipStart + targetClip.duration)) {
+            clipAudioOffset = currentTimelineTime - activePlayingClipStart;
+          } else {
+            // El playhead estaba fuera de los límites de este clip; arrancar desde su inicio exacto
+            clipAudioOffset = 0;
+            setState({ project: { currentTime: activePlayingClipStart } });
+            const playheadEl = $('#timeline-playhead');
+            if (playheadEl) {
+              playheadEl.style.transform = `translateX(${activePlayingClipStart * getPixelsPerSecond()}px)`;
+            }
+            const currentTimeEl = $('#current-time');
+            if (currentTimeEl) {
+              currentTimeEl.textContent = formatTime(activePlayingClipStart);
+            }
+          }
+
           if (globalAudio.src !== targetClip.objectUrl) {
             globalAudio.src = targetClip.objectUrl;
-            globalAudio.currentTime = state.project.currentTime || 0;
-          } else if (Math.abs((globalAudio.currentTime || 0) - state.project.currentTime) > 0.05) {
+            globalAudio.currentTime = clipAudioOffset;
+          } else if (Math.abs((globalAudio.currentTime || 0) - clipAudioOffset) > 0.05) {
             try {
-              globalAudio.currentTime = state.project.currentTime;
+              globalAudio.currentTime = clipAudioOffset;
             } catch (_) {}
           }
 
@@ -1560,12 +1700,26 @@ function bindTimelineEvents() {
       return;
     }
 
-    // Clic en clip para selección
+    // Clic en clip para selección y alineación de reproducción (Fase 9)
     const clipEl = e.target.closest('[data-clip-id]');
     if (clipEl && !e.target.closest('[data-handle]')) {
       const clipId = clipEl.dataset.clipId;
       const nextId = state.selection.clipId === clipId ? null : clipId;
       setState({ selection: { clipId: nextId } });
+
+      if (nextId) {
+        const trackId = clipEl.dataset.trackId;
+        const track = state.tracks.find((t) => t.id === trackId);
+        const clip = track ? track.clips.find((c) => c.id === clipId) : null;
+        if (clip) {
+          const rect = clipEl.getBoundingClientRect();
+          const clickOffsetPx = e.clientX - rect.left;
+          const pps = getPixelsPerSecond();
+          const clickOffsetSec = Math.max(0, clickOffsetPx / pps);
+          const targetSec = clip.start + clickOffsetSec;
+          seekTo(targetSec);
+        }
+      }
       return;
     }
 
@@ -1717,24 +1871,13 @@ function bindTimelineEvents() {
     const track = state.tracks.find((t) => t.id === trackId);
     if (!track) return;
 
-    // Calcular posición X convertida a segundos
+    // Calcular posición X convertida a segundos con anclaje a 00:00 en carriles vacíos (Fase 9)
     const rect = lane.getBoundingClientRect();
     const dropX = e.clientX - rect.left + lane.scrollLeft;
     const pps = getPixelsPerSecond();
-    let start = Math.max(0, Math.round(dropX / pps));
     const duration = Math.round(payload.duration || 0);
-    let end = start + duration;
 
-    // Acomodo automático sin pisar (Sprint 4 — 4)
-    const existingClips = [...track.clips].sort((a, b) => a.start - b.start);
-    for (const c of existingClips) {
-      const cStart = c.start || 0;
-      const cEnd = cStart + (c.duration || 0);
-      if (start < cEnd && end > cStart) {
-        start = cEnd;
-        end = start + duration;
-      }
-    }
+    const start = calculateDropStart(track, dropX, pps, duration);
 
     const libItem = getLibraryItem(payload.libraryId);
     const objectUrl = libItem ? (libItem.objectUrl ?? null) : null;
@@ -1949,6 +2092,8 @@ function bindTimelineEvents() {
             globalAudio.src = '';
           }
           stopPlayheadLoop();
+          activePlayingClipStart = 0;
+          activePlayingClipDuration = 0;
         }
 
         setState({
