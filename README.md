@@ -6,6 +6,11 @@ Este repositorio contiene el **Sprint 5 (Playhead de Alta Fidelidad a 60 FPS, Si
 
 ---
 
+## 🖥️ Backend (Fases 1 a 7 completadas)
+El backend vive en `/backend`, ver [`backend/README.md`](backend/README.md) para instrucciones completas, arquitectura y guía de pruebas. Actualmente desarrollado y verificado de forma aislada; la conexión con el frontend está pendiente de aprobación del usuario.
+
+---
+
 ## 📌 Decisiones de Arquitectura y Alcance — Sprint 5
 
 ### 0.1 Nota de arquitectura: Empaquetado final con Electron Builder (Sprint 7)
