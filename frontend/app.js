@@ -42,12 +42,12 @@ const PROJECT_STATUS = {
  * Regla de oro: No incluye violet-500 puro para respetar el color reservado a IA/Play.
  */
 const TRACK_PALETTE = [
-  { lane: 'bg-sky-900/40 border-sky-500',         clip: 'bg-sky-500/30 border-sky-400',         dot: 'bg-sky-500' },
-  { lane: 'bg-amber-900/40 border-amber-500',     clip: 'bg-amber-500/30 border-amber-400',     dot: 'bg-amber-500' },
-  { lane: 'bg-emerald-900/40 border-emerald-500', clip: 'bg-emerald-500/30 border-emerald-400', dot: 'bg-emerald-500' },
-  { lane: 'bg-fuchsia-900/40 border-fuchsia-500', clip: 'bg-fuchsia-500/30 border-fuchsia-400', dot: 'bg-fuchsia-500' },
-  { lane: 'bg-rose-900/40 border-rose-500',       clip: 'bg-rose-500/30 border-rose-400',       dot: 'bg-rose-500' },
-  { lane: 'bg-cyan-900/40 border-cyan-500',       clip: 'bg-cyan-500/30 border-cyan-400',       dot: 'bg-cyan-500' }
+  { lane: 'track-lane-sky',     clip: 'track-clip-sky',     dot: 'bg-sky-500' },
+  { lane: 'track-lane-amber',   clip: 'track-clip-amber',   dot: 'bg-amber-500' },
+  { lane: 'track-lane-emerald', clip: 'track-clip-emerald', dot: 'bg-emerald-500' },
+  { lane: 'track-lane-fuchsia', clip: 'track-clip-fuchsia', dot: 'bg-fuchsia-500' },
+  { lane: 'track-lane-rose',    clip: 'track-clip-rose',    dot: 'bg-rose-500' },
+  { lane: 'track-lane-cyan',    clip: 'track-clip-cyan',    dot: 'bg-cyan-500' }
 ];
 
 /**
@@ -604,12 +604,12 @@ function renderLibraryList() {
   if (state.library.length === 0) {
     listContainer.className = 'flex-1 min-h-0 p-3 overflow-y-auto flex flex-col';
     listContainer.innerHTML = `
-      <div id="library-empty" class="flex-1 flex flex-col items-center justify-center p-6 text-center border-2 border-dashed border-slate-800/80 rounded-xl bg-slate-950/40">
-        <div class="w-12 h-12 rounded-full bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400 mb-3 shadow-inner">
+      <div id="library-empty" class="flex-1 flex flex-col items-center justify-center p-6 text-center border-2 border-dashed rounded-xl theme-empty-box">
+        <div class="w-12 h-12 rounded-full theme-pill border flex items-center justify-center theme-text-secondary mb-3 shadow-inner">
           <i data-lucide="file-audio" class="w-6 h-6"></i>
         </div>
-        <h3 class="text-xs font-semibold text-slate-300 mb-1">Tu biblioteca aparecerá aquí</h3>
-        <p class="text-[11px] text-slate-500 leading-relaxed max-w-[190px]">
+        <h3 class="text-xs font-semibold theme-text-primary mb-1">Tu biblioteca aparecerá aquí</h3>
+        <p class="text-[11px] theme-text-muted leading-relaxed max-w-[190px]">
           Importa archivos MP3 desde tu computador para estructurar tu episodio.
         </p>
       </div>
@@ -622,8 +622,8 @@ function renderLibraryList() {
     const isSelected = state.selection.libraryId === item.id;
     const formattedDuration = formatDuration(item.duration);
     const borderBgClasses = isSelected
-      ? 'border-slate-400 bg-slate-800 shadow-md'
-      : 'border-slate-800 bg-slate-900';
+      ? 'lib-card-selected'
+      : 'lib-card-default';
 
     return `
       <article
@@ -635,23 +635,23 @@ function renderLibraryList() {
         aria-pressed="${isSelected ? 'true' : 'false'}"
         aria-label="${escapeHtml(item.name)}, duración ${formattedDuration}. Arrastra a un carril"
         title="Arrastra a cualquier carril del timeline"
-        class="group relative min-h-[58px] rounded-lg border ${borderBgClasses} hover:border-slate-600 hover:bg-slate-800/60 active:cursor-grabbing cursor-grab flex items-center gap-3 px-3 py-2 select-none transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+        class="group relative min-h-[58px] rounded-lg border ${borderBgClasses} active:cursor-grabbing cursor-grab flex items-center gap-3 px-3 py-2 select-none transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
       >
         <!-- Ícono neutro 32x32 -->
-        <div class="w-8 h-8 rounded-md border border-slate-700/70 bg-slate-800 text-slate-300 flex items-center justify-center shrink-0 pointer-events-none">
-          <i data-lucide="file-audio" class="w-4 h-4"></i>
+        <div class="w-8 h-8 rounded-md border theme-pill flex items-center justify-center shrink-0 pointer-events-none">
+          <i data-lucide="file-audio" class="w-4 h-4 theme-text-secondary"></i>
         </div>
 
         <!-- Nombre y tipo -->
         <div class="flex-1 min-w-0 flex flex-col justify-center pointer-events-none">
-          <span class="text-xs font-medium text-slate-100 truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
-          <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400">MP3</span>
+          <span class="text-xs font-medium theme-text-primary truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+          <span class="text-[10px] font-mono uppercase tracking-wider theme-text-muted">MP3</span>
         </div>
 
         <!-- Duración y Grip -->
         <div class="flex items-center gap-2 shrink-0 pointer-events-none">
-          <span class="font-mono tabular-nums text-[11px] text-slate-400">${formattedDuration}</span>
-          <i data-lucide="grip-vertical" class="w-4 h-4 text-slate-600 group-hover:text-slate-300 transition-colors"></i>
+          <span class="font-mono tabular-nums text-[11px] theme-text-muted">${formattedDuration}</span>
+          <i data-lucide="grip-vertical" class="w-4 h-4 text-slate-400 group-hover:theme-text-primary transition-colors"></i>
         </div>
       </article>
     `;
@@ -672,16 +672,16 @@ function renderTimelineTracks() {
   if (state.tracks.length === 0) {
     container.className = 'flex-1 min-h-0 p-4 lg:p-6 overflow-y-auto flex flex-col justify-center';
     container.innerHTML = `
-      <div class="flex-1 flex flex-col items-center justify-center p-8 text-center border-2 border-dashed border-slate-800/60 rounded-xl bg-slate-900/20 max-w-xl mx-auto w-full my-auto">
-        <div class="w-14 h-14 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-center text-slate-400 mb-3 shadow-inner">
+      <div class="flex-1 flex flex-col items-center justify-center p-8 text-center border-2 border-dashed rounded-xl theme-empty-box max-w-xl mx-auto w-full my-auto">
+        <div class="w-14 h-14 rounded-2xl theme-pill border flex items-center justify-center theme-text-secondary mb-3 shadow-inner">
           <i data-lucide="layers" class="w-7 h-7"></i>
         </div>
-        <h3 class="text-sm font-semibold text-slate-200 mb-1">Aún no tienes carriles</h3>
-        <p class="text-xs text-slate-500 max-w-sm leading-relaxed mb-4">
+        <h3 class="text-sm font-semibold theme-text-primary mb-1">Aún no tienes carriles</h3>
+        <p class="text-xs theme-text-muted max-w-sm leading-relaxed mb-4">
           Crea un carril para empezar a construir tu episodio y arrastrar archivos de audio.
         </p>
-        <button id="btn-empty-add-track" type="button" aria-label="Crear primer carril" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-slate-900 bg-slate-100 hover:bg-white active:scale-95 shadow-md transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
-          <i data-lucide="plus" class="w-4 h-4 text-slate-800"></i>
+        <button id="btn-empty-add-track" type="button" aria-label="Crear primer carril" class="theme-btn-export inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold active:scale-95 shadow-md transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+          <i data-lucide="plus" class="w-4 h-4"></i>
           <span>Crear Primer Carril</span>
         </button>
       </div>
@@ -727,8 +727,8 @@ function renderTimelineTracks() {
           ></div>
 
           <!-- Nombre y duración -->
-          <span class="text-xs font-semibold truncate text-slate-100 flex-1 min-w-0 ml-1.5 pointer-events-none">${escapeHtml(clip.name)}</span>
-          <span class="text-[10px] font-mono text-slate-300 shrink-0 opacity-80 tabular-nums mr-1.5 pointer-events-none">${formattedDuration}</span>
+          <span class="text-xs font-semibold truncate theme-text-primary flex-1 min-w-0 ml-1.5 pointer-events-none">${escapeHtml(clip.name)}</span>
+          <span class="text-[10px] font-mono theme-text-secondary shrink-0 opacity-90 tabular-nums mr-1.5 pointer-events-none">${formattedDuration}</span>
 
           <!-- Asa de recorte derecha -->
           <div
@@ -745,12 +745,12 @@ function renderTimelineTracks() {
     return `
       <div class="timeline-row flex items-stretch gap-3 group/track" data-track-id="${track.id}">
         <!-- Cabecera del Carril -->
-        <div class="w-40 lg:w-44 shrink-0 flex items-center justify-between px-3 py-2 bg-slate-900/90 border border-slate-800 rounded-lg select-none gap-2">
+        <div class="w-40 lg:w-44 shrink-0 flex items-center justify-between px-3 py-2 theme-panel border rounded-lg select-none gap-2">
           <div class="flex items-center gap-2 min-w-0 flex-1">
             <span class="w-2.5 h-2.5 rounded-full ${palette.dot} shrink-0"></span>
             <span
               id="track-name-${track.id}"
-              class="track-title text-xs font-semibold text-slate-200 truncate cursor-text hover:text-white"
+              class="track-title text-xs font-semibold theme-text-primary truncate cursor-text hover:text-violet-600 dark:hover:text-violet-400"
               title="Doble clic para renombrar"
               data-track-id="${track.id}"
             >${escapeHtml(track.name)}</span>
@@ -761,7 +761,7 @@ function renderTimelineTracks() {
             data-delete-track="${track.id}"
             aria-label="Eliminar carril ${escapeHtml(track.name)}"
             title="Eliminar carril"
-            class="w-6 h-6 rounded flex items-center justify-center text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 active:scale-90 transition-colors"
+            class="w-6 h-6 rounded flex items-center justify-center theme-text-muted hover:text-rose-500 hover:bg-rose-500/10 active:scale-90 transition-colors"
           >
             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
           </button>
@@ -773,7 +773,7 @@ function renderTimelineTracks() {
           class="timeline-lane flex-1 min-w-0 h-16 relative rounded-lg border transition-all duration-150 overflow-x-auto overflow-y-hidden ${palette.lane}"
         >
           ${clips.length === 0
-            ? `<div class="h-full flex items-center justify-center text-xs text-slate-500/80 italic select-none pointer-events-none px-4">
+            ? `<div class="h-full flex items-center justify-center text-xs theme-text-muted italic select-none pointer-events-none px-4">
                  <span>Carril vacío — Arrastra un audio aquí</span>
                </div>`
             : clipsHtml
@@ -847,6 +847,55 @@ function renderAll(currentState = state, prevState) {
       scheduleAutoSave();
     }
   }
+}
+
+
+/* ==========================================================================
+   5.1 THEME MANAGEMENT (Fase A: Claro por Defecto / Oscuro)
+   ========================================================================== */
+
+/**
+ * Obtiene el tema activo actual ('light' o 'dark').
+ * Si no está configurado, retorna 'light' como valor por defecto contractual.
+ * @returns {'light' | 'dark'}
+ */
+function getCurrentTheme() {
+  return document.documentElement.getAttribute('data-theme') || 'light';
+}
+
+/**
+ * Aplica el tema a <html>, actualiza el botón de toggle e icono Lucide,
+ * y persiste la preferencia en localStorage.
+ * @param {'light' | 'dark'} theme
+ */
+function applyTheme(theme) {
+  const finalTheme = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', finalTheme);
+
+  try {
+    localStorage.setItem('podcastcraft-theme', finalTheme);
+  } catch (err) {
+    console.warn('[PodcastCraft AI] No se pudo guardar la preferencia de tema en localStorage:', err);
+  }
+
+  const toggleBtn = $('#btn-theme-toggle');
+  if (toggleBtn) {
+    const isDark = finalTheme === 'dark';
+    toggleBtn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+    toggleBtn.setAttribute('aria-label', isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
+    toggleBtn.setAttribute('title', isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
+    toggleBtn.innerHTML = `<i data-lucide="${isDark ? 'sun' : 'moon'}" class="w-4 h-4"></i>`;
+    renderIcons();
+  }
+}
+
+/**
+ * Alterna entre tema claro y tema oscuro.
+ */
+function toggleTheme() {
+  const current = getCurrentTheme();
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
 }
 
 
@@ -1253,6 +1302,11 @@ function bindTopbarEvents() {
     btnExport.addEventListener('click', async () => {
       await saveProjectToBackend();
     });
+  }
+
+  const themeToggleBtn = $('#btn-theme-toggle');
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', toggleTheme);
   }
 }
 
@@ -1973,6 +2027,9 @@ function bindViewportGuard() {
 subscribe(renderAll);
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Inicialización de tema visual e icono del toggle
+  applyTheme(getCurrentTheme());
+
   // Carga previa e hidratación del estado persistido desde el backend (Sprint 6)
   await loadProjectFromBackend();
 

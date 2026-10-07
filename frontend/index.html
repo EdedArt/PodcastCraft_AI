@@ -6,6 +6,15 @@
   <title>PodcastCraft AI — Editor Profesional de Podcasts con IA</title>
   <meta name="description" content="PodcastCraft AI es una estación de trabajo de audio digital moderna para la edición y producción inteligente de podcasts con asistencia de IA.">
 
+  <!-- Script anti-flash de tema sincrónico (Claro por defecto) -->
+  <script>
+    (function() {
+      var saved = localStorage.getItem('podcastcraft-theme');
+      var theme = saved === 'dark' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+
   <!-- Orden estricto de carga de scripts y estilos -->
   <script src="./vendor/tailwind.js"></script>
   <script src="./tailwind-config.js"></script>
@@ -13,7 +22,7 @@
   <script src="./vendor/lucide.min.js"></script>
   <script src="./app.js" defer></script>
 </head>
-<body class="h-full flex flex-col overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased selection:bg-violet-500/30 selection:text-violet-200">
+<body class="h-full flex flex-col overflow-hidden theme-bg-app theme-text-app font-sans antialiased selection:bg-violet-500/30 selection:text-violet-700">
 
   <!-- Overlay de guardia de resolución (visible en pantallas < 1280px) -->
   <div id="viewport-warning" role="alert" aria-live="assertive" class="fixed inset-0 z-50 hidden flex-col items-center justify-center bg-slate-950/95 p-8 text-center backdrop-blur-md">
@@ -29,8 +38,8 @@
     </p>
   </div>
 
-  <!-- 1. Top Navbar (h-14, shrink-0, bg-slate-900 border-b border-slate-800) -->
-  <header id="topbar" aria-label="Barra superior de herramientas" class="h-14 shrink-0 bg-slate-900 border-b border-slate-800 px-4 grid grid-cols-[1fr_auto_1fr] items-center select-none z-10">
+  <!-- 1. Top Navbar (h-14, shrink-0, panel adaptable) -->
+  <header id="topbar" aria-label="Barra superior de herramientas" class="h-14 shrink-0 theme-panel border-b px-4 grid grid-cols-[1fr_auto_1fr] items-center select-none z-10">
     
     <!-- Zona Izquierda: Logo, Nombre del Proyecto y Badge de Estado -->
     <div class="flex items-center gap-3 min-w-0">
@@ -39,47 +48,55 @@
         <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-violet-600 to-fuchsia-500 flex items-center justify-center text-white shadow-md shadow-violet-500/20">
           <i data-lucide="sparkles" class="w-4 h-4"></i>
         </div>
-        <span class="font-bold tracking-tight text-slate-100 text-sm md:text-base">PodcastCraft<span class="text-violet-400">.AI</span></span>
+        <span class="font-bold tracking-tight theme-text-primary text-sm md:text-base">PodcastCraft<span class="text-violet-600">.AI</span></span>
       </div>
 
       <!-- Separador vertical -->
-      <div class="h-4 w-px bg-slate-800 shrink-0 mx-1"></div>
+      <div class="h-4 w-px bg-slate-300 dark:bg-slate-800 shrink-0 mx-1"></div>
 
       <!-- Nombre del proyecto -->
-      <span id="project-title" class="text-xs md:text-sm font-medium text-slate-300 truncate max-w-[180px] lg:max-w-[280px]" title="Untitled Project">
+      <span id="project-title" class="text-xs md:text-sm font-medium theme-text-secondary truncate max-w-[180px] lg:max-w-[280px]" title="Untitled Project">
         Untitled Project
       </span>
 
       <!-- Badge de Estado del Proyecto (Borrador / Guardado) -->
-      <div id="project-status" aria-live="polite" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0 transition-colors duration-150">
-        <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+      <div id="project-status" aria-live="polite" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 shrink-0 transition-colors duration-150">
+        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
         <span>Borrador</span>
       </div>
     </div>
 
     <!-- Zona Central: Duración Total -->
     <div class="flex items-center justify-center">
-      <div class="flex items-center gap-2 bg-slate-950/80 border border-slate-800/90 px-3.5 py-1 rounded-full text-xs shadow-inner">
-        <span class="text-slate-400 font-medium tracking-wide">Duración total</span>
-        <span id="total-duration" class="font-mono text-slate-100 font-semibold tabular-nums">00:00:00</span>
+      <div class="flex items-center gap-2 theme-pill border px-3.5 py-1 rounded-full text-xs shadow-inner">
+        <span class="theme-text-secondary font-medium tracking-wide">Duración total</span>
+        <span id="total-duration" class="font-mono theme-text-primary font-semibold tabular-nums">00:00:00</span>
       </div>
     </div>
 
-    <!-- Zona Derecha: Botón IA Secundario y Botón Primario de Exportación -->
+    <!-- Zona Derecha: Botón IA, Exportar y Toggle de Tema -->
     <div class="flex items-center justify-end gap-3">
       <!-- Botón Secundario IA -->
-      <button id="btn-ai-analysis" type="button" aria-label="Iniciar análisis inteligente con IA" title="Análisis de IA" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-violet-300 bg-violet-500/10 border border-violet-500/40 glow-ai hover:bg-violet-500/20 hover:border-violet-500 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 outline-none transition-all duration-150">
-        <i data-lucide="wand-2" class="w-3.5 h-3.5 text-violet-400"></i>
+      <button id="btn-ai-analysis" type="button" aria-label="Iniciar análisis inteligente con IA" title="Análisis de IA" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-violet-700 bg-violet-500/10 border border-violet-500/40 glow-ai hover:bg-violet-500/20 hover:border-violet-500 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-all duration-150">
+        <i data-lucide="wand-2" class="w-3.5 h-3.5 text-violet-600"></i>
         <span>Análisis de IA</span>
       </button>
 
       <!-- Separador vertical -->
-      <div class="h-4 w-px bg-slate-800 shrink-0"></div>
+      <div class="h-4 w-px bg-slate-300 dark:bg-slate-800 shrink-0"></div>
 
       <!-- Botón Primario: Exportar Podcast -->
-      <button id="btn-export" type="button" aria-label="Exportar podcast final" title="Exportar Podcast" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-900 bg-slate-100 hover:bg-white active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 outline-none shadow-sm transition-all duration-150">
+      <button id="btn-export" type="button" aria-label="Exportar podcast final" title="Exportar Podcast" class="theme-btn-export inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none shadow-sm transition-all duration-150">
         <i data-lucide="download" class="w-3.5 h-3.5"></i>
         <span>Exportar Podcast</span>
+      </button>
+
+      <!-- Separador vertical -->
+      <div class="h-4 w-px bg-slate-300 dark:bg-slate-800 shrink-0"></div>
+
+      <!-- Botón de Alternancia de Tema (Claro / Oscuro) -->
+      <button id="btn-theme-toggle" type="button" aria-pressed="false" aria-label="Cambiar a modo oscuro" title="Cambiar a modo oscuro" class="theme-btn-secondary inline-flex items-center justify-center w-8 h-8 rounded-lg active:scale-95 border focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
+        <i data-lucide="moon" class="w-4 h-4"></i>
       </button>
     </div>
   </header>
@@ -88,27 +105,27 @@
   <main id="workspace" aria-label="Espacio de trabajo del editor" class="flex-1 min-h-0 flex overflow-hidden">
     
     <!-- Columna Izquierda: Biblioteca de Medios (20%, min 260px, max 320px) -->
-    <aside id="col-library" aria-label="Biblioteca de bloques de audio" class="w-[20%] min-w-[260px] max-w-[320px] bg-slate-900/60 border-r border-slate-800 flex flex-col min-h-0">
-      <!-- Encabezado de Biblioteca con Botón de Importar MP3 (Sprint 4) -->
-      <div class="border-b border-slate-800 shrink-0 bg-slate-900/90">
+    <aside id="col-library" aria-label="Biblioteca de bloques de audio" class="w-[20%] min-w-[260px] max-w-[320px] theme-panel border-r flex flex-col min-h-0">
+      <!-- Encabezado de Biblioteca con Botón de Importar MP3 -->
+      <div class="border-b shrink-0 theme-panel-header">
         <div class="h-11 px-3.5 flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <i data-lucide="library" class="w-4 h-4 text-slate-400"></i>
-            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-200">Biblioteca</h2>
+            <i data-lucide="library" class="w-4 h-4 theme-text-secondary"></i>
+            <h2 class="text-xs font-bold uppercase tracking-wider theme-text-primary">Biblioteca</h2>
           </div>
-          <span id="library-count" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 tabular-nums">0 audios</span>
+          <span id="library-count" class="text-[11px] font-semibold px-2 py-0.5 rounded-full theme-pill border theme-text-secondary tabular-nums">0 audios</span>
         </div>
         
-        <!-- Zona de Importación de MP3 Real (Sprint 4) -->
+        <!-- Zona de Importación de MP3 Real -->
         <div class="px-3 pb-2.5 flex flex-col gap-1.5">
           <input type="file" id="audio-file-input" accept=".mp3,audio/mpeg" multiple hidden>
-          <button id="btn-import-audio" type="button" aria-label="Importar archivos MP3 desde tu computador" title="Importar archivos MP3" class="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 hover:border-slate-600 active:scale-[0.98] transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500 shadow-sm">
-            <i data-lucide="upload" class="w-3.5 h-3.5 text-slate-400"></i>
+          <button id="btn-import-audio" type="button" aria-label="Importar archivos MP3 desde tu computador" title="Importar archivos MP3" class="theme-btn-secondary w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border active:scale-[0.98] transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500 shadow-sm">
+            <i data-lucide="upload" class="w-3.5 h-3.5"></i>
             <span>Importar MP3</span>
           </button>
           
           <!-- Mensaje accesible y no bloqueante para rechazo de archivos no-MP3 -->
-          <div id="import-feedback" aria-live="polite" class="hidden text-[11px] text-amber-400 font-medium text-center bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1 transition-opacity duration-200"></div>
+          <div id="import-feedback" aria-live="polite" class="hidden text-[11px] text-amber-700 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1 transition-opacity duration-200"></div>
         </div>
       </div>
 
@@ -117,35 +134,35 @@
     </aside>
 
     <!-- Columna Central: Línea de Tiempo / Escaleta (flex-1, min-w-0) -->
-    <section id="col-timeline" aria-label="Línea de tiempo multipista" class="flex-1 min-w-0 bg-slate-950 flex flex-col min-h-0">
+    <section id="col-timeline" aria-label="Línea de tiempo multipista" class="flex-1 min-w-0 theme-timeline-bg flex flex-col min-h-0">
       <!-- Encabezado de Línea de Tiempo, Botón de Nuevo Carril y Slider de Zoom -->
-      <div class="h-11 px-4 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-900/50 backdrop-blur-sm gap-3">
+      <div class="h-11 px-4 border-b flex items-center justify-between shrink-0 theme-panel-header gap-3">
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-2">
-            <i data-lucide="layers" class="w-4 h-4 text-slate-400"></i>
-            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-200">Línea de tiempo</h2>
+            <i data-lucide="layers" class="w-4 h-4 theme-text-secondary"></i>
+            <h2 class="text-xs font-bold uppercase tracking-wider theme-text-primary">Línea de tiempo</h2>
           </div>
 
-          <!-- Botón de Crear Carril Dinámico (Sprint 4 — 2.1) -->
-          <button id="btn-add-track" type="button" aria-label="Agregar nuevo carril" title="Agregar nuevo carril" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-all shadow-sm">
-            <i data-lucide="plus" class="w-3.5 h-3.5 text-slate-400"></i>
+          <!-- Botón de Crear Carril Dinámico -->
+          <button id="btn-add-track" type="button" aria-label="Agregar nuevo carril" title="Agregar nuevo carril" class="theme-btn-secondary inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-all shadow-sm">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
             <span>Nuevo Carril</span>
           </button>
         </div>
 
         <!-- Control de Zoom -->
         <div class="flex items-center gap-2.5">
-          <label for="zoom-slider" class="text-xs font-medium text-slate-400 select-none">Zoom</label>
+          <label for="zoom-slider" class="text-xs font-medium theme-text-secondary select-none">Zoom</label>
           <div class="flex items-center gap-1.5 w-28 lg:w-36">
-            <i data-lucide="zoom-out" class="w-3.5 h-3.5 text-slate-500 shrink-0"></i>
+            <i data-lucide="zoom-out" class="w-3.5 h-3.5 theme-text-secondary shrink-0"></i>
             <input id="zoom-slider" type="range" min="0" max="100" value="50" aria-label="Nivel de zoom de la línea de tiempo" title="Nivel de zoom" class="w-full">
-            <i data-lucide="zoom-in" class="w-3.5 h-3.5 text-slate-500 shrink-0"></i>
+            <i data-lucide="zoom-in" class="w-3.5 h-3.5 theme-text-secondary shrink-0"></i>
           </div>
-          <span id="zoom-value" class="text-xs font-mono font-medium text-slate-400 tabular-nums w-8 text-right">50%</span>
+          <span id="zoom-value" class="text-xs font-mono font-medium theme-text-secondary tabular-nums w-8 text-right">50%</span>
         </div>
       </div>
 
-      <!-- Regla de tiempo interactiva con scrubbing (Sprint 5) -->
+      <!-- Regla de tiempo interactiva con scrubbing -->
       <div
         id="timeline-ruler"
         role="slider"
@@ -154,7 +171,7 @@
         aria-valuemin="0"
         aria-valuemax="0"
         aria-valuenow="0"
-        class="h-7 border-b border-slate-800/80 bg-slate-900/40 shrink-0 px-4 flex items-center justify-between text-[10px] font-mono text-slate-600 select-none cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-violet-500"
+        class="h-7 border-b theme-ruler shrink-0 px-4 flex items-center justify-between text-[10px] font-mono select-none cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-violet-500"
       >
         <span>00:00:00</span>
         <span>00:10:00</span>
@@ -163,9 +180,9 @@
         <span>00:40:00</span>
       </div>
 
-      <!-- Contenedor relativo de carriles y playhead superpuesto (Sprint 5) -->
+      <!-- Contenedor relativo de carriles y playhead superpuesto -->
       <div class="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-        <!-- Indicador visual del playhead a 60 FPS (Sprint 5) -->
+        <!-- Indicador visual del playhead a 60 FPS -->
         <div id="timeline-playhead" aria-hidden="true"></div>
 
         <!-- Contenedor dinámico de carriles (Renderizado por renderTimelineTracks() en app.js) -->
@@ -174,35 +191,35 @@
     </section>
 
     <!-- Columna Derecha: Asistente de IA (24%, min 300px, max 380px) -->
-    <aside id="col-ai-panel" aria-label="Panel de asistente de inteligencia artificial" class="w-[24%] min-w-[300px] max-w-[380px] bg-slate-900/60 border-l border-slate-800 flex flex-col min-h-0">
+    <aside id="col-ai-panel" aria-label="Panel de asistente de inteligencia artificial" class="w-[24%] min-w-[300px] max-w-[380px] theme-panel border-l flex flex-col min-h-0">
       <!-- Encabezado de Asistente de IA con tono violeta suave -->
-      <div class="h-11 px-3.5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-violet-950/20">
+      <div class="h-11 px-3.5 border-b flex items-center justify-between shrink-0 bg-violet-500/10 dark:bg-violet-950/20">
         <div class="flex items-center gap-2">
-          <i data-lucide="sparkles" class="w-4 h-4 text-violet-400"></i>
-          <h2 class="text-xs font-bold uppercase tracking-wider text-violet-200">Asistente de IA</h2>
+          <i data-lucide="sparkles" class="w-4 h-4 text-violet-600"></i>
+          <h2 class="text-xs font-bold uppercase tracking-wider text-violet-800 dark:text-violet-200">Asistente de IA</h2>
         </div>
-        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30 uppercase tracking-wide">
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30 uppercase tracking-wide">
           Beta
         </span>
       </div>
 
-      <!-- Contenedor de Transcripción (Punto de anclaje para Sprint 4) -->
+      <!-- Contenedor de Transcripción -->
       <div id="ai-transcript" class="flex-1 min-h-0 p-4 overflow-y-auto flex flex-col">
-        <div class="flex-1 flex flex-col items-center justify-center p-6 text-center border-2 border-dashed border-slate-800/80 rounded-xl bg-slate-950/40">
-          <div class="w-12 h-12 rounded-full bg-violet-950/40 border border-violet-800/40 flex items-center justify-center text-violet-400 mb-3 shadow-inner">
+        <div class="flex-1 flex flex-col items-center justify-center p-6 text-center border-2 border-dashed rounded-xl theme-empty-box">
+          <div class="w-12 h-12 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-600 mb-3 shadow-inner">
             <i data-lucide="message-square-text" class="w-6 h-6"></i>
           </div>
-          <h3 class="text-xs font-semibold text-slate-300 mb-1">La transcripción aparecerá aquí</h3>
-          <p class="text-[11px] text-slate-500 leading-relaxed max-w-[210px]">
+          <h3 class="text-xs font-semibold theme-text-primary mb-1">La transcripción aparecerá aquí</h3>
+          <p class="text-[11px] theme-text-muted leading-relaxed max-w-[210px]">
             El modelo transcribirá tus archivos de audio y resaltará muletillas y silencios automáticamente.
           </p>
         </div>
       </div>
 
-      <!-- Contenedor CTA de IA (Punto de anclaje para Sprint 4 y 6) -->
-      <div id="ai-cta" class="p-3.5 border-t border-slate-800/80 bg-slate-900/80 shrink-0">
-        <button type="button" disabled aria-label="Limpiar audio con IA (Se activará tras el análisis)" title="Limpiar Audio con IA" class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-violet-300/60 bg-violet-950/30 border border-violet-900/40 cursor-not-allowed opacity-40 transition-all">
-          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-violet-400"></i>
+      <!-- Contenedor CTA de IA -->
+      <div id="ai-cta" class="p-3.5 border-t shrink-0 theme-panel-footer">
+        <button type="button" disabled aria-label="Limpiar audio con IA (Se activará tras el análisis)" title="Limpiar Audio con IA" class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-violet-700/60 dark:text-violet-300/60 bg-violet-500/10 dark:bg-violet-950/30 border border-violet-500/20 dark:border-violet-900/40 cursor-not-allowed opacity-50 transition-all">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-violet-600"></i>
           <span>Limpiar Audio con IA</span>
         </button>
       </div>
@@ -210,18 +227,18 @@
   </main>
 
   <!-- 3. Footer de Transporte (h-16, shrink-0, en flujo normal) -->
-  <footer id="transport" aria-label="Controles de transporte y reproducción" class="h-16 shrink-0 bg-slate-900 border-t border-slate-800 px-4 grid grid-cols-[1fr_auto_1fr] items-center select-none z-10">
+  <footer id="transport" aria-label="Controles de transporte y reproducción" class="h-16 shrink-0 theme-panel border-t px-4 grid grid-cols-[1fr_auto_1fr] items-center select-none z-10">
     
     <!-- Zona Izquierda: Clip en reproducción -->
     <div class="flex items-center gap-3 min-w-0">
-      <div class="w-9 h-9 rounded-lg bg-slate-800 border border-slate-700/60 flex items-center justify-center text-slate-400 shrink-0 shadow-inner">
+      <div class="w-9 h-9 rounded-lg theme-pill border flex items-center justify-center theme-text-secondary shrink-0 shadow-inner">
         <i data-lucide="disc-3" class="w-4 h-4"></i>
       </div>
       <div class="min-w-0">
-        <div id="now-playing-name" class="text-xs font-semibold text-slate-300 truncate max-w-[180px] lg:max-w-[260px]" title="Ningún clip en la línea de tiempo">
+        <div id="now-playing-name" class="text-xs font-semibold theme-text-primary truncate max-w-[180px] lg:max-w-[260px]" title="Ningún clip en la línea de tiempo">
           Ningún clip en la línea de tiempo
         </div>
-        <div id="now-playing-meta" class="text-[11px] text-slate-500 truncate font-mono">
+        <div id="now-playing-meta" class="text-[11px] theme-text-muted truncate font-mono">
           —
         </div>
       </div>
@@ -230,32 +247,32 @@
     <!-- Zona Central: Botones de transporte y contador de tiempo -->
     <div class="flex items-center justify-center gap-4">
       <!-- Botón Retroceder 5s -->
-      <button id="btn-rewind" type="button" aria-label="Retroceder 5 segundos" title="Retroceder 5s (J)" class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 outline-none transition-colors duration-150">
+      <button id="btn-rewind" type="button" aria-label="Retroceder 5 segundos" title="Retroceder 5s (J)" class="w-8 h-8 rounded-full flex items-center justify-center theme-text-secondary hover:theme-text-primary hover:bg-slate-200/60 dark:hover:bg-slate-800 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
         <i data-lucide="skip-back" class="w-4 h-4"></i>
       </button>
 
       <!-- Botón Play / Pausa (Círculo violeta 36px, deshabilitado en estado limpio sin clips) -->
-      <button id="btn-play" type="button" disabled aria-disabled="true" aria-label="Reproducir (sin audio cargado)" title="Reproducir (sin audio cargado)" class="w-9 h-9 rounded-full flex items-center justify-center bg-violet-600 text-white shadow-md active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 outline-none transition-all duration-150 opacity-40 cursor-not-allowed">
+      <button id="btn-play" type="button" disabled aria-disabled="true" aria-label="Reproducir (sin audio cargado)" title="Reproducir (sin audio cargado)" class="w-9 h-9 rounded-full flex items-center justify-center bg-violet-600 text-white shadow-md active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-400 outline-none transition-all duration-150 opacity-40 cursor-not-allowed">
         <i data-lucide="play" class="w-4 h-4 fill-white ml-0.5"></i>
       </button>
 
       <!-- Botón Avanzar 5s -->
-      <button id="btn-forward" type="button" aria-label="Avanzar 5 segundos" title="Avanzar 5s (L)" class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 outline-none transition-colors duration-150">
+      <button id="btn-forward" type="button" aria-label="Avanzar 5 segundos" title="Avanzar 5s (L)" class="w-8 h-8 rounded-full flex items-center justify-center theme-text-secondary hover:theme-text-primary hover:bg-slate-200/60 dark:hover:bg-slate-800 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
         <i data-lucide="skip-forward" class="w-4 h-4"></i>
       </button>
 
       <!-- Indicador numérico de tiempo -->
       <div class="flex items-center gap-1 font-mono text-xs tabular-nums select-none ml-2">
-        <span id="current-time" aria-live="polite" class="text-slate-100 font-semibold">00:00:00</span>
-        <span class="text-slate-600 font-normal">/</span>
-        <span id="duration-label" class="text-slate-400 font-normal">00:00:00</span>
+        <span id="current-time" aria-live="polite" class="theme-text-primary font-semibold">00:00:00</span>
+        <span class="theme-text-muted font-normal">/</span>
+        <span id="duration-label" class="theme-text-secondary font-normal">00:00:00</span>
       </div>
     </div>
 
     <!-- Zona Derecha: Control de volumen y mute -->
     <div class="flex items-center justify-end gap-2.5">
       <!-- Botón Mute / Unmute -->
-      <button id="btn-mute" type="button" aria-label="Silenciar audio" title="Silenciar / Activar sonido (M)" class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 outline-none transition-colors duration-150">
+      <button id="btn-mute" type="button" aria-label="Silenciar audio" title="Silenciar / Activar sonido (M)" class="w-8 h-8 rounded-full flex items-center justify-center theme-text-secondary hover:theme-text-primary hover:bg-slate-200/60 dark:hover:bg-slate-800 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
         <i data-lucide="volume-2" class="w-4 h-4"></i>
       </button>
 
