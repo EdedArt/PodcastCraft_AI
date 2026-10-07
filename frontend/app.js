@@ -1,13 +1,20 @@
 /**
  * ==========================================================================
  * PodcastCraft AI — Archivo Principal de Lógica de Interfaz
- * SPRINT 5: Playhead de Alta Fidelidad + Scrubbing en Regla de Tiempo
+ * SPRINT 6: Reestructuración Frontend/Backend + Persistencia Real
  * ==========================================================================
  */
 
 /* ==========================================================================
    1. CONSTANTS
    ========================================================================== */
+
+/**
+ * URL base del backend Express local (Sprint 6).
+ * Nota: En el empaquetado final con Electron (Sprint 7), backend y frontend
+ * compartirán proceso local y esta constante se adaptará o unificará.
+ */
+const API_BASE_URL = 'http://localhost:3001';
 
 /**
  * Ancho mínimo de pantalla soportado sin advertencia (en píxeles).
@@ -827,6 +834,175 @@ function renderAll(currentState = state, prevState) {
   }
 
   renderIcons();
+
+  // Detección de cambios persistentes para autoguardado en backend (Sprint 6)
+  if (!isInitial) {
+    const dataChanged = (
+      currentState.tracks !== prevState?.tracks ||
+      currentState.library !== prevState?.library ||
+      currentState.project.title !== prevState?.project?.title
+    );
+
+    if (dataChanged) {
+      scheduleAutoSave();
+    }
+  }
+}
+
+
+/* ==========================================================================
+   6.1 PERSISTENCE & BACKEND API (Sprint 6)
+   ========================================================================== */
+
+let saveDebounceTimer = null;
+let isSaving = false;
+
+/**
+ * Programa el guardado automático en el backend con un debounce de 1.5s.
+ * Marca visualmente el proyecto en estado 'Borrador' de inmediato.
+ */
+function scheduleAutoSave() {
+  if (state.project.status !== 'draft') {
+    state.project.status = 'draft';
+    renderTopbar();
+  }
+
+  clearTimeout(saveDebounceTimer);
+  saveDebounceTimer = setTimeout(async () => {
+    await saveProjectToBackend();
+  }, 1500);
+}
+
+/**
+ * Serializa y envía el estado del proyecto al backend vía PUT /api/project.
+ */
+async function saveProjectToBackend() {
+  if (isSaving) return;
+  isSaving = true;
+
+  try {
+    const payload = {
+      project: {
+        title: state.project.title,
+        status: 'saved'
+      },
+      library: state.library.map((item) => ({
+        id: item.id,
+        name: item.name,
+        duration: item.duration,
+        url: item.url || (item.objectUrl ? item.objectUrl.replace(API_BASE_URL, '') : '')
+      })),
+      tracks: state.tracks.map((t) => ({
+        id: t.id,
+        name: t.name,
+        colorIndex: t.colorIndex,
+        clips: t.clips.map((c) => ({
+          id: c.id,
+          libraryId: c.libraryId,
+          name: c.name,
+          start: c.start,
+          duration: c.duration
+        }))
+      }))
+    };
+
+    const res = await fetch(`${API_BASE_URL}/api/project`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    state.project.status = 'saved';
+    renderTopbar();
+    console.info('[PodcastCraft AI] Proyecto guardado exitosamente en backend.');
+  } catch (err) {
+    console.warn('[PodcastCraft AI] Error al persistir proyecto en backend:', err);
+    showImportFeedback('No se pudo guardar en el servidor local. Verifica que el backend esté corriendo.');
+  } finally {
+    isSaving = false;
+  }
+}
+
+/**
+ * Carga el estado guardado del proyecto desde el backend vía GET /api/project.
+ * Si el backend no está disponible, cae de vuelta silenciosamente al estado inicial local.
+ */
+async function loadProjectFromBackend() {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+
+    const res = await fetch(`${API_BASE_URL}/api/project`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (!data || typeof data !== 'object') return;
+
+    if (data.project?.title) {
+      state.project.title = data.project.title;
+    }
+    state.project.status = data.project?.status || 'saved';
+
+    if (Array.isArray(data.library)) {
+      state.library = data.library.map((item) => ({
+        id: item.id,
+        name: item.name,
+        duration: typeof item.duration === 'number' ? item.duration : 0,
+        url: item.url,
+        objectUrl: item.url ? `${API_BASE_URL}${item.url}` : null,
+        icon: 'file-audio',
+        isImported: true
+      }));
+    }
+
+    if (Array.isArray(data.tracks)) {
+      state.tracks = data.tracks.map((t) => ({
+        id: t.id,
+        name: t.name || 'Carril',
+        colorIndex: typeof t.colorIndex === 'number' ? t.colorIndex : 0,
+        clips: Array.isArray(t.clips)
+          ? t.clips.map((c) => {
+              const libItem = state.library.find((l) => l.id === c.libraryId);
+              return {
+                id: c.id,
+                libraryId: c.libraryId,
+                name: c.name,
+                start: typeof c.start === 'number' ? c.start : 0,
+                duration: typeof c.duration === 'number' ? c.duration : 0,
+                objectUrl: libItem ? libItem.objectUrl : null
+              };
+            })
+          : []
+      }));
+
+      // Recomputar duración total del proyecto a partir de los clips cargados
+      state.project.duration = recomputeProjectDuration(state.tracks);
+
+      // Ajustar contadores para evitar colisión con nuevos carriles
+      if (state.tracks.length > 0) {
+        trackCounter = Math.max(state.tracks.length, trackCounter);
+        const maxColor = Math.max(...state.tracks.map((t) => t.colorIndex || 0));
+        nextColorIndex = Math.max(maxColor + 1, nextColorIndex);
+      }
+    }
+
+    console.info('[PodcastCraft AI] Proyecto cargado exitosamente desde backend.');
+  } catch (err) {
+    console.warn('[PodcastCraft AI] Servidor local no disponible o inaccesible. Modo de sesión local activo:', err.message);
+    showImportFeedback('Servidor local no detectado. Los cambios se mantendrán solo durante esta sesión.');
+  }
 }
 
 
@@ -1074,9 +1250,8 @@ function bindTopbarEvents() {
 
   const btnExport = $('#btn-export');
   if (btnExport) {
-    btnExport.addEventListener('click', () => {
-      const nextStatus = state.project.status === 'draft' ? 'saved' : 'draft';
-      setState({ project: { status: nextStatus } });
+    btnExport.addEventListener('click', async () => {
+      await saveProjectToBackend();
     });
   }
 }
@@ -1144,53 +1319,75 @@ function bindImportAudioEvents() {
 
       const newItems = [];
       for (const file of validFiles) {
-        const objectUrl = URL.createObjectURL(file);
-        const audio = new Audio(objectUrl);
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
 
-        const duration = await new Promise((resolve) => {
-          const onLoaded = () => {
-            cleanup();
-            let dur = audio.duration;
-            if (!isFinite(dur) || isNaN(dur)) {
-              dur = 0;
-            }
-            resolve(Math.round(dur));
-          };
-          const onError = () => {
-            cleanup();
-            resolve(0);
-          };
-          const timer = setTimeout(() => {
-            cleanup();
-            resolve(0);
-          }, 3000);
+          const res = await fetch(`${API_BASE_URL}/api/audio`, {
+            method: 'POST',
+            body: formData
+          });
 
-          function cleanup() {
-            clearTimeout(timer);
-            audio.removeEventListener('loadedmetadata', onLoaded);
-            audio.removeEventListener('error', onError);
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `Error HTTP ${res.status}`);
           }
 
-          audio.addEventListener('loadedmetadata', onLoaded);
-          audio.addEventListener('error', onError);
-        });
+          const audioData = await res.json();
+          const backendAudioUrl = `${API_BASE_URL}${audioData.url}`;
+          const audio = new Audio(backendAudioUrl);
 
-        newItems.push({
-          id: `lib-import-${crypto.randomUUID()}`,
-          name: file.name.replace(/\.mp3$/i, ''),
-          duration: duration,
-          objectUrl,
-          icon: 'file-audio',
-          isImported: true
-        });
+          const duration = await new Promise((resolve) => {
+            const onLoaded = () => {
+              cleanup();
+              let dur = audio.duration;
+              if (!isFinite(dur) || isNaN(dur)) {
+                dur = 0;
+              }
+              resolve(Math.round(dur));
+            };
+            const onError = () => {
+              cleanup();
+              resolve(0);
+            };
+            const timer = setTimeout(() => {
+              cleanup();
+              resolve(0);
+            }, 4000);
+
+            function cleanup() {
+              clearTimeout(timer);
+              audio.removeEventListener('loadedmetadata', onLoaded);
+              audio.removeEventListener('error', onError);
+            }
+
+            audio.addEventListener('loadedmetadata', onLoaded);
+            audio.addEventListener('error', onError);
+          });
+
+          newItems.push({
+            id: audioData.id,
+            name: audioData.name,
+            duration: duration,
+            url: audioData.url,
+            objectUrl: backendAudioUrl,
+            icon: 'file-audio',
+            isImported: true
+          });
+        } catch (uploadErr) {
+          console.error('[PodcastCraft AI] Error subiendo archivo MP3 al backend:', uploadErr);
+          showImportFeedback('No se pudo conectar con el servidor local. Verifica que el backend esté corriendo.');
+        }
       }
 
-      setState({
-        library: [...state.library, ...newItems]
-      });
+      if (newItems.length > 0) {
+        setState({
+          library: [...state.library, ...newItems]
+        });
+        console.info(`[PodcastCraft AI] ${newItems.length} archivo(s) MP3 subido(s) y procesado(s) exitosamente.`);
+      }
 
       fileInput.value = '';
-      console.info(`[PodcastCraft AI] ${newItems.length} archivo(s) MP3 importado(s) exitosamente.`);
     });
   }
 
@@ -1775,8 +1972,11 @@ function bindViewportGuard() {
 
 subscribe(renderAll);
 
-document.addEventListener('DOMContentLoaded', () => {
-  // Renderizado inicial (Clean slate, 0 carriles, 0 audios)
+document.addEventListener('DOMContentLoaded', async () => {
+  // Carga previa e hidratación del estado persistido desde el backend (Sprint 6)
+  await loadProjectFromBackend();
+
+  // Renderizado inicial (con datos del backend o clean slate si está desconectado)
   renderAll();
 
   // Vinculación de escuchadores de eventos
@@ -1787,5 +1987,5 @@ document.addEventListener('DOMContentLoaded', () => {
   bindGlobalDragGuard();
   bindViewportGuard();
 
-  console.info('[PodcastCraft AI] Sprint 5 (Playhead sincronizado a 60 FPS + Scrubbing) inicializado.');
+  console.info('[PodcastCraft AI] Sprint 6 (Reestructuración Frontend/Backend + Persistencia Real) inicializado.');
 });

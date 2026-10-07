@@ -1,0 +1,5 @@
+node_modules/
+storage/audio-files/*
+!storage/audio-files/.gitkeep
+storage/project.json
+storage/project.tmp.json
