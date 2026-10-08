@@ -44,7 +44,25 @@ const I18N = {
     'transport.unmuteAria': 'Activar sonido',
     'transport.unmuteTitle': 'Activar sonido (M)',
     'transport.volumeAria': 'Control de volumen de reproducción',
-    'transport.volumeTitle': 'Volumen'
+    'transport.volumeTitle': 'Volumen',
+
+    // Biblioteca de Medios (Library)
+    'library.asideAria': 'Biblioteca de bloques de audio',
+    'library.title': 'Biblioteca',
+    'library.countSingle': '1 audio',
+    'library.countPlural': '{count} audios',
+    'library.importAria': 'Importar archivos MP3 desde tu computador',
+    'library.importTitle': 'Importar archivos MP3',
+    'library.importBtn': 'Importar MP3',
+    'library.listAria': 'Audios importados',
+    'library.emptyTitle': 'Tu biblioteca aparecerá aquí',
+    'library.emptyDesc': 'Importa archivos MP3 desde tu computador para estructurar tu episodio.',
+    'library.durationLabel': 'duración',
+    'library.dragToTrack': 'Arrastra a un carril',
+    'library.cardDragTitle': 'Arrastra a cualquier carril del timeline',
+    'library.feedbackOnlyMp3': 'Solo se permiten archivos MP3',
+    'library.feedbackNonMp3Ignored': '{count} archivo(s) no eran MP3 y fueron ignorados',
+    'library.feedbackServerConnError': 'No se pudo conectar con el servidor local. Verifica que el backend esté corriendo.'
   },
   en: {
     // Aplicación y Barra Superior (Topbar)
@@ -82,7 +100,25 @@ const I18N = {
     'transport.unmuteAria': 'Unmute audio',
     'transport.unmuteTitle': 'Unmute audio (M)',
     'transport.volumeAria': 'Playback volume control',
-    'transport.volumeTitle': 'Volume'
+    'transport.volumeTitle': 'Volume',
+
+    // Biblioteca de Medios (Library)
+    'library.asideAria': 'Audio block library',
+    'library.title': 'Library',
+    'library.countSingle': '1 audio',
+    'library.countPlural': '{count} audio files',
+    'library.importAria': 'Import MP3 files from your computer',
+    'library.importTitle': 'Import MP3 files',
+    'library.importBtn': 'Import MP3',
+    'library.listAria': 'Imported audio files',
+    'library.emptyTitle': 'Your library will appear here',
+    'library.emptyDesc': 'Import MP3 files from your computer to structure your episode.',
+    'library.durationLabel': 'duration',
+    'library.dragToTrack': 'Drag to a track',
+    'library.cardDragTitle': 'Drag to any track on the timeline',
+    'library.feedbackOnlyMp3': 'Only MP3 files are allowed',
+    'library.feedbackNonMp3Ignored': '{count} file(s) were not MP3 and were ignored',
+    'library.feedbackServerConnError': 'Could not connect to local server. Make sure the backend is running.'
   }
 };
 
@@ -166,6 +202,18 @@ function applyTranslations() {
   }
   if (typeof renderTransport === 'function') {
     renderTransport();
+  }
+  if (typeof renderLibraryCount === 'function') {
+    renderLibraryCount();
+  }
+  if (typeof renderLibraryList === 'function') {
+    renderLibraryList();
+  }
+  if (typeof renderTimelineTracks === 'function') {
+    renderTimelineTracks();
+  }
+  if (typeof renderIcons === 'function') {
+    renderIcons();
   }
   if (typeof applyTheme === 'function' && typeof getCurrentTheme === 'function') {
     applyTheme(getCurrentTheme());

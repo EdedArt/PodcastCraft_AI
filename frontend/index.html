@@ -114,13 +114,13 @@
   <main id="workspace" aria-label="Espacio de trabajo del editor" class="flex-1 min-h-0 flex overflow-hidden">
     
     <!-- Columna Izquierda: Biblioteca de Medios (20%, min 260px, max 320px) -->
-    <aside id="col-library" aria-label="Biblioteca de bloques de audio" class="w-[20%] min-w-[260px] max-w-[320px] theme-panel border-r flex flex-col min-h-0">
+    <aside id="col-library" data-i18n-aria-label="library.asideAria" aria-label="Biblioteca de bloques de audio" class="w-[20%] min-w-[260px] max-w-[320px] theme-panel border-r flex flex-col min-h-0">
       <!-- Encabezado de Biblioteca con Botón de Importar MP3 -->
       <div class="border-b shrink-0 theme-panel-header">
         <div class="h-11 px-3.5 flex items-center justify-between">
           <div class="flex items-center gap-2">
             <i data-lucide="library" class="w-4 h-4 theme-text-secondary"></i>
-            <h2 class="text-xs font-bold uppercase tracking-wider theme-text-primary">Biblioteca</h2>
+            <h2 class="text-xs font-bold uppercase tracking-wider theme-text-primary" data-i18n="library.title">Biblioteca</h2>
           </div>
           <span id="library-count" class="text-[11px] font-semibold px-2 py-0.5 rounded-full theme-pill border theme-text-secondary tabular-nums">0 audios</span>
         </div>
@@ -128,9 +128,9 @@
         <!-- Zona de Importación de MP3 Real -->
         <div class="px-3 pb-2.5 flex flex-col gap-1.5">
           <input type="file" id="audio-file-input" accept=".mp3,audio/mpeg" multiple hidden>
-          <button id="btn-import-audio" type="button" aria-label="Importar archivos MP3 desde tu computador" title="Importar archivos MP3" class="theme-btn-secondary w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border active:scale-[0.98] transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500 shadow-sm">
+          <button id="btn-import-audio" type="button" data-i18n-aria-label="library.importAria" data-i18n-title="library.importTitle" aria-label="Importar archivos MP3 desde tu computador" title="Importar archivos MP3" class="theme-btn-secondary w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border active:scale-[0.98] transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500 shadow-sm">
             <i data-lucide="upload" class="w-3.5 h-3.5"></i>
-            <span>Importar MP3</span>
+            <span data-i18n="library.importBtn">Importar MP3</span>
           </button>
           
           <!-- Mensaje accesible y no bloqueante para rechazo de archivos no-MP3 -->
@@ -139,7 +139,7 @@
       </div>
 
       <!-- Lista de Audios y Estados Vacíos (renderizada dinámicamente desde JS) -->
-      <div id="library-list" role="region" aria-label="Audios importados" class="flex-1 min-h-0 p-3 overflow-y-auto"></div>
+      <div id="library-list" role="region" data-i18n-aria-label="library.listAria" aria-label="Audios importados" class="flex-1 min-h-0 p-3 overflow-y-auto"></div>
     </aside>
 
     <!-- Columna Central: Línea de Tiempo / Escaleta (flex-1, min-w-0) -->

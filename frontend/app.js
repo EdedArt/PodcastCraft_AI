@@ -654,7 +654,10 @@ function renderLibraryCount() {
   const libraryCount = $('#library-count');
   if (libraryCount) {
     const count = state.library.length;
-    libraryCount.textContent = count === 1 ? '1 audio' : `${count} audios`;
+    const text = typeof t === 'function'
+      ? (count === 1 ? t('library.countSingle') : t('library.countPlural').replace('{count}', count))
+      : (count === 1 ? '1 audio' : `${count} audios`);
+    libraryCount.textContent = text;
   }
 }
 
@@ -667,14 +670,16 @@ function renderLibraryList() {
 
   if (state.library.length === 0) {
     listContainer.className = 'flex-1 min-h-0 p-3 overflow-y-auto flex flex-col';
+    const emptyTitle = typeof t === 'function' ? t('library.emptyTitle') : 'Tu biblioteca aparecerá aquí';
+    const emptyDesc = typeof t === 'function' ? t('library.emptyDesc') : 'Importa archivos MP3 desde tu computador para estructurar tu episodio.';
     listContainer.innerHTML = `
       <div id="library-empty" class="flex-1 flex flex-col items-center justify-center p-6 text-center border-2 border-dashed rounded-xl theme-empty-box">
         <div class="w-12 h-12 rounded-full theme-pill border flex items-center justify-center theme-text-secondary mb-3 shadow-inner">
           <i data-lucide="file-audio" class="w-6 h-6"></i>
         </div>
-        <h3 class="text-xs font-semibold theme-text-primary mb-1">Tu biblioteca aparecerá aquí</h3>
+        <h3 class="text-xs font-semibold theme-text-primary mb-1">${emptyTitle}</h3>
         <p class="text-[11px] theme-text-muted leading-relaxed max-w-[190px]">
-          Importa archivos MP3 desde tu computador para estructurar tu episodio.
+          ${emptyDesc}
         </p>
       </div>
     `;
@@ -682,6 +687,10 @@ function renderLibraryList() {
   }
 
   listContainer.className = 'flex-1 min-h-0 p-3 overflow-y-auto space-y-2';
+  const durationLabel = typeof t === 'function' ? t('library.durationLabel') : 'duración';
+  const dragToTrack = typeof t === 'function' ? t('library.dragToTrack') : 'Arrastra a un carril';
+  const cardDragTitle = typeof t === 'function' ? t('library.cardDragTitle') : 'Arrastra a cualquier carril del timeline';
+
   const cardsHtml = state.library.map((item) => {
     const isSelected = state.selection.libraryId === item.id;
     const formattedDuration = formatDuration(item.duration);
@@ -697,8 +706,8 @@ function renderLibraryList() {
         tabindex="0"
         role="button"
         aria-pressed="${isSelected ? 'true' : 'false'}"
-        aria-label="${escapeHtml(item.name)}, duración ${formattedDuration}. Arrastra a un carril"
-        title="Arrastra a cualquier carril del timeline"
+        aria-label="${escapeHtml(item.name)}, ${durationLabel} ${formattedDuration}. ${dragToTrack}"
+        title="${cardDragTitle}"
         class="group relative min-h-[58px] rounded-lg border ${borderBgClasses} active:cursor-grabbing cursor-grab flex items-center gap-3 px-3 py-2 select-none transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
       >
         <!-- Ícono neutro 32x32 -->
@@ -1539,11 +1548,10 @@ function bindImportAudioEvents() {
       }
 
       if (rejectedCount > 0) {
-        showImportFeedback(
-          rejectedCount === 1
-            ? 'Solo se permiten archivos MP3'
-            : `${rejectedCount} archivo(s) no eran MP3 y fueron ignorados`
-        );
+        const feedbackMsg = typeof t === 'function'
+          ? (rejectedCount === 1 ? t('library.feedbackOnlyMp3') : t('library.feedbackNonMp3Ignored').replace('{count}', rejectedCount))
+          : (rejectedCount === 1 ? 'Solo se permiten archivos MP3' : `${rejectedCount} archivo(s) no eran MP3 y fueron ignorados`);
+        showImportFeedback(feedbackMsg);
       }
 
       if (validFiles.length === 0) {
@@ -1610,7 +1618,10 @@ function bindImportAudioEvents() {
           });
         } catch (uploadErr) {
           console.error('[PodcastCraft AI] Error subiendo archivo MP3 al backend:', uploadErr);
-          showImportFeedback('No se pudo conectar con el servidor local. Verifica que el backend esté corriendo.');
+          const errMsg = typeof t === 'function'
+            ? t('library.feedbackServerConnError')
+            : 'No se pudo conectar con el servidor local. Verifica que el backend esté corriendo.';
+          showImportFeedback(errMsg);
         }
       }
 
