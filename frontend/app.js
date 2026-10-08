@@ -480,17 +480,23 @@ function deleteTrack(trackId) {
 function renderTopbar() {
   const projectTitle = $('#project-title');
   if (projectTitle) {
-    projectTitle.textContent = state.project.title;
-    projectTitle.setAttribute('title', state.project.title);
+    const isUntitled = !state.project.title || state.project.title === 'Untitled Project' || state.project.title === 'Proyecto sin título';
+    const displayTitle = isUntitled ? (typeof t === 'function' ? t('topbar.untitledProject') : state.project.title) : state.project.title;
+    projectTitle.textContent = displayTitle;
+    projectTitle.setAttribute('title', displayTitle);
   }
 
   const projectStatus = $('#project-status');
   if (projectStatus) {
+    const isSaved = state.project.status === 'saved';
+    const statusLabel = typeof t === 'function'
+      ? (isSaved ? t('app.badge.saved') : t('app.badge.draft'))
+      : (isSaved ? 'Guardado' : 'Borrador');
     const statusConfig = PROJECT_STATUS[state.project.status] || PROJECT_STATUS.draft;
     projectStatus.className = `inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border shrink-0 transition-colors duration-150 ${statusConfig.className}`;
     projectStatus.innerHTML = `
       <span class="w-1.5 h-1.5 rounded-full ${statusConfig.dotClass} ${state.project.status === 'draft' ? 'animate-pulse' : ''}"></span>
-      <span>${statusConfig.label}</span>
+      <span>${statusLabel}</span>
     `;
   }
 
@@ -532,14 +538,14 @@ function renderTransport() {
   const totalClips = state.tracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
   const hasClips = totalClips > 0;
 
-  // Botón Play / Pausa contextual
+  // Botón Play / Pausa contextual con etiquetas traducidas dinámicamente
   const btnPlay = $('#btn-play');
   if (btnPlay) {
     if (!hasClips) {
       btnPlay.setAttribute('disabled', 'true');
       btnPlay.setAttribute('aria-disabled', 'true');
-      btnPlay.setAttribute('aria-label', 'Reproducir (sin audio cargado)');
-      btnPlay.setAttribute('title', 'Reproducir (sin audio cargado)');
+      btnPlay.setAttribute('aria-label', typeof t === 'function' ? t('transport.playDisabledAria') : 'Reproducir (sin audio cargado)');
+      btnPlay.setAttribute('title', typeof t === 'function' ? t('transport.playDisabledTitle') : 'Reproducir (sin audio cargado)');
       btnPlay.className = 'w-9 h-9 rounded-full flex items-center justify-center bg-violet-600 text-white shadow-md outline-none transition-all duration-150 opacity-40 cursor-not-allowed';
       btnPlay.innerHTML = '<i data-lucide="play" class="w-4 h-4 fill-white ml-0.5"></i>';
     } else {
@@ -549,14 +555,26 @@ function renderTransport() {
 
       if (state.project.isPlaying) {
         btnPlay.innerHTML = '<i data-lucide="pause" class="w-4 h-4 fill-white"></i>';
-        btnPlay.setAttribute('aria-label', 'Pausar');
-        btnPlay.setAttribute('title', 'Pausar (Espacio)');
+        btnPlay.setAttribute('aria-label', typeof t === 'function' ? t('transport.pauseAria') : 'Pausar');
+        btnPlay.setAttribute('title', typeof t === 'function' ? t('transport.pauseTitle') : 'Pausar (Espacio)');
       } else {
         btnPlay.innerHTML = '<i data-lucide="play" class="w-4 h-4 fill-white ml-0.5"></i>';
-        btnPlay.setAttribute('aria-label', 'Reproducir');
-        btnPlay.setAttribute('title', 'Reproducir (Espacio)');
+        btnPlay.setAttribute('aria-label', typeof t === 'function' ? t('transport.playAria') : 'Reproducir');
+        btnPlay.setAttribute('title', typeof t === 'function' ? t('transport.playTitle') : 'Reproducir (Espacio)');
       }
     }
+  }
+
+  // Botones fijos de transporte (tooltips y aria-labels dinámicos)
+  const btnRewind = $('#btn-rewind');
+  if (btnRewind) {
+    btnRewind.setAttribute('aria-label', typeof t === 'function' ? t('transport.rewindAria') : 'Retroceder 5 segundos');
+    btnRewind.setAttribute('title', typeof t === 'function' ? t('transport.rewindTitle') : 'Retroceder 5s (J)');
+  }
+  const btnForward = $('#btn-forward');
+  if (btnForward) {
+    btnForward.setAttribute('aria-label', typeof t === 'function' ? t('transport.forwardAria') : 'Avanzar 5 segundos');
+    btnForward.setAttribute('title', typeof t === 'function' ? t('transport.forwardTitle') : 'Avanzar 5s (L)');
   }
 
   // Información del clip en reproducción activa (#now-playing-name, #now-playing-meta)
@@ -587,8 +605,9 @@ function renderTransport() {
       nowPlayingName.setAttribute('title', activeClip.name);
       nowPlayingMeta.textContent = `${formatDuration(activeClip.duration)} · MP3`;
     } else {
-      nowPlayingName.textContent = 'Ningún clip en la línea de tiempo';
-      nowPlayingName.setAttribute('title', 'Ningún clip en la línea de tiempo');
+      const emptyLabel = typeof t === 'function' ? t('transport.noClip') : 'Ningún clip en la línea de tiempo';
+      nowPlayingName.textContent = emptyLabel;
+      nowPlayingName.setAttribute('title', emptyLabel);
       nowPlayingMeta.textContent = '—';
     }
   }
@@ -598,12 +617,12 @@ function renderTransport() {
   if (btnMute) {
     if (state.project.isMuted) {
       btnMute.innerHTML = '<i data-lucide="volume-x" class="w-4 h-4"></i>';
-      btnMute.setAttribute('aria-label', 'Activar sonido');
-      btnMute.setAttribute('title', 'Activar sonido (M)');
+      btnMute.setAttribute('aria-label', typeof t === 'function' ? t('transport.unmuteAria') : 'Activar sonido');
+      btnMute.setAttribute('title', typeof t === 'function' ? t('transport.unmuteTitle') : 'Activar sonido (M)');
     } else {
       btnMute.innerHTML = '<i data-lucide="volume-2" class="w-4 h-4"></i>';
-      btnMute.setAttribute('aria-label', 'Silenciar audio');
-      btnMute.setAttribute('title', 'Silenciar audio (M)');
+      btnMute.setAttribute('aria-label', typeof t === 'function' ? t('transport.muteAria') : 'Silenciar audio');
+      btnMute.setAttribute('title', typeof t === 'function' ? t('transport.muteTitle') : 'Silenciar audio (M)');
     }
   }
 

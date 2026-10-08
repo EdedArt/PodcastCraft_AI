@@ -40,7 +40,7 @@
   </div>
 
   <!-- 1. Top Navbar (h-14, shrink-0, panel adaptable) -->
-  <header id="topbar" aria-label="Barra superior de herramientas" class="h-14 shrink-0 theme-panel border-b px-4 grid grid-cols-[1fr_auto_1fr] items-center select-none z-10">
+  <header id="topbar" data-i18n-aria-label="topbar.ariaLabel" aria-label="Barra superior de herramientas" class="h-14 shrink-0 theme-panel border-b px-4 grid grid-cols-[1fr_auto_1fr] items-center select-none z-10">
     
     <!-- Zona Izquierda: Logo, Nombre del Proyecto y Badge de Estado -->
     <div class="flex items-center gap-3 min-w-0">
@@ -56,21 +56,21 @@
       <div class="h-4 w-px bg-slate-300 dark:bg-slate-800 shrink-0 mx-1"></div>
 
       <!-- Nombre del proyecto -->
-      <span id="project-title" class="text-xs md:text-sm font-medium theme-text-secondary truncate max-w-[180px] lg:max-w-[280px]" title="Untitled Project">
-        Untitled Project
+      <span id="project-title" class="text-xs md:text-sm font-medium theme-text-secondary truncate max-w-[180px] lg:max-w-[280px]" data-i18n-title="topbar.untitledProject" title="Proyecto sin título">
+        Proyecto sin título
       </span>
 
       <!-- Badge de Estado del Proyecto (Borrador / Guardado) -->
       <div id="project-status" aria-live="polite" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 shrink-0 transition-colors duration-150">
         <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-        <span>Borrador</span>
+        <span data-i18n="app.badge.draft">Borrador</span>
       </div>
     </div>
 
     <!-- Zona Central: Duración Total -->
     <div class="flex items-center justify-center">
       <div class="flex items-center gap-2 theme-pill border px-3.5 py-1 rounded-full text-xs shadow-inner">
-        <span class="theme-text-secondary font-medium tracking-wide">Duración total</span>
+        <span class="theme-text-secondary font-medium tracking-wide" data-i18n="topbar.duration">Duración total</span>
         <span id="total-duration" class="font-mono theme-text-primary font-semibold tabular-nums">00:00:00</span>
       </div>
     </div>
@@ -78,18 +78,18 @@
     <!-- Zona Derecha: Botón IA, Exportar y Toggle de Tema -->
     <div class="flex items-center justify-end gap-3">
       <!-- Botón Secundario IA -->
-      <button id="btn-ai-analysis" type="button" aria-label="Iniciar análisis inteligente con IA" title="Análisis de IA" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-violet-700 bg-violet-500/10 border border-violet-500/40 glow-ai hover:bg-violet-500/20 hover:border-violet-500 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-all duration-150">
+      <button id="btn-ai-analysis" type="button" data-i18n-aria-label="topbar.aiAnalysisAria" data-i18n-title="topbar.aiAnalysisTitle" aria-label="Iniciar análisis inteligente con IA" title="Análisis de IA" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-violet-700 bg-violet-500/10 border border-violet-500/40 glow-ai hover:bg-violet-500/20 hover:border-violet-500 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-all duration-150">
         <i data-lucide="wand-2" class="w-3.5 h-3.5 text-violet-600"></i>
-        <span>Análisis de IA</span>
+        <span data-i18n="topbar.aiAnalysis">Análisis de IA</span>
       </button>
 
       <!-- Separador vertical -->
       <div class="h-4 w-px bg-slate-300 dark:bg-slate-800 shrink-0"></div>
 
       <!-- Botón Primario: Exportar Podcast -->
-      <button id="btn-export" type="button" aria-label="Exportar podcast final" title="Exportar Podcast" class="theme-btn-export inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none shadow-sm transition-all duration-150">
+      <button id="btn-export" type="button" data-i18n-aria-label="topbar.exportAria" data-i18n-title="topbar.exportTitle" aria-label="Exportar podcast final" title="Exportar Podcast" class="theme-btn-export inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none shadow-sm transition-all duration-150">
         <i data-lucide="download" class="w-3.5 h-3.5"></i>
-        <span>Exportar Podcast</span>
+        <span data-i18n="topbar.export">Exportar Podcast</span>
       </button>
 
       <!-- Separador vertical -->
@@ -236,7 +236,7 @@
   </main>
 
   <!-- 3. Footer de Transporte (h-16, shrink-0, en flujo normal) -->
-  <footer id="transport" aria-label="Controles de transporte y reproducción" class="h-16 shrink-0 theme-panel border-t px-4 grid grid-cols-[1fr_auto_1fr] items-center select-none z-10">
+  <footer id="transport" data-i18n-aria-label="transport.ariaLabel" aria-label="Controles de transporte y reproducción" class="h-16 shrink-0 theme-panel border-t px-4 grid grid-cols-[1fr_auto_1fr] items-center select-none z-10">
     
     <!-- Zona Izquierda: Clip en reproducción -->
     <div class="flex items-center gap-3 min-w-0">
@@ -244,7 +244,7 @@
         <i data-lucide="disc-3" class="w-4 h-4"></i>
       </div>
       <div class="min-w-0">
-        <div id="now-playing-name" class="text-xs font-semibold theme-text-primary truncate max-w-[180px] lg:max-w-[260px]" title="Ningún clip en la línea de tiempo">
+        <div id="now-playing-name" data-i18n="transport.noClip" data-i18n-title="transport.noClip" class="text-xs font-semibold theme-text-primary truncate max-w-[180px] lg:max-w-[260px]" title="Ningún clip en la línea de tiempo">
           Ningún clip en la línea de tiempo
         </div>
         <div id="now-playing-meta" class="text-[11px] theme-text-muted truncate font-mono">
@@ -256,17 +256,17 @@
     <!-- Zona Central: Botones de transporte y contador de tiempo -->
     <div class="flex items-center justify-center gap-4">
       <!-- Botón Retroceder 5s -->
-      <button id="btn-rewind" type="button" aria-label="Retroceder 5 segundos" title="Retroceder 5s (J)" class="w-8 h-8 rounded-full flex items-center justify-center theme-text-secondary hover:theme-text-primary hover:bg-slate-200/60 dark:hover:bg-slate-800 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
+      <button id="btn-rewind" type="button" data-i18n-aria-label="transport.rewindAria" data-i18n-title="transport.rewindTitle" aria-label="Retroceder 5 segundos" title="Retroceder 5s (J)" class="w-8 h-8 rounded-full flex items-center justify-center theme-text-secondary hover:theme-text-primary hover:bg-slate-200/60 dark:hover:bg-slate-800 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
         <i data-lucide="skip-back" class="w-4 h-4"></i>
       </button>
 
       <!-- Botón Play / Pausa (Círculo violeta 36px, deshabilitado en estado limpio sin clips) -->
-      <button id="btn-play" type="button" disabled aria-disabled="true" aria-label="Reproducir (sin audio cargado)" title="Reproducir (sin audio cargado)" class="w-9 h-9 rounded-full flex items-center justify-center bg-violet-600 text-white shadow-md active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-400 outline-none transition-all duration-150 opacity-40 cursor-not-allowed">
+      <button id="btn-play" type="button" disabled aria-disabled="true" data-i18n-aria-label="transport.playDisabledAria" data-i18n-title="transport.playDisabledTitle" aria-label="Reproducir (sin audio cargado)" title="Reproducir (sin audio cargado)" class="w-9 h-9 rounded-full flex items-center justify-center bg-violet-600 text-white shadow-md active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-400 outline-none transition-all duration-150 opacity-40 cursor-not-allowed">
         <i data-lucide="play" class="w-4 h-4 fill-white ml-0.5"></i>
       </button>
 
       <!-- Botón Avanzar 5s -->
-      <button id="btn-forward" type="button" aria-label="Avanzar 5 segundos" title="Avanzar 5s (L)" class="w-8 h-8 rounded-full flex items-center justify-center theme-text-secondary hover:theme-text-primary hover:bg-slate-200/60 dark:hover:bg-slate-800 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
+      <button id="btn-forward" type="button" data-i18n-aria-label="transport.forwardAria" data-i18n-title="transport.forwardTitle" aria-label="Avanzar 5 segundos" title="Avanzar 5s (L)" class="w-8 h-8 rounded-full flex items-center justify-center theme-text-secondary hover:theme-text-primary hover:bg-slate-200/60 dark:hover:bg-slate-800 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
         <i data-lucide="skip-forward" class="w-4 h-4"></i>
       </button>
 
@@ -281,12 +281,12 @@
     <!-- Zona Derecha: Control de volumen y mute -->
     <div class="flex items-center justify-end gap-2.5">
       <!-- Botón Mute / Unmute -->
-      <button id="btn-mute" type="button" aria-label="Silenciar audio" title="Silenciar / Activar sonido (M)" class="w-8 h-8 rounded-full flex items-center justify-center theme-text-secondary hover:theme-text-primary hover:bg-slate-200/60 dark:hover:bg-slate-800 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
+      <button id="btn-mute" type="button" data-i18n-aria-label="transport.muteAria" data-i18n-title="transport.muteTitle" aria-label="Silenciar audio" title="Silenciar / Activar sonido (M)" class="w-8 h-8 rounded-full flex items-center justify-center theme-text-secondary hover:theme-text-primary hover:bg-slate-200/60 dark:hover:bg-slate-800 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
         <i data-lucide="volume-2" class="w-4 h-4"></i>
       </button>
 
       <!-- Slider de Volumen -->
-      <input id="volume-slider" type="range" min="0" max="100" value="80" aria-label="Control de volumen de reproducción" title="Volumen" class="w-24 lg:w-28">
+      <input id="volume-slider" type="range" min="0" max="100" value="80" data-i18n-aria-label="transport.volumeAria" data-i18n-title="transport.volumeTitle" aria-label="Control de volumen de reproducción" title="Volumen" class="w-24 lg:w-28">
     </div>
   </footer>
 
