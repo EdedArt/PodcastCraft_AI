@@ -188,7 +188,11 @@ window.PodcastCraft = {
   startPlayheadLoop: () => startPlayheadLoop(),
   stopPlayheadLoop: () => stopPlayheadLoop(),
   get globalAudio() { return globalAudio; },
-  get activePlayingClipStart() { return activePlayingClipStart; }
+  get activePlayingClipStart() { return activePlayingClipStart; },
+  getCurrentLanguage: () => (typeof getCurrentLanguage === 'function' ? getCurrentLanguage() : 'es'),
+  setLanguage: (lang) => (typeof setLanguage === 'function' ? setLanguage(lang) : null),
+  t: (key) => (typeof t === 'function' ? t(key) : key),
+  applyTranslations: () => (typeof applyTranslations === 'function' ? applyTranslations() : null)
 };
 
 
@@ -922,9 +926,12 @@ function applyTheme(theme) {
   const toggleBtn = $('#btn-theme-toggle');
   if (toggleBtn) {
     const isDark = finalTheme === 'dark';
+    const label = isDark
+      ? (typeof t === 'function' ? t('theme.switchToLight') : 'Cambiar a modo claro')
+      : (typeof t === 'function' ? t('theme.switchToDark') : 'Cambiar a modo oscuro');
     toggleBtn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
-    toggleBtn.setAttribute('aria-label', isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
-    toggleBtn.setAttribute('title', isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
+    toggleBtn.setAttribute('aria-label', label);
+    toggleBtn.setAttribute('title', label);
     toggleBtn.innerHTML = `<i data-lucide="${isDark ? 'sun' : 'moon'}" class="w-4 h-4"></i>`;
     renderIcons();
   }
@@ -1447,6 +1454,20 @@ function bindTopbarEvents() {
   const themeToggleBtn = $('#btn-theme-toggle');
   if (themeToggleBtn) {
     themeToggleBtn.addEventListener('click', toggleTheme);
+  }
+
+  const langToggleBtn = $('#btn-language-toggle');
+  if (langToggleBtn) {
+    langToggleBtn.addEventListener('click', () => {
+      const current = typeof getCurrentLanguage === 'function' ? getCurrentLanguage() : 'es';
+      const nextLang = current === 'es' ? 'en' : 'es';
+      if (typeof setLanguage === 'function') {
+        setLanguage(nextLang);
+      }
+      if (typeof applyTranslations === 'function') {
+        applyTranslations();
+      }
+    });
   }
 }
 
@@ -2180,6 +2201,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Renderizado inicial (con datos del backend o clean slate si está desconectado)
   renderAll();
+
+  // Inicialización de internacionalización y traducciones visibles (Fase 10)
+  if (typeof applyTranslations === 'function') {
+    applyTranslations();
+  }
 
   // Vinculación de escuchadores de eventos
   bindTransportEvents();

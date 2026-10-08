@@ -95,10 +95,18 @@
       <!-- Separador vertical -->
       <div class="h-4 w-px bg-slate-300 dark:bg-slate-800 shrink-0"></div>
 
-      <!-- Botón de Alternancia de Tema (Claro / Oscuro) -->
-      <button id="btn-theme-toggle" type="button" aria-pressed="false" aria-label="Cambiar a modo oscuro" title="Cambiar a modo oscuro" class="theme-btn-secondary inline-flex items-center justify-center w-8 h-8 rounded-lg active:scale-95 border focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
-        <i data-lucide="moon" class="w-4 h-4"></i>
-      </button>
+      <!-- Ajustes Rápidos: Alternancia de Idioma y Tema -->
+      <div class="flex items-center gap-1.5" role="group" aria-label="Ajustes rápidos de interfaz">
+        <!-- Botón de Alternancia de Idioma (ES / EN) -->
+        <button id="btn-language-toggle" type="button" aria-label="Cambiar a inglés" title="Cambiar a inglés" class="theme-btn-secondary inline-flex items-center justify-center w-8 h-8 rounded-lg active:scale-95 border focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150 text-xs font-bold tracking-wider">
+          EN
+        </button>
+
+        <!-- Botón de Alternancia de Tema (Claro / Oscuro) -->
+        <button id="btn-theme-toggle" type="button" aria-pressed="false" aria-label="Cambiar a modo oscuro" title="Cambiar a modo oscuro" class="theme-btn-secondary inline-flex items-center justify-center w-8 h-8 rounded-lg active:scale-95 border focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
+          <i data-lucide="moon" class="w-4 h-4"></i>
+        </button>
+      </div>
     </div>
   </header>
 
