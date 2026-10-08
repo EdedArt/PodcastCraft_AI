@@ -143,28 +143,28 @@
     </aside>
 
     <!-- Columna Central: Línea de Tiempo / Escaleta (flex-1, min-w-0) -->
-    <section id="col-timeline" aria-label="Línea de tiempo multipista" class="flex-1 min-w-0 theme-timeline-bg flex flex-col min-h-0">
+    <section id="col-timeline" data-i18n-aria-label="timeline.sectionAria" aria-label="Línea de tiempo multipista" class="flex-1 min-w-0 theme-timeline-bg flex flex-col min-h-0">
       <!-- Encabezado de Línea de Tiempo, Botón de Nuevo Carril y Slider de Zoom -->
       <div class="h-11 px-4 border-b flex items-center justify-between shrink-0 theme-panel-header gap-3">
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-2">
             <i data-lucide="layers" class="w-4 h-4 theme-text-secondary"></i>
-            <h2 class="text-xs font-bold uppercase tracking-wider theme-text-primary">Línea de tiempo</h2>
+            <h2 class="text-xs font-bold uppercase tracking-wider theme-text-primary" data-i18n="timeline.title">Línea de tiempo</h2>
           </div>
 
           <!-- Botón de Crear Carril Dinámico -->
-          <button id="btn-add-track" type="button" aria-label="Agregar nuevo carril" title="Agregar nuevo carril" class="theme-btn-secondary inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-all shadow-sm">
+          <button id="btn-add-track" type="button" data-i18n-aria-label="timeline.addTrackAria" data-i18n-title="timeline.addTrackTitle" aria-label="Agregar nuevo carril" title="Agregar nuevo carril" class="theme-btn-secondary inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-all shadow-sm">
             <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-            <span>Nuevo Carril</span>
+            <span data-i18n="timeline.addTrackBtn">Nuevo Carril</span>
           </button>
         </div>
 
         <!-- Control de Zoom -->
         <div class="flex items-center gap-2.5">
-          <label for="zoom-slider" class="text-xs font-medium theme-text-secondary select-none">Zoom</label>
+          <label for="zoom-slider" class="text-xs font-medium theme-text-secondary select-none" data-i18n="timeline.zoomLabel">Zoom</label>
           <div class="flex items-center gap-1.5 w-28 lg:w-36">
             <i data-lucide="zoom-out" class="w-3.5 h-3.5 theme-text-secondary shrink-0"></i>
-            <input id="zoom-slider" type="range" min="0" max="100" value="50" aria-label="Nivel de zoom de la línea de tiempo" title="Nivel de zoom" class="w-full">
+            <input id="zoom-slider" type="range" min="0" max="100" value="50" data-i18n-aria-label="timeline.zoomSliderAria" data-i18n-title="timeline.zoomSliderTitle" aria-label="Nivel de zoom de la línea de tiempo" title="Nivel de zoom" class="w-full">
             <i data-lucide="zoom-in" class="w-3.5 h-3.5 theme-text-secondary shrink-0"></i>
           </div>
           <span id="zoom-value" class="text-xs font-mono font-medium theme-text-secondary tabular-nums w-8 text-right">50%</span>
@@ -176,6 +176,7 @@
         id="timeline-ruler"
         role="slider"
         tabindex="0"
+        data-i18n-aria-label="timeline.rulerAria"
         aria-label="Buscar posición en la línea de tiempo"
         aria-valuemin="0"
         aria-valuemax="0"

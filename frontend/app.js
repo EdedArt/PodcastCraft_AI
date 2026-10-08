@@ -375,9 +375,10 @@ function $$(selector) {
  * @returns {object} El nuevo carril creado
  */
 function createTrack(customName) {
+  const prefix = typeof t === 'function' ? t('timeline.defaultTrackPrefix') : 'Carril';
   const newTrack = {
     id: `track-${crypto.randomUUID()}`,
-    name: customName || `Carril ${++trackCounter}`,
+    name: customName || `${prefix} ${++trackCounter}`,
     colorIndex: (nextColorIndex++) % TRACK_PALETTE.length,
     clips: []
   };
@@ -419,7 +420,10 @@ function deleteTrack(trackId) {
   if (!track) return;
 
   if (track.clips && track.clips.length > 0) {
-    const confirmMsg = `Este carril tiene ${track.clips.length} clip(s). ¿Eliminarlo de todas formas?`;
+    const confirmTemplate = typeof t === 'function'
+      ? t('timeline.deleteTrackConfirm')
+      : 'Este carril tiene {count} clip(s). ¿Eliminarlo de todas formas?';
+    const confirmMsg = confirmTemplate.replace('{count}', track.clips.length);
     if (!window.confirm(confirmMsg)) {
       return;
     }
@@ -744,18 +748,23 @@ function renderTimelineTracks() {
   // Estado vacío 1: Cero carriles creados
   if (state.tracks.length === 0) {
     container.className = 'flex-1 min-h-0 p-4 lg:p-6 overflow-y-auto flex flex-col justify-center';
+    const emptyTitle = typeof t === 'function' ? t('timeline.emptyTracksTitle') : 'Aún no tienes carriles';
+    const emptyDesc = typeof t === 'function' ? t('timeline.emptyTracksDesc') : 'Crea un carril para empezar a construir tu episodio y arrastrar archivos de audio.';
+    const createFirstText = typeof t === 'function' ? t('timeline.createFirstTrack') : 'Crear Primer Carril';
+    const createFirstAria = typeof t === 'function' ? t('timeline.createFirstTrackAria') : 'Crear primer carril';
+
     container.innerHTML = `
       <div class="flex-1 flex flex-col items-center justify-center p-8 text-center border-2 border-dashed rounded-xl theme-empty-box max-w-xl mx-auto w-full my-auto">
         <div class="w-14 h-14 rounded-2xl theme-pill border flex items-center justify-center theme-text-secondary mb-3 shadow-inner">
           <i data-lucide="layers" class="w-7 h-7"></i>
         </div>
-        <h3 class="text-sm font-semibold theme-text-primary mb-1">Aún no tienes carriles</h3>
+        <h3 class="text-sm font-semibold theme-text-primary mb-1">${emptyTitle}</h3>
         <p class="text-xs theme-text-muted max-w-sm leading-relaxed mb-4">
-          Crea un carril para empezar a construir tu episodio y arrastrar archivos de audio.
+          ${emptyDesc}
         </p>
-        <button id="btn-empty-add-track" type="button" aria-label="Crear primer carril" class="theme-btn-export inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold active:scale-95 shadow-md transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+        <button id="btn-empty-add-track" type="button" aria-label="${createFirstAria}" class="theme-btn-export inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold active:scale-95 shadow-md transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
           <i data-lucide="plus" class="w-4 h-4"></i>
-          <span>Crear Primer Carril</span>
+          <span>${createFirstText}</span>
         </button>
       </div>
     `;
@@ -764,6 +773,16 @@ function renderTimelineTracks() {
 
   container.className = 'flex-1 min-h-0 p-4 lg:p-6 overflow-y-auto space-y-3.5 flex flex-col';
   const pps = getPixelsPerSecond();
+
+  const splitText = typeof t === 'function' ? t('timeline.doubleClickToSplit') : 'Doble clic para dividir';
+  const trimStartText = typeof t === 'function' ? t('timeline.dragToTrimStart') : 'Arrastra para recortar inicio';
+  const trimEndText = typeof t === 'function' ? t('timeline.dragToTrimEnd') : 'Arrastra para recortar final';
+  const clipFromText = typeof t === 'function' ? t('timeline.clipFrom') : 'de';
+  const clipToText = typeof t === 'function' ? t('timeline.clipTo') : 'a';
+  const renameTitle = typeof t === 'function' ? t('timeline.doubleClickToRename') : 'Doble clic para renombrar';
+  const deleteAriaPrefix = typeof t === 'function' ? t('timeline.deleteTrackAria') : 'Eliminar carril';
+  const deleteTitle = typeof t === 'function' ? t('timeline.deleteTrackTitle') : 'Eliminar carril';
+  const emptyLaneText = typeof t === 'function' ? t('timeline.emptyLane') : 'Carril vacío — Arrastra un audio aquí';
 
   const tracksHtml = state.tracks.map((track) => {
     const palette = TRACK_PALETTE[track.colorIndex % TRACK_PALETTE.length];
@@ -776,7 +795,7 @@ function renderTimelineTracks() {
       const formattedDuration = formatDuration(clip.duration);
       const startFormatted = formatDuration(clip.start);
       const endFormatted = formatDuration((clip.start || 0) + (clip.duration || 0));
-      const fullAriaLabel = `${clip.name}, de ${startFormatted} a ${endFormatted}`;
+      const fullAriaLabel = `${clip.name}, ${clipFromText} ${startFormatted} ${clipToText} ${endFormatted}`;
 
       return `
         <div
@@ -786,7 +805,7 @@ function renderTimelineTracks() {
           role="button"
           tabindex="0"
           aria-label="${escapeHtml(fullAriaLabel)}"
-          title="${escapeHtml(clip.name)} (${formattedDuration}) — Doble clic para dividir"
+          title="${escapeHtml(clip.name)} (${formattedDuration}) — ${splitText}"
           class="timeline-clip absolute top-1.5 bottom-1.5 rounded-md border flex items-center px-2 gap-1 cursor-pointer select-none transition-all duration-100 ${palette.clip} ${isSelected ? 'is-selected' : ''}"
           style="left: ${leftPx}px; width: ${widthPx}px;"
         >
@@ -796,7 +815,7 @@ function renderTimelineTracks() {
             data-handle="left"
             data-clip-id="${clip.id}"
             data-track-id="${track.id}"
-            title="Arrastra para recortar inicio"
+            title="${trimStartText}"
           ></div>
 
           <!-- Nombre y duración -->
@@ -809,7 +828,7 @@ function renderTimelineTracks() {
             data-handle="right"
             data-clip-id="${clip.id}"
             data-track-id="${track.id}"
-            title="Arrastra para recortar final"
+            title="${trimEndText}"
           ></div>
         </div>
       `;
@@ -824,7 +843,7 @@ function renderTimelineTracks() {
             <span
               id="track-name-${track.id}"
               class="track-title text-xs font-semibold theme-text-primary truncate cursor-text hover:text-violet-600 dark:hover:text-violet-400"
-              title="Doble clic para renombrar"
+              title="${renameTitle}"
               data-track-id="${track.id}"
             >${escapeHtml(track.name)}</span>
           </div>
@@ -832,8 +851,8 @@ function renderTimelineTracks() {
             type="button"
             id="track-delete-${track.id}"
             data-delete-track="${track.id}"
-            aria-label="Eliminar carril ${escapeHtml(track.name)}"
-            title="Eliminar carril"
+            aria-label="${deleteAriaPrefix} ${escapeHtml(track.name)}"
+            title="${deleteTitle}"
             class="w-6 h-6 rounded flex items-center justify-center theme-text-muted hover:text-rose-500 hover:bg-rose-500/10 active:scale-90 transition-colors"
           >
             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
@@ -847,7 +866,7 @@ function renderTimelineTracks() {
         >
           ${clips.length === 0
             ? `<div class="h-full flex items-center justify-center text-xs theme-text-muted italic select-none pointer-events-none px-4">
-                 <span>Carril vacío — Arrastra un audio aquí</span>
+                 <span>${emptyLaneText}</span>
                </div>`
             : clipsHtml
           }
@@ -1796,6 +1815,8 @@ function bindTimelineEvents() {
       input.type = 'text';
       input.className = 'track-rename-input';
       input.value = currentName;
+      input.setAttribute('aria-label', typeof t === 'function' ? t('timeline.renameTrackAria') : 'Renombrar carril');
+      input.placeholder = typeof t === 'function' ? t('timeline.renameTrackPlaceholder') : 'Nombre del carril';
 
       titleEl.replaceWith(input);
       input.focus();

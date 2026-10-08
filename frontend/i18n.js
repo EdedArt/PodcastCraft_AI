@@ -62,7 +62,35 @@ const I18N = {
     'library.cardDragTitle': 'Arrastra a cualquier carril del timeline',
     'library.feedbackOnlyMp3': 'Solo se permiten archivos MP3',
     'library.feedbackNonMp3Ignored': '{count} archivo(s) no eran MP3 y fueron ignorados',
-    'library.feedbackServerConnError': 'No se pudo conectar con el servidor local. Verifica que el backend esté corriendo.'
+    'library.feedbackServerConnError': 'No se pudo conectar con el servidor local. Verifica que el backend esté corriendo.',
+
+    // Línea de Tiempo (Timeline)
+    'timeline.sectionAria': 'Línea de tiempo multipista',
+    'timeline.title': 'Línea de tiempo',
+    'timeline.addTrackAria': 'Agregar nuevo carril',
+    'timeline.addTrackTitle': 'Agregar nuevo carril',
+    'timeline.addTrackBtn': 'Nuevo Carril',
+    'timeline.zoomLabel': 'Zoom',
+    'timeline.zoomSliderAria': 'Nivel de zoom de la línea de tiempo',
+    'timeline.zoomSliderTitle': 'Nivel de zoom',
+    'timeline.rulerAria': 'Buscar posición en la línea de tiempo',
+    'timeline.emptyTracksTitle': 'Aún no tienes carriles',
+    'timeline.emptyTracksDesc': 'Crea un carril para empezar a construir tu episodio y arrastrar archivos de audio.',
+    'timeline.createFirstTrack': 'Crear Primer Carril',
+    'timeline.createFirstTrackAria': 'Crear primer carril',
+    'timeline.defaultTrackPrefix': 'Carril',
+    'timeline.doubleClickToRename': 'Doble clic para renombrar',
+    'timeline.renameTrackAria': 'Renombrar carril',
+    'timeline.renameTrackPlaceholder': 'Nombre del carril',
+    'timeline.deleteTrackAria': 'Eliminar carril',
+    'timeline.deleteTrackTitle': 'Eliminar carril',
+    'timeline.deleteTrackConfirm': 'Este carril tiene {count} clip(s). ¿Eliminarlo de todas formas?',
+    'timeline.emptyLane': 'Carril vacío — Arrastra un audio aquí',
+    'timeline.clipFrom': 'de',
+    'timeline.clipTo': 'a',
+    'timeline.doubleClickToSplit': 'Doble clic para dividir',
+    'timeline.dragToTrimStart': 'Arrastra para recortar inicio',
+    'timeline.dragToTrimEnd': 'Arrastra para recortar final'
   },
   en: {
     // Aplicación y Barra Superior (Topbar)
@@ -118,7 +146,35 @@ const I18N = {
     'library.cardDragTitle': 'Drag to any track on the timeline',
     'library.feedbackOnlyMp3': 'Only MP3 files are allowed',
     'library.feedbackNonMp3Ignored': '{count} file(s) were not MP3 and were ignored',
-    'library.feedbackServerConnError': 'Could not connect to local server. Make sure the backend is running.'
+    'library.feedbackServerConnError': 'Could not connect to local server. Make sure the backend is running.',
+
+    // Línea de Tiempo (Timeline)
+    'timeline.sectionAria': 'Multitrack timeline',
+    'timeline.title': 'Timeline',
+    'timeline.addTrackAria': 'Add new track',
+    'timeline.addTrackTitle': 'Add new track',
+    'timeline.addTrackBtn': 'New Track',
+    'timeline.zoomLabel': 'Zoom',
+    'timeline.zoomSliderAria': 'Timeline zoom level',
+    'timeline.zoomSliderTitle': 'Zoom level',
+    'timeline.rulerAria': 'Seek position in timeline',
+    'timeline.emptyTracksTitle': "You don't have tracks yet",
+    'timeline.emptyTracksDesc': 'Create a track to start building your episode and drag audio files.',
+    'timeline.createFirstTrack': 'Create First Track',
+    'timeline.createFirstTrackAria': 'Create first track',
+    'timeline.defaultTrackPrefix': 'Track',
+    'timeline.doubleClickToRename': 'Double-click to rename',
+    'timeline.renameTrackAria': 'Rename track',
+    'timeline.renameTrackPlaceholder': 'Track name',
+    'timeline.deleteTrackAria': 'Delete track',
+    'timeline.deleteTrackTitle': 'Delete track',
+    'timeline.deleteTrackConfirm': 'This track contains {count} clip(s). Delete it anyway?',
+    'timeline.emptyLane': 'Empty track — Drag audio here',
+    'timeline.clipFrom': 'from',
+    'timeline.clipTo': 'to',
+    'timeline.doubleClickToSplit': 'Double-click to split',
+    'timeline.dragToTrimStart': 'Drag to trim start',
+    'timeline.dragToTrimEnd': 'Drag to trim end'
   }
 };
 
