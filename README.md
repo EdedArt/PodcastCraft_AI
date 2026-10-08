@@ -84,6 +84,50 @@ Esta fase corrige dos discrepancias críticas del timeline para alinear el compo
 
 ---
 
+## 🌐 Fase 10: Infraestructura de Internacionalización (i18n) + Topbar y Transporte Traducidos (ES/EN)
+
+Esta fase implementa la infraestructura base de internacionalización (i18n) para soportar **Español (ES)** e **Inglés (EN)** de forma nativa, traduciendo de extremo a extremo el chrome estructural visible (Barra Superior y Barra de Transporte):
+
+### 1. Arquitectura de Traducción y Diccionarios (`frontend/i18n.js`)
+- **Diccionarios centralizados:** Objeto `I18N` con diccionarios completos en español (`es`) e inglés (`en`).
+- **Función `t(key)`:** Resuelve claves con doble sistema de fallback: si la clave no existe en el idioma activo, intenta en español, y si no existe, devuelve la clave misma para evitar pantallas en blanco o errores no capturados.
+- **Persistencia en `localStorage`:** Clave `'podcastcraft-language'`, con **español (`es`) como valor por defecto**.
+- **Atributo `lang` en `<html>`:** Se actualiza sincrónicamente a `lang="es"` o `lang="en"`.
+- **Motor `applyTranslations()`:** Escanea y actualiza declarativamente el DOM:
+  - `data-i18n="clave"`: Traduce el contenido textual interno.
+  - `data-i18n-aria-label="clave"`: Traduce la descripción accesible para lectores de pantalla.
+  - `data-i18n-title="clave"`: Traduce el tooltip emergente del navegador.
+
+### 2. Control de Alternancia de Idioma (`#btn-language-toggle`)
+- Ubicado en el header junto al botón de tema (`#btn-theme-toggle`), agrupados en un contenedor visual de "Ajustes rápidos".
+- Muestra el idioma objetivo al que se cambiará: muestra **"EN"** cuando el idioma activo es español, y **"ES"** cuando el idioma activo es inglés (siguiendo las directrices de diseño sin banderas que dependan de renderizado de fuentes del SO).
+- Al hacer clic, conmuta el idioma en `localStorage`, actualiza el DOM inmediatamente con `applyTranslations()` y re-renderiza componentes dinámicos sin requerir recargar la página.
+
+### 3. Componentes Traducidos en Fase 10
+- **Topbar:**
+  - Título placeholder del proyecto (`Proyecto sin título` / `Untitled Project`).
+  - Badge de estado dinámico (`Borrador` / `Draft` y `Guardado` / `Saved`).
+  - Etiqueta de duración (`Duración total` / `Total duration`).
+  - Botón de análisis con IA (`Análisis de IA` / `AI Analysis`, aria-label y tooltip).
+  - Botón de exportación (`Exportar Podcast` / `Export Podcast`, aria-label y tooltip).
+  - Tooltip dinámico del toggle de tema (`Cambiar a modo oscuro|claro` / `Switch to dark|light mode`).
+- **Transporte:**
+  - Indicador de clip en reproducción (`Ningún clip en la línea de tiempo` / `No clip on timeline`).
+  - Botón Retroceder 5s (aria-label y tooltip `Retroceder 5s (J)` / `Rewind 5s (J)`).
+  - Botón Play / Pausa (estados contextuales sin audio, reproduciendo y pausado con tooltips `(Espacio)` / `(Space)`).
+  - Botón Avanzar 5s (aria-label y tooltip `Avanzar 5s (L)` / `Forward 5s (L)`).
+  - Botón Silenciar / Activar sonido (tooltips `(M)`).
+  - Slider de volumen (aria-label y tooltip).
+
+### 4. Alcance Pendiente para Fase 11
+La Fase 11 extenderá el uso de `t(key)` y los atributos `data-i18n*` a los componentes internos restantes:
+- **Biblioteca de Medios:** Encabezado, botón "Importar MP3", feedback de validación, estados vacíos, badges.
+- **Línea de Tiempo:** Encabezado, botón "Nuevo Carril", controles de Zoom, tooltip de división, texto de carril vacío.
+- **Panel de Asistente IA:** Encabezado, badge Beta, tarjeta vacía de transcripción, botón "Limpiar Audio con IA".
+- **Modales y Diálogos:** Mensajes de confirmación de eliminación y advertencia de resolución de pantalla.
+
+---
+
 ## 📌 Decisiones de Arquitectura y Alcance — Sprint 5
 
 ### 0.1 Nota de arquitectura: Empaquetado final con Electron Builder (Sprint 7)
@@ -168,7 +212,7 @@ podcastcraft-ai/
 ## 4. Contrato de IDs (Sprint 1 a Sprint 5)
 
 ### 4.1 Identificadores Activos
-- **Navegación:** `topbar`, `project-title`, `project-status`, `total-duration`, `btn-ai-analysis`, `btn-export`, `btn-theme-toggle` *(Nuevo - Fase A: Conmutador de tema)*
+- **Navegación:** `topbar`, `project-title`, `project-status`, `total-duration`, `btn-ai-analysis`, `btn-export`, `btn-theme-toggle` *(Nuevo - Fase A: Conmutador de tema)*, `btn-language-toggle` *(Nuevo - Fase 10: Conmutador de idioma)*
 - **Biblioteca:** `col-library`, `library-count`, `library-list`, `btn-import-audio`, `audio-file-input`, `import-feedback`, `lib-card-${item.id}`
 - **Línea de tiempo:** `col-timeline`, `zoom-slider`, `zoom-value`, `timeline-ruler` *(Slider accesible con scrubbing S5)*, `timeline-playhead` *(Nuevo S5)*, `timeline-tracks`, `btn-add-track`, `btn-empty-add-track`, `track-name-${id}`, `track-delete-${id}`, `timeline-clip-${clip.id}`, `.clip-handle-left`, `.clip-handle-right`
 - **Panel IA:** `col-ai-panel`, `ai-transcript`, `ai-cta`
