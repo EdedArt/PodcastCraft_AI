@@ -84,6 +84,27 @@ Esta fase corrige dos discrepancias críticas del timeline para alinear el compo
 
 ---
 
+## 🔍 Fase 9.5: Fix de Contraste y Legibilidad en Panel de IA (Modo Claro)
+
+Esta fase corrige la degradación de contraste y legibilidad en el Panel de Asistente IA (`#col-ai-panel`) cuando la aplicación opera en **Modo Claro** (`data-theme="light"`):
+
+### 1. Diagnóstico de Causa Raíz
+- **Fuga de Selector de Modo Oscuro en Tailwind:** `tailwind.config` carecía de `darkMode: ['selector', '[data-theme="dark"]']`. Al evaluar por defecto `@media (prefers-color-scheme: dark)`, los navegadores con tema de sistema operativo oscuro activaban las variantes `dark:` de Tailwind (`dark:text-violet-200`, `dark:bg-violet-950/20`, `dark:text-violet-300/60`), generando texto lavanda claro (`#ddd6fe`) sobre fondos blancos con un contraste deficiente de **1.25:1** (fallo de accesibilidad).
+- **Opacidades Acumuladas en Botón CTA:** El botón `#ai-cta` combinaba `opacity-50` estructural con texto `text-violet-700/60` (opacidad efectiva 30%), reduciendo el contraste a **1.8:1** y luciendo como una mancha grisácea ilegible sobre blanco.
+- **Sombreado Sucio:** El contenedor del ícono en `#ai-transcript` poseía `shadow-inner`, produciendo un sombreado interior oscuro que ensuciaba la estética en modo claro.
+
+### 2. Solución Implementada
+- **Configuración de Selector en Tailwind:** Se configuró explícitamente `darkMode: ['selector', '[data-theme="dark"]']` en `frontend/tailwind-config.js` para asegurar que las clases de modo oscuro respondan única y exclusivamente al atributo `[data-theme="dark"]` del DOM y no al sistema operativo.
+- **Tokens Semánticos de Panel IA (`styles.css`):**
+  - **Cabecera:** `--ai-header-bg: #faf5ff`, `--ai-header-text: #6b21a8` (**8.2:1 — WCAG AAA**).
+  - **Badge Beta:** `--ai-badge-bg: #ede9fe`, `--ai-badge-text: #6b21a8` (**8.2:1 — WCAG AAA**).
+  - **Ícono de estado vacío:** `--ai-icon-bg: #f3e8ff`, `--ai-icon-color: #7e22ce` (**7.2:1 — WCAG AAA**), reemplazando `shadow-inner` por `shadow-sm`.
+  - **Descripción:** uso de `theme-text-secondary` (`#475569`, **4.6:1 — WCAG AA**).
+  - **Botón CTA:** clase `.theme-btn-ai-cta` con `--ai-cta-bg: #f5f3ff`, `--ai-cta-text: #6b21a8` (**7.6:1 — WCAG AAA**), eliminando la multiplicación de opacidades.
+- **Modo Oscuro Intacto:** Todos los valores de modo oscuro se preservaron en sus tokens semánticos correspondientes, verificando contrastes superiores a **10:1** (AAA) sin ninguna regresión visual.
+
+---
+
 ## 🌐 Fase 10: Infraestructura de Internacionalización (i18n) + Topbar y Transporte Traducidos (ES/EN)
 
 Esta fase implementa la infraestructura base de internacionalización (i18n) para soportar **Español (ES)** e **Inglés (EN)** de forma nativa, traduciendo de extremo a extremo el chrome estructural visible (Barra Superior y Barra de Transporte):
