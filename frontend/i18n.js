@@ -63,6 +63,8 @@ const I18N = {
     'library.feedbackOnlyMp3': 'Solo se permiten archivos MP3',
     'library.feedbackNonMp3Ignored': '{count} archivo(s) no eran MP3 y fueron ignorados',
     'library.feedbackServerConnError': 'No se pudo conectar con el servidor local. Verifica que el backend esté corriendo.',
+    'library.backendUnreachable': 'No se pudo conectar con el servidor local. Verifica que el backend esté corriendo.',
+    'library.uploadError': 'Ocurrió un error al procesar el archivo en el servidor local.',
 
     // Línea de Tiempo (Timeline)
     'timeline.sectionAria': 'Línea de tiempo multipista',
@@ -170,6 +172,8 @@ const I18N = {
     'library.feedbackOnlyMp3': 'Only MP3 files are allowed',
     'library.feedbackNonMp3Ignored': '{count} file(s) were not MP3 and were ignored',
     'library.feedbackServerConnError': 'Could not connect to local server. Make sure the backend is running.',
+    'library.backendUnreachable': 'Could not connect to local server. Make sure the backend is running.',
+    'library.uploadError': 'An error occurred while processing the file on the local server.',
 
     // Línea de Tiempo (Timeline)
     'timeline.sectionAria': 'Multitrack timeline',
