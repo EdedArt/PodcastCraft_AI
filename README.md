@@ -119,12 +119,42 @@ Esta fase implementa la infraestructura base de internacionalización (i18n) par
   - Botón Silenciar / Activar sonido (tooltips `(M)`).
   - Slider de volumen (aria-label y tooltip).
 
-### 4. Alcance Pendiente para Fase 11
-La Fase 11 extenderá el uso de `t(key)` y los atributos `data-i18n*` a los componentes internos restantes:
-- **Biblioteca de Medios:** Encabezado, botón "Importar MP3", feedback de validación, estados vacíos, badges.
-- **Línea de Tiempo:** Encabezado, botón "Nuevo Carril", controles de Zoom, tooltip de división, texto de carril vacío.
-- **Panel de Asistente IA:** Encabezado, badge Beta, tarjeta vacía de transcripción, botón "Limpiar Audio con IA".
-- **Modales y Diálogos:** Mensajes de confirmación de eliminación y advertencia de resolución de pantalla.
+### 4. Alcance Cubierto en Fase 11
+La Fase 11 completó la extensión del motor de internacionalización al 100% de la aplicación, abarcando la Biblioteca, Timeline, Panel de IA, Viewport Warning y mensajes del sistema.
+
+---
+
+## 🌐 Fase 11: Cobertura Completa de i18n — Biblioteca, Timeline, Panel de IA y Mensajes del Sistema (ES/EN)
+
+Esta fase completa la internacionalización integral de la aplicación, eliminando todo string en español hardcodeado y asegurando que la totalidad de la experiencia sea bilingüe nativa (Español e Inglés):
+
+### 1. Columna de Biblioteca (`#col-library`)
+- **Cabecera y Contador:** Traducido el título "Biblioteca" / "Library" y el contador pluralizado reactivo (`1 audio` / `1 audio`, `{count} audios` / `{count} audio files`).
+- **Importación de Audio:** Botón "Importar MP3", `aria-label` y tooltips contextuales.
+- **Feedback Accesible (`#import-feedback`):** Notificaciones dinámicas traducidas para rechazo de archivos no-MP3 ("Solo se permiten archivos MP3" / "Only MP3 files are allowed", conteo de archivos ignorados) y advertencia de caída de conexión con el backend local.
+- **Estado Vacío y Tarjetas:** Título y descripción explicativa del estado vacío, y atributos de accesibilidad (`aria-label`, `title`) en cada tarjeta de clip importado ("Arrastra a un carril" / "Drag to a track").
+
+### 2. Columna de Línea de Tiempo (`#col-timeline`)
+- **Cabecera y Controles:** Título "Línea de tiempo" / "Timeline", botón "Nuevo Carril" / "New Track", etiqueta y slider accesible de Zoom.
+- **Regla de Tiempo (`#timeline-ruler`):** Atributo accesible `aria-label` ("Buscar posición en la línea de tiempo" / "Seek position in timeline").
+- **Estado Vacío General:** Título ("Aún no tienes carriles" / "You don't have tracks yet"), descripción y botón primario ("Crear Primer Carril" / "Create First Track").
+- **Carriles y Clips Dinámicos:**
+  - **Nombres por defecto de carriles:** Generados dinámicamente según el idioma activo en el momento de creación (`Carril {N}` en español, `Track {N}` en inglés).
+  - **Preservación de personalización:** Si el usuario renombra manualmente un carril, su nombre personalizado se respeta intacto y nunca es sobreescrito por el motor de i18n.
+  - **Edición in situ:** Input flotante al hacer doble clic con `aria-label` y `placeholder` traducidos.
+  - **Diálogo de confirmación:** El diálogo nativo `window.confirm` para eliminar carriles con clips interpola la cantidad en el idioma activo ("Este carril tiene {count} clip(s). ¿Eliminarlo de todas formas?" / "This track contains {count} clip(s). Delete it anyway?").
+  - **Asas y división de clips:** Tooltips de asas de recorte ("Arrastra para recortar inicio|final" / "Drag to trim start|end"), tooltip de doble clic para dividir y etiqueta accesible con rango temporal ("de X a Y" / "from X to Y").
+  - **Zona vacía:** Indicador "Carril vacío — Arrastra un audio aquí" / "Empty track — Drag audio here".
+
+### 3. Columna de Asistente IA (`#col-ai-panel`)
+- **Cabecera:** Título "Asistente de IA" / "AI Assistant" y badge "Beta".
+- **Estado Vacío de Transcripción:** Mensaje informativo sobre la detección automática de silencios y muletillas en el idioma seleccionado.
+- **Botón de Acción (CTA):** Botón "Limpiar Audio con IA" / "Clean Audio with AI" con `aria-label` y `title` explicativos.
+
+### 4. Guardia de Pantalla y Navegación
+- **Overlay de Resolución (`#viewport-warning`):** Título ("Resolución no optimizada" / "Unoptimized Resolution"), subtítulo de 1280px y recomendación de ampliación de ventana.
+- **Título de la Pestaña:** `document.title` sincronizado en caliente al alternar idioma (`PodcastCraft AI — Editor Profesional de Podcasts con IA` ↔ `PodcastCraft AI — Professional AI Podcast Editor`).
+- **Conmutación Reactiva sin Recarga:** `applyTranslations()` ejecuta el re-escaneo del DOM declarativo (`data-i18n*`) y refresca inmediatamente los renders de la cabecera, transporte, biblioteca y carriles del timeline sin perder el estado activo ni recargar la página.
 
 ---
 
