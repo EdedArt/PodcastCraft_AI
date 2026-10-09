@@ -30,11 +30,11 @@
     <div class="w-16 h-16 rounded-2xl bg-violet-500/10 border border-violet-500/30 flex items-center justify-center text-violet-400 mb-4 shadow-lg glow-ai">
       <i data-lucide="monitor" class="w-8 h-8"></i>
     </div>
-    <h2 class="text-lg font-bold text-slate-100 mb-2">Resolución no optimizada</h2>
-    <p class="text-sm font-medium text-violet-300 mb-3 max-w-md">
+    <h2 class="text-lg font-bold text-slate-100 mb-2" data-i18n="viewport.title">Resolución no optimizada</h2>
+    <p class="text-sm font-medium text-violet-300 mb-3 max-w-md" data-i18n="viewport.subtitle">
       PodcastCraft AI está optimizado para pantallas de escritorio ≥ 1280px
     </p>
-    <p class="text-xs text-slate-400 max-w-sm leading-relaxed">
+    <p class="text-xs text-slate-400 max-w-sm leading-relaxed" data-i18n="viewport.description">
       Para utilizar todas las herramientas de la estación de trabajo y la línea de tiempo multipista, amplía la ventana de tu navegador.
     </p>
   </div>
@@ -96,7 +96,7 @@
       <div class="h-4 w-px bg-slate-300 dark:bg-slate-800 shrink-0"></div>
 
       <!-- Ajustes Rápidos: Alternancia de Idioma y Tema -->
-      <div class="flex items-center gap-1.5" role="group" aria-label="Ajustes rápidos de interfaz">
+      <div class="flex items-center gap-1.5" role="group" data-i18n-aria-label="settings.quickGroupAria" aria-label="Ajustes rápidos de interfaz">
         <!-- Botón de Alternancia de Idioma (ES / EN) -->
         <button id="btn-language-toggle" type="button" aria-label="Cambiar a inglés" title="Cambiar a inglés" class="theme-btn-secondary inline-flex items-center justify-center w-8 h-8 rounded-lg active:scale-95 border focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150 text-xs font-bold tracking-wider">
           EN
@@ -111,7 +111,7 @@
   </header>
 
   <!-- 2. Workspace Principal (Grid de 3 columnas, flex-1, min-h-0) -->
-  <main id="workspace" aria-label="Espacio de trabajo del editor" class="flex-1 min-h-0 flex overflow-hidden">
+  <main id="workspace" data-i18n-aria-label="workspace.ariaLabel" aria-label="Espacio de trabajo del editor" class="flex-1 min-h-0 flex overflow-hidden">
     
     <!-- Columna Izquierda: Biblioteca de Medios (20%, min 260px, max 320px) -->
     <aside id="col-library" data-i18n-aria-label="library.asideAria" aria-label="Biblioteca de bloques de audio" class="w-[20%] min-w-[260px] max-w-[320px] theme-panel border-r flex flex-col min-h-0">
@@ -201,14 +201,14 @@
     </section>
 
     <!-- Columna Derecha: Asistente de IA (24%, min 300px, max 380px) -->
-    <aside id="col-ai-panel" aria-label="Panel de asistente de inteligencia artificial" class="w-[24%] min-w-[300px] max-w-[380px] theme-panel border-l flex flex-col min-h-0">
+    <aside id="col-ai-panel" data-i18n-aria-label="aiPanel.sectionAria" aria-label="Panel de asistente de inteligencia artificial" class="w-[24%] min-w-[300px] max-w-[380px] theme-panel border-l flex flex-col min-h-0">
       <!-- Encabezado de Asistente de IA con tono violeta suave -->
       <div class="h-11 px-3.5 border-b flex items-center justify-between shrink-0 bg-violet-500/10 dark:bg-violet-950/20">
         <div class="flex items-center gap-2">
           <i data-lucide="sparkles" class="w-4 h-4 text-violet-600"></i>
-          <h2 class="text-xs font-bold uppercase tracking-wider text-violet-800 dark:text-violet-200">Asistente de IA</h2>
+          <h2 class="text-xs font-bold uppercase tracking-wider text-violet-800 dark:text-violet-200" data-i18n="aiPanel.title">Asistente de IA</h2>
         </div>
-        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30 uppercase tracking-wide">
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30 uppercase tracking-wide" data-i18n="aiPanel.betaBadge">
           Beta
         </span>
       </div>
@@ -219,8 +219,8 @@
           <div class="w-12 h-12 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-600 mb-3 shadow-inner">
             <i data-lucide="message-square-text" class="w-6 h-6"></i>
           </div>
-          <h3 class="text-xs font-semibold theme-text-primary mb-1">La transcripción aparecerá aquí</h3>
-          <p class="text-[11px] theme-text-muted leading-relaxed max-w-[210px]">
+          <h3 class="text-xs font-semibold theme-text-primary mb-1" data-i18n="aiPanel.transcriptEmptyTitle">La transcripción aparecerá aquí</h3>
+          <p class="text-[11px] theme-text-muted leading-relaxed max-w-[210px]" data-i18n="aiPanel.transcriptEmptyDesc">
             El modelo transcribirá tus archivos de audio y resaltará muletillas y silencios automáticamente.
           </p>
         </div>
@@ -228,9 +228,9 @@
 
       <!-- Contenedor CTA de IA -->
       <div id="ai-cta" class="p-3.5 border-t shrink-0 theme-panel-footer">
-        <button type="button" disabled aria-label="Limpiar audio con IA (Se activará tras el análisis)" title="Limpiar Audio con IA" class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-violet-700/60 dark:text-violet-300/60 bg-violet-500/10 dark:bg-violet-950/30 border border-violet-500/20 dark:border-violet-900/40 cursor-not-allowed opacity-50 transition-all">
+        <button type="button" disabled data-i18n-aria-label="aiPanel.ctaAria" data-i18n-title="aiPanel.ctaTitle" aria-label="Limpiar audio con IA (Se activará tras el análisis)" title="Limpiar Audio con IA" class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-violet-700/60 dark:text-violet-300/60 bg-violet-500/10 dark:bg-violet-950/30 border border-violet-500/20 dark:border-violet-900/40 cursor-not-allowed opacity-50 transition-all">
           <i data-lucide="sparkles" class="w-3.5 h-3.5 text-violet-600"></i>
-          <span>Limpiar Audio con IA</span>
+          <span data-i18n="aiPanel.ctaBtn">Limpiar Audio con IA</span>
         </button>
       </div>
     </aside>

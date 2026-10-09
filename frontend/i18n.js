@@ -90,7 +90,30 @@ const I18N = {
     'timeline.clipTo': 'a',
     'timeline.doubleClickToSplit': 'Doble clic para dividir',
     'timeline.dragToTrimStart': 'Arrastra para recortar inicio',
-    'timeline.dragToTrimEnd': 'Arrastra para recortar final'
+    'timeline.dragToTrimEnd': 'Arrastra para recortar final',
+
+    // Espacio de Trabajo y Ajustes
+    'workspace.ariaLabel': 'Espacio de trabajo del editor',
+    'settings.quickGroupAria': 'Ajustes rápidos de interfaz',
+
+    // Panel de Asistente IA (AI Panel)
+    'aiPanel.sectionAria': 'Panel de asistente de inteligencia artificial',
+    'aiPanel.title': 'Asistente de IA',
+    'aiPanel.betaBadge': 'Beta',
+    'aiPanel.transcriptEmptyTitle': 'La transcripción aparecerá aquí',
+    'aiPanel.transcriptEmptyDesc': 'El modelo transcribirá tus archivos de audio y resaltará muletillas y silencios automáticamente.',
+    'aiPanel.ctaAria': 'Limpiar audio con IA (Se activará tras el análisis)',
+    'aiPanel.ctaTitle': 'Limpiar Audio con IA',
+    'aiPanel.ctaBtn': 'Limpiar Audio con IA',
+
+    // Guardia de Pantalla (Viewport Warning)
+    'viewport.title': 'Resolución no optimizada',
+    'viewport.subtitle': 'PodcastCraft AI está optimizado para pantallas de escritorio ≥ 1280px',
+    'viewport.description': 'Para utilizar todas las herramientas de la estación de trabajo y la línea de tiempo multipista, amplía la ventana de tu navegador.',
+
+    // Mensajes de Conexión del Backend
+    'topbar.feedbackSaveError': 'No se pudo guardar en el servidor local. Verifica que el backend esté corriendo.',
+    'topbar.feedbackServerOffline': 'Servidor local no detectado. Los cambios se mantendrán solo durante esta sesión.'
   },
   en: {
     // Aplicación y Barra Superior (Topbar)
@@ -174,7 +197,30 @@ const I18N = {
     'timeline.clipTo': 'to',
     'timeline.doubleClickToSplit': 'Double-click to split',
     'timeline.dragToTrimStart': 'Drag to trim start',
-    'timeline.dragToTrimEnd': 'Drag to trim end'
+    'timeline.dragToTrimEnd': 'Drag to trim end',
+
+    // Espacio de Trabajo y Ajustes
+    'workspace.ariaLabel': 'Editor workspace',
+    'settings.quickGroupAria': 'Quick interface settings',
+
+    // Panel de Asistente IA (AI Panel)
+    'aiPanel.sectionAria': 'Artificial intelligence assistant panel',
+    'aiPanel.title': 'AI Assistant',
+    'aiPanel.betaBadge': 'Beta',
+    'aiPanel.transcriptEmptyTitle': 'Transcript will appear here',
+    'aiPanel.transcriptEmptyDesc': 'The model will transcribe your audio files and automatically highlight filler words and silences.',
+    'aiPanel.ctaAria': 'Clean audio with AI (Enabled after analysis)',
+    'aiPanel.ctaTitle': 'Clean Audio with AI',
+    'aiPanel.ctaBtn': 'Clean Audio with AI',
+
+    // Guardia de Pantalla (Viewport Warning)
+    'viewport.title': 'Unoptimized Resolution',
+    'viewport.subtitle': 'PodcastCraft AI is optimized for desktop displays ≥ 1280px',
+    'viewport.description': 'To use all digital audio workstation tools and multitrack timeline, expand your browser window.',
+
+    // Mensajes de Conexión del Backend
+    'topbar.feedbackSaveError': 'Could not save to local server. Make sure the backend is running.',
+    'topbar.feedbackServerOffline': 'Local server not detected. Changes will only persist during this session.'
   }
 };
 

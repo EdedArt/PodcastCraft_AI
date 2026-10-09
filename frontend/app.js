@@ -1067,7 +1067,10 @@ async function saveProjectToBackend() {
     console.info('[PodcastCraft AI] Proyecto guardado exitosamente en backend.');
   } catch (err) {
     console.warn('[PodcastCraft AI] Error al persistir proyecto en backend:', err);
-    showImportFeedback('No se pudo guardar en el servidor local. Verifica que el backend esté corriendo.');
+    const saveErrorMsg = typeof t === 'function'
+      ? t('topbar.feedbackSaveError')
+      : 'No se pudo guardar en el servidor local. Verifica que el backend esté corriendo.';
+    showImportFeedback(saveErrorMsg);
   } finally {
     isSaving = false;
   }
@@ -1145,7 +1148,10 @@ async function loadProjectFromBackend() {
     console.info('[PodcastCraft AI] Proyecto cargado exitosamente desde backend.');
   } catch (err) {
     console.warn('[PodcastCraft AI] Servidor local no disponible o inaccesible. Modo de sesión local activo:', err.message);
-    showImportFeedback('Servidor local no detectado. Los cambios se mantendrán solo durante esta sesión.');
+    const offlineMsg = typeof t === 'function'
+      ? t('topbar.feedbackServerOffline')
+      : 'Servidor local no detectado. Los cambios se mantendrán solo durante esta sesión.';
+    showImportFeedback(offlineMsg);
   }
 }
 
