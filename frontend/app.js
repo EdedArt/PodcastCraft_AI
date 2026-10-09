@@ -1595,9 +1595,11 @@ function bindImportAudioEvents() {
             body: formData
           });
 
-          if (!res.ok) {
+          if (!res.ok || res.status !== 201) {
             const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.error || `Error HTTP ${res.status}`);
+            const serverErr = new Error(errData.error || `Error HTTP ${res.status}`);
+            serverErr.isServerError = true;
+            throw serverErr;
           }
 
           const audioData = await res.json();
@@ -1643,9 +1645,16 @@ function bindImportAudioEvents() {
           });
         } catch (uploadErr) {
           console.error('[PodcastCraft AI] Error subiendo archivo MP3 al backend:', uploadErr);
-          const errMsg = typeof t === 'function'
-            ? t('library.feedbackServerConnError')
-            : 'No se pudo conectar con el servidor local. Verifica que el backend esté corriendo.';
+          let errMsg;
+          if (uploadErr.isServerError) {
+            errMsg = typeof t === 'function'
+              ? t('library.uploadError')
+              : 'Ocurrió un error al procesar el archivo en el servidor local.';
+          } else {
+            errMsg = typeof t === 'function'
+              ? t('library.backendUnreachable')
+              : 'No se pudo conectar con el servidor local. Verifica que el backend esté corriendo.';
+          }
           showImportFeedback(errMsg);
         }
       }
