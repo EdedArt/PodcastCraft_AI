@@ -202,13 +202,13 @@
 
     <!-- Columna Derecha: Asistente de IA (24%, min 300px, max 380px) -->
     <aside id="col-ai-panel" data-i18n-aria-label="aiPanel.sectionAria" aria-label="Panel de asistente de inteligencia artificial" class="w-[24%] min-w-[300px] max-w-[380px] theme-panel border-l flex flex-col min-h-0">
-      <!-- Encabezado de Asistente de IA con tono violeta suave -->
-      <div class="h-11 px-3.5 border-b flex items-center justify-between shrink-0 bg-violet-500/10 dark:bg-violet-950/20">
+      <!-- Encabezado de Asistente de IA con tono violeta adaptable -->
+      <div class="h-11 px-3.5 border-b flex items-center justify-between shrink-0 theme-ai-header">
         <div class="flex items-center gap-2">
-          <i data-lucide="sparkles" class="w-4 h-4 text-violet-600"></i>
-          <h2 class="text-xs font-bold uppercase tracking-wider text-violet-800 dark:text-violet-200" data-i18n="aiPanel.title">Asistente de IA</h2>
+          <i data-lucide="sparkles" class="w-4 h-4 text-violet-600 dark:text-violet-400"></i>
+          <h2 class="text-xs font-bold uppercase tracking-wider theme-ai-header-title" data-i18n="aiPanel.title">Asistente de IA</h2>
         </div>
-        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30 uppercase tracking-wide" data-i18n="aiPanel.betaBadge">
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border theme-ai-badge uppercase tracking-wide" data-i18n="aiPanel.betaBadge">
           Beta
         </span>
       </div>
@@ -216,11 +216,11 @@
       <!-- Contenedor de Transcripción -->
       <div id="ai-transcript" class="flex-1 min-h-0 p-4 overflow-y-auto flex flex-col">
         <div class="flex-1 flex flex-col items-center justify-center p-6 text-center border-2 border-dashed rounded-xl theme-empty-box">
-          <div class="w-12 h-12 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-600 mb-3 shadow-inner">
+          <div class="w-12 h-12 rounded-full border flex items-center justify-center theme-ai-icon-wrapper mb-3 shadow-sm">
             <i data-lucide="message-square-text" class="w-6 h-6"></i>
           </div>
           <h3 class="text-xs font-semibold theme-text-primary mb-1" data-i18n="aiPanel.transcriptEmptyTitle">La transcripción aparecerá aquí</h3>
-          <p class="text-[11px] theme-text-muted leading-relaxed max-w-[210px]" data-i18n="aiPanel.transcriptEmptyDesc">
+          <p class="text-[11px] theme-text-secondary leading-relaxed max-w-[210px]" data-i18n="aiPanel.transcriptEmptyDesc">
             El modelo transcribirá tus archivos de audio y resaltará muletillas y silencios automáticamente.
           </p>
         </div>
@@ -228,8 +228,8 @@
 
       <!-- Contenedor CTA de IA -->
       <div id="ai-cta" class="p-3.5 border-t shrink-0 theme-panel-footer">
-        <button type="button" disabled data-i18n-aria-label="aiPanel.ctaAria" data-i18n-title="aiPanel.ctaTitle" aria-label="Limpiar audio con IA (Se activará tras el análisis)" title="Limpiar Audio con IA" class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-violet-700/60 dark:text-violet-300/60 bg-violet-500/10 dark:bg-violet-950/30 border border-violet-500/20 dark:border-violet-900/40 cursor-not-allowed opacity-50 transition-all">
-          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-violet-600"></i>
+        <button type="button" disabled data-i18n-aria-label="aiPanel.ctaAria" data-i18n-title="aiPanel.ctaTitle" aria-label="Limpiar audio con IA (Se activará tras el análisis)" title="Limpiar Audio con IA" class="theme-btn-ai-cta w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold border shadow-sm">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
           <span data-i18n="aiPanel.ctaBtn">Limpiar Audio con IA</span>
         </button>
       </div>

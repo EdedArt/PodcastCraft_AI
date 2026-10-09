@@ -31,6 +31,23 @@
   --ai-accent-border: rgba(147, 51, 234, 0.28);
   --focus-ring: #9333ea;
 
+  /* Superficies y componentes de Panel de IA */
+  --ai-header-bg: #faf5ff;              /* violet-50 suave y limpio */
+  --ai-header-text: #6b21a8;            /* violet-800 (Contraste 8.6:1 - AAA) */
+  --ai-badge-bg: #ede9fe;               /* violet-100 */
+  --ai-badge-border: #c4b5fd;           /* violet-300 */
+  --ai-badge-text: #6b21a8;             /* violet-800 (Contraste 7.8:1 - AAA) */
+  --ai-icon-bg: #f3e8ff;                /* violet-100 */
+  --ai-icon-border: #d8b4fe;            /* violet-300 */
+  --ai-icon-color: #7e22ce;             /* violet-700 (Contraste 7.2:1 - AAA) */
+  --ai-cta-bg: #f5f3ff;                 /* violet-50 */
+  --ai-cta-border: #ddd6fe;             /* violet-200 */
+  --ai-cta-text: #6b21a8;               /* violet-800 (Contraste 8.4:1 - AAA) */
+  --ai-cta-icon: #7c3aed;               /* violet-600 */
+  --ai-cta-hover-bg: #ede9fe;           /* violet-100 */
+  --ai-cta-hover-text: #581c87;         /* violet-900 */
+  --ai-cta-hover-border: #c4b5fd;       /* violet-300 */
+
   /* Superficies secundarias */
   --card-bg: #ffffff;
   --card-hover-bg: #f8fafc;
@@ -125,6 +142,23 @@
   --ai-accent-soft: rgba(168, 85, 247, 0.1);
   --ai-accent-border: rgba(168, 85, 247, 0.4);
   --focus-ring: #a855f7;
+
+  /* Superficies y componentes de Panel de IA */
+  --ai-header-bg: rgba(76, 29, 149, 0.2);     /* violet-950/20 */
+  --ai-header-text: #ddd6fe;                  /* violet-200 (Contraste 13:1 - AAA) */
+  --ai-badge-bg: rgba(168, 85, 247, 0.15);
+  --ai-badge-border: rgba(168, 85, 247, 0.3);
+  --ai-badge-text: #d8b4fe;                  /* violet-300 (Contraste 9.2:1 - AAA) */
+  --ai-icon-bg: rgba(168, 85, 247, 0.1);
+  --ai-icon-border: rgba(168, 85, 247, 0.25);
+  --ai-icon-color: #c084fc;                  /* violet-400 (Contraste 8.5:1 - AAA) */
+  --ai-cta-bg: rgba(126, 34, 206, 0.12);      /* violet-950/30 */
+  --ai-cta-border: rgba(147, 51, 234, 0.25);
+  --ai-cta-text: #c4b5fd;                    /* violet-300 (Contraste 8.9:1 - AAA) */
+  --ai-cta-icon: #a855f7;                    /* violet-500 */
+  --ai-cta-hover-bg: rgba(147, 51, 234, 0.2);
+  --ai-cta-hover-text: #e9d5ff;
+  --ai-cta-hover-border: rgba(168, 85, 247, 0.4);
 
   --card-bg: #0f172a;
   --card-hover-bg: rgba(30, 41, 59, 0.6);
@@ -277,6 +311,43 @@ body {
 }
 .theme-text-muted {
   color: var(--text-muted);
+}
+
+/* Componentes del Panel de IA */
+.theme-ai-header {
+  background-color: var(--ai-header-bg);
+  border-color: var(--border-default);
+}
+.theme-ai-header-title {
+  color: var(--ai-header-text);
+}
+.theme-ai-badge {
+  background-color: var(--ai-badge-bg);
+  border-color: var(--ai-badge-border);
+  color: var(--ai-badge-text);
+}
+.theme-ai-icon-wrapper {
+  background-color: var(--ai-icon-bg);
+  border-color: var(--ai-icon-border);
+  color: var(--ai-icon-color);
+}
+.theme-btn-ai-cta {
+  background-color: var(--ai-cta-bg);
+  border-color: var(--ai-cta-border);
+  color: var(--ai-cta-text);
+  transition: all 0.15s ease;
+}
+.theme-btn-ai-cta i {
+  color: var(--ai-cta-icon);
+}
+.theme-btn-ai-cta:disabled {
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+.theme-btn-ai-cta:not(:disabled):hover {
+  background-color: var(--ai-cta-hover-bg);
+  border-color: var(--ai-cta-hover-border);
+  color: var(--ai-cta-hover-text);
 }
 
 /* 4. Barras de desplazamiento adaptables */

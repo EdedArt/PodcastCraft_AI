@@ -3,6 +3,7 @@
  * Compatible con Tailwind Play CDN v3.4.17
  */
 tailwind.config = {
+  darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
