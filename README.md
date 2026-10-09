@@ -179,6 +179,32 @@ Esta fase completa la internacionalización integral de la aplicación, eliminan
 
 ---
 
+## 🔌 Fase 12: Reconexión Real — Importación de Audio al Backend Express (`POST /api/audio`)
+
+Esta fase establece la primera conexión real entre el frontend y el backend Express local (desarrollado y probado en las Fases 1 a 7), reemplazando el uso de `URL.createObjectURL()` en la importación de audio por una subida HTTP real mediante `fetch`:
+
+### 1. Configuración de API (`frontend/app.js`)
+- **Constante central:** `API_BASE_URL = 'http://localhost:3001'`.
+- **CORS Habilitado:** Comunicación fluida entre el frontend (servido en su propio puerto local) y el backend Express en el puerto `3001`.
+
+### 2. Flujo de Subida de Audio
+- **Validación previa en frontend:** Se verifica la extensión `.mp3` y el tipo MIME `audio/mpeg` como primera barrera de experiencia de usuario.
+- **Transmisión multipart:** Construcción de `FormData` con el archivo binario en el campo `file` y envío asíncrono a `POST /api/audio`.
+- **Respuesta 201 Created:** El backend asigna un UUID único, almacena físicamente el archivo en `backend/storage/audio-files/` y retorna `{ id: "lib-import-<uuid>", name, url: "/audio-files/<uuid>.mp3", sizeBytes }`.
+- **Cálculo de duración en frontend:** Conforme a la arquitectura definida en la Fase 7 del backend (el servidor no parsea metadatos pesados de audio), el frontend instancia un elemento temporal `new Audio("${API_BASE_URL}${url}")` para resolver la duración real vía el evento `loadedmetadata` (con fallback de 4s a `0` segundos ante streams no deterministas).
+- **Asignación a la biblioteca:** El ítem se agrega a `state.library` utilizando `${API_BASE_URL}${url}` como URL reproducible (`objectUrl`), permitiendo su reproducción en `globalAudio` y su inserción como clip en cualquier carril del timeline.
+- **Eliminación de dependencias locales:** Se eliminó cualquier llamada a `URL.createObjectURL()` para nuevos archivos importados.
+
+### 3. Resiliencia y Manejo de Errores Bilingüe (i18n)
+- **Mecanismo no bloqueante (`#import-feedback`):** Reutiliza la zona accesible de notificaciones dinámicas ubicada bajo el botón de importación, con contraste adaptativo tanto en tema claro (`text-amber-700`) como en tema oscuro (`text-amber-300`).
+- **Servidor desconectado / Offline:** Si `fetch` falla por red o porque el backend no está corriendo, muestra el mensaje traducido dinámicamente según el idioma activo:
+  - **ES:** `"No se pudo conectar con el servidor local. Verifica que el backend esté corriendo."` (`library.backendUnreachable`)
+  - **EN:** `"Could not connect to local server. Make sure the backend is running."` (`library.backendUnreachable`)
+- **Errores de servidor:** Si el servidor responde con un código distinto a 201, se informa adecuadamente (`library.uploadError`).
+- **Desvanecimiento automático:** El mensaje permanece visible durante 4 segundos y se oculta de forma limpia sin congelar la interfaz ni afectar clips o carriles existentes.
+
+---
+
 ## 📌 Decisiones de Arquitectura y Alcance — Sprint 5
 
 ### 0.1 Nota de arquitectura: Empaquetado final con Electron Builder (Sprint 7)
