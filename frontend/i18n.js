@@ -269,6 +269,7 @@ function t(key) {
 function applyTranslations() {
   const lang = getCurrentLanguage();
   document.documentElement.setAttribute('lang', lang);
+  document.title = t('app.title');
 
   // 1. Textos directos
   document.querySelectorAll('[data-i18n]').forEach((el) => {
