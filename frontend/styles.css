@@ -615,7 +615,7 @@ body.is-trimming * {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
+  left: var(--track-control-strip-width);
   width: 2px;
   background: var(--playhead-color);
   box-shadow: 0 0 4px 1px var(--playhead-glow);

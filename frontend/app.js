@@ -748,7 +748,7 @@ function renderTimelineTracks() {
     return;
   }
 
-  container.className = 'flex-1 min-h-0 p-4 lg:p-6 overflow-y-auto space-y-3.5 flex flex-col';
+  container.className = 'flex-1 min-h-0 py-3 overflow-y-auto space-y-3.5 flex flex-col';
   const pps = getPixelsPerSecond();
 
   const splitText = typeof t === 'function' ? t('timeline.doubleClickToSplit') : 'Doble clic para dividir';
@@ -811,7 +811,7 @@ function renderTimelineTracks() {
     }).join('');
 
     return `
-      <div class="timeline-row flex items-stretch group/track" data-track-id="${track.id}">
+      <div class="timeline-row flex items-stretch pr-4 group/track" data-track-id="${track.id}">
         <!-- Franja de control minimalista de ancho fijo (Fase 13.5) -->
         <div class="timeline-control-strip shrink-0 flex items-center justify-center select-none" style="width: var(--track-control-strip-width);">
           <button
@@ -1719,10 +1719,11 @@ function bindTimelineEvents() {
   const ruler = $('#timeline-ruler');
   if (ruler) {
     ruler.addEventListener('click', (e) => {
-      const rect = ruler.getBoundingClientRect();
+      const scaleEl = $('#timeline-ruler-scale') || ruler;
+      const rect = scaleEl.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const pps = getPixelsPerSecond();
-      let seconds = clickX / pps;
+      let seconds = Math.max(0, clickX) / pps;
       const maxDuration = state.project.duration > 0 ? state.project.duration : Infinity;
       seconds = clamp(seconds, 0, maxDuration);
       seekTo(seconds);
@@ -1929,7 +1930,7 @@ function bindTimelineEvents() {
       selection: { clipId: newClip.id }
     });
 
-    console.info(`[PodcastCraft AI] Clip añadido al carril "${track.name}":`, newClip);
+    console.info(`[PodcastCraft AI] Clip añadido al carril ${track.id}:`, newClip);
   });
 
   // 5. Recorte de bordes con asas (Sprint 4 — 7.1 Pointer Events)

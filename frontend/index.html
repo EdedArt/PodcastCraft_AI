@@ -181,13 +181,18 @@
         aria-valuemin="0"
         aria-valuemax="0"
         aria-valuenow="0"
-        class="h-7 border-b theme-ruler shrink-0 px-4 flex items-center justify-between text-[10px] font-mono select-none cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-violet-500"
+        class="h-7 border-b theme-ruler shrink-0 flex items-center text-[10px] font-mono select-none cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-violet-500"
       >
-        <span>00:00:00</span>
-        <span>00:10:00</span>
-        <span>00:20:00</span>
-        <span>00:30:00</span>
-        <span>00:40:00</span>
+        <!-- Gutter minimalista alineado con la franja de control de los carriles -->
+        <div class="timeline-ruler-gutter shrink-0" style="width: var(--track-control-strip-width);" aria-hidden="true"></div>
+        <!-- Escala con marcas de tiempo alineadas con el inicio real de los clips -->
+        <div id="timeline-ruler-scale" class="flex-1 min-w-0 pr-4 flex items-center justify-between">
+          <span>00:00:00</span>
+          <span>00:10:00</span>
+          <span>00:20:00</span>
+          <span>00:30:00</span>
+          <span>00:40:00</span>
+        </div>
       </div>
 
       <!-- Contenedor relativo de carriles y playhead superpuesto -->
@@ -196,7 +201,7 @@
         <div id="timeline-playhead" aria-hidden="true"></div>
 
         <!-- Contenedor dinámico de carriles (Renderizado por renderTimelineTracks() en app.js) -->
-        <div id="timeline-tracks" class="flex-1 min-h-0 p-4 lg:p-6 overflow-y-auto space-y-3.5 flex flex-col"></div>
+        <div id="timeline-tracks" class="flex-1 min-h-0 py-3 overflow-y-auto space-y-3.5 flex flex-col"></div>
       </div>
     </section>
 
