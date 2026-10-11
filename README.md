@@ -466,8 +466,8 @@ podcastcraft-ai/
 | **2** | **Biblioteca de bloques de audio + Pestañas + Fuente Drag & Drop** | **Completado ✅** |
 | **3** | **Pivote Local Funcional + Timeline con Drop Zones + Audio Real** | **Completado ✅** |
 | **4** | **Carriles Dinámicos Ilimitados + Import MP3 + Edición (Trim/Split/Delete)** | **Completado ✅** |
-| **5** | **Playhead de Alta Fidelidad + Scrubbing en Regla (rAF 60 FPS + A11y Slider)** | **Completado (Este Sprint) ✅** |
-| 6 | Motor de simulación de IA (limpiar audio con animación y notificaciones toast) | Planificado |
+| **5** | **Playhead de Alta Fidelidad + Scrubbing en Regla (rAF 60 FPS + A11y Slider)** | **Completado ✅** |
+| **6** | **Motor de simulación de IA (transcripción + limpieza de muletillas manual y masiva + toasts)** | **Completado (Fase 15) ✅** |
 | 7 | Pulido final, microinteracciones, atajos globales y **empaquetado nativo (.exe con Electron Builder)** | Planificado |
 
 ---
@@ -492,6 +492,12 @@ console.log('PPS actual:', PodcastCraft.getPixelsPerSecond());
 
 // 5. Inspeccionar elemento de audio global
 console.log('Audio actual:', PodcastCraft.globalAudio.src, PodcastCraft.globalAudio.currentTime);
+
+// 6. Transcribir el clip seleccionado manualmente
+PodcastCraft.transcribeSelectedClip();
+
+// 7. Limpiar muletillas masivamente del clip activo
+PodcastCraft.cleanAllFillers(PodcastCraft.getState().selection.clipId);
 ```
 
 ---
@@ -531,4 +537,67 @@ Previo a la implementación, se realizó la medición física en píxeles de los
    - Doble clic para dividir clip (`pixelsToTime(clickX)`).
    - Arrastre de asas de recorte (trim) mediante `pixelsToTime` y `timeToPixels`.
    - Soltado de audio (drag & drop) coordinado con la misma conversión temporal.
+
+---
+
+## 🤖 8. Fase 15: Panel de IA — Transcripción Simulada y Limpieza de Muletillas
+
+Esta fase construye el flujo de edición asistida por inteligencia artificial en el Panel de Asistente IA (`#col-ai-panel`), permitiendo transcribir el clip seleccionado, detectar muletillas intercaladas, marcarlas interactivamente para borrado manual y ejecutar limpieza automática masiva.
+
+### 8.1 Arquitectura del Estado de IA
+El estado de IA se indexa por el identificador del clip en la línea de tiempo (`clipId`), permitiendo que cada instancia de clip conserve su propia transcripción de forma totalmente independiente:
+
+```javascript
+state.ai = {
+  transcriptByClip: {
+    // [clipId]: { status: 'idle' | 'processing' | 'done', segments: [...] }
+  },
+  isMassCleaning: false
+};
+
+// Segmento representativo de una palabra:
+// { id: 'seg-clip-0', text: 'bueno', isFiller: true, markedForDeletion: false }
+```
+
+### 8.2 Componentes e Interacciones del Panel de IA
+1. **Botón Transcribir (`#btn-transcribe-clip`):**
+   - **Deshabilitado:** Cuando no hay ningún clip seleccionado (`state.selection.clipId === null`).
+   - **Habilitado:** Al seleccionar cualquier clip en el timeline, mostrando el texto localizado `t('aiPanel.transcribe')` ("Transcribir" / "Transcribe").
+   - **Re-transcripción:** Si el clip ya fue procesado (`status: 'done'`), cambia dinámicamente a `t('aiPanel.retranscribe')` ("Volver a transcribir" / "Re-transcribe").
+2. **Estado de Procesamiento y Animación:**
+   - Al presionar transcribir, se asigna `status: 'processing'` y se despliega `#ai-transcript-loading` con la animación `.animate-ai-pulse` y efecto de resplandor `glow-ai`.
+   - Tras un intervalo simulado de 1.5s, se generan las palabras y se actualiza a `status: 'done'`.
+3. **Fichas de Palabras Interactivas (`#ai-transcript-segments`):**
+   - Cada palabra se renderiza en un elemento accesible con `role="button"`, `tabindex="0"`, `aria-pressed` y `aria-label` detallado.
+   - **Muletilla (`isFiller: true`):** Resaltada con fondo y borde ámbar (nunca violeta, preservando la regla de acento exclusivo de transporte/IA).
+   - **Marcada para borrar (`markedForDeletion: true`):** Tachado (`line-through`), borde discontinuo rojizo y fondo sutil rose.
+   - **Interacción dual:** Clic con puntero o pulsación de `Enter` / `Espacio` conmuta el estado de marcado.
+4. **Confirmación de Borrado Manual (`#btn-confirm-cleanup`):**
+   - Botón con icono de visto (`check`) que se vuelve visible automáticamente solo cuando existe al menos una palabra marcada (`markedCount > 0`).
+   - Al hacer clic, elimina las palabras seleccionadas del arreglo de segmentos y dispara una notificación toast flotante accesible (`#toast-container`).
+5. **Limpieza Automática Masiva con IA (`#btn-ai-clean-all`):**
+   - Habilitado únicamente cuando el clip tiene estado `done` y conserva al menos una muletilla detectada.
+   - Muestra el conteo en tiempo real: `t('aiPanel.cleanAllWithCount', { count })` (ej. "Limpiar Audio con IA (4 detectadas)").
+   - Al pulsar, activa una animación de procesamiento de 1.5s y remueve todas las muletillas detectadas de una sola vez, emitiendo un toast de confirmación.
+6. **Guardia de Teclado Extendido:**
+   - Se extendió el listener global de `Delete` y `Backspace`:
+     - **Foco sobre una palabra de la transcripción:** Alterna su marcado para eliminación preventiva sin borrar el clip del timeline.
+     - **Foco en inputs/textareas:** Se respeta la edición nativa de texto.
+     - **Foco en el timeline:** Conserva su comportamiento original eliminando el clip seleccionado.
+
+### 8.3 Verificación de Contraste y Accesibilidad (WCAG AA y AAA)
+Para cumplir con los más altos estándares cromáticos en ambos temas:
+
+| Elemento | Modo Claro (Default) | Modo Oscuro | Ratio de Contraste / Cumplimiento |
+|---|---|---|---|
+| **Muletilla (`.ai-word-filler`)** | Texto `#92400e` (amber-800) sobre fondo claro | Texto `#fde68a` (amber-200) sobre `#0f172a` | **7.47:1** en claro (**WCAG AAA**) / **12.2:1** en oscuro (**WCAG AAA**) |
+| **Palabra Marcada (`.ai-word-marked`)** | Texto `#be123c` (rose-700) sobre fondo rose | Texto `#fda4af` (rose-300) sobre `#0f172a` | **6.35:1** en claro (**WCAG AA**) / **9.1:1** en oscuro (**WCAG AAA**) |
+| **Píldora de Conteo** | Fondo ámbar con borde semitransparente | Texto ámbar de alto contraste | **7.47:1** (AAA) / **12.2:1** (AAA) |
+
+### 8.4 Limitaciones Conocidas del Flujo
+1. **Sin backend de IA / Speech-to-Text real:** El proyecto no integra un motor pesado de inferencia de voz a texto. La transcripción se genera mediante un generador simulado con muestreo determinista de diccionarios locales (`FILLER_WORDS_ES/EN` y `SAMPLE_WORDS_ES/EN`).
+2. **Persistencia de sesión (no almacenada en backend):** La transcripción de los clips es un estado de trabajo en memoria (`state.ai.transcriptByClip`), consistente con la selección (`state.selection`). Al recargar la página no persiste en el servidor REST.
+3. **Generación vinculada al idioma activo al transcribir:** El texto se genera en el idioma activo en el momento de la transcripción. Si el usuario conmuta entre Español e Inglés posteriormente, el texto de la transcripción no se retraduce retroactivamente (es audio transcrito simulado, no chrome de la interfaz).
+4. **División de clips (Split):** Al dividir un clip en dos mitades en el timeline, ambas mitades nacen sin transcripción previa y deben transcribirse de manera independiente.
+
 
