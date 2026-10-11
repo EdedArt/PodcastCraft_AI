@@ -575,24 +575,6 @@ body.is-trimming * {
   user-select: none !important;
 }
 
-/* Renombrar carril in situ */
-.track-rename-input {
-  background: var(--bg-panel);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-primary);
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  outline: none;
-  width: 100%;
-  box-shadow: 0 0 0 1px var(--border-default);
-}
-.track-rename-input:focus {
-  border-color: var(--focus-ring);
-  box-shadow: 0 0 0 1px var(--focus-ring);
-}
-
 /* Clases de paleta rotativa para carriles */
 .track-lane-sky { background-color: var(--lane-sky-bg); border-color: var(--lane-sky-border); }
 .track-clip-sky { background-color: var(--clip-sky-bg); border-color: var(--clip-sky-border); color: var(--clip-sky-text); }

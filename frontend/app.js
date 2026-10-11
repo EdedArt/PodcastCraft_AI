@@ -96,7 +96,6 @@ const state = {
   }
 };
 
-let trackCounter = 0;   // Generador de nombres por defecto "Carril 1", "Carril 2"...
 let nextColorIndex = 0; // Índice rotativo de color, nunca se decrementa
 
 
@@ -180,7 +179,6 @@ window.PodcastCraft = {
   PIXELS_PER_SECOND_BASE,
   createTrack,
   deleteTrack,
-  renameTrack,
   calculateDropStart,
   recomputeProjectDuration: () => recomputeProjectDuration(),
   getPixelsPerSecond: () => getPixelsPerSecond(),
@@ -372,15 +370,12 @@ function $$(selector) {
    ========================================================================== */
 
 /**
- * Crea un nuevo carril dinámico con nombre autoincremental y color rotativo.
- * @param {string} [customName]
+ * Crea un nuevo carril dinámico con color rotativo (Fase 13.5: sin nombres de carril).
  * @returns {object} El nuevo carril creado
  */
-function createTrack(customName) {
-  const prefix = typeof t === 'function' ? t('timeline.defaultTrackPrefix') : 'Carril';
+function createTrack() {
   const newTrack = {
     id: `track-${crypto.randomUUID()}`,
-    name: customName || `${prefix} ${++trackCounter}`,
     colorIndex: (nextColorIndex++) % TRACK_PALETTE.length,
     clips: []
   };
@@ -391,26 +386,6 @@ function createTrack(customName) {
 
   console.info('[PodcastCraft AI] Carril creado:', newTrack);
   return newTrack;
-}
-
-/**
- * Renombra un carril existente. Si el nombre es vacío, se mantiene el previo.
- * @param {string} trackId
- * @param {string} newName
- */
-function renameTrack(trackId, newName) {
-  const trimmed = (newName || '').trim();
-  if (!trimmed) return;
-
-  const nextTracks = state.tracks.map((t) => {
-    if (t.id === trackId) {
-      return { ...t, name: trimmed };
-    }
-    return t;
-  });
-
-  setState({ tracks: nextTracks });
-  console.info(`[PodcastCraft AI] Carril ${trackId} renombrado a: ${trimmed}`);
 }
 
 /**
@@ -1048,7 +1023,6 @@ async function saveProjectToBackend() {
       })),
       tracks: state.tracks.map((t) => ({
         id: t.id,
-        name: t.name,
         colorIndex: t.colorIndex,
         clips: (t.clips || []).map((c) => ({
           id: c.id,
@@ -1131,7 +1105,6 @@ async function loadProjectFromBackend() {
     if (Array.isArray(data.tracks)) {
       state.tracks = data.tracks.map((t) => ({
         id: t.id,
-        name: t.name || 'Carril',
         colorIndex: typeof t.colorIndex === 'number' ? t.colorIndex : 0,
         clips: Array.isArray(t.clips)
           ? t.clips.map((c) => {
@@ -1151,15 +1124,8 @@ async function loadProjectFromBackend() {
       // Recomputar duración total del proyecto a partir de los clips cargados
       state.project.duration = recomputeProjectDuration(state.tracks);
 
-      // Ajustar contadores para evitar colisión con nuevos carriles
+      // Ajustar índice de color rotativo para nuevos carriles
       if (state.tracks.length > 0) {
-        trackCounter = Math.max(state.tracks.length, trackCounter);
-        state.tracks.forEach((t) => {
-          const match = t.name && t.name.match(/(\d+)$/);
-          if (match) {
-            trackCounter = Math.max(trackCounter, parseInt(match[1], 10));
-          }
-        });
         const maxColor = Math.max(...state.tracks.map((t) => t.colorIndex || 0));
         nextColorIndex = Math.max(maxColor + 1, nextColorIndex);
       }
@@ -1834,64 +1800,15 @@ function bindTimelineEvents() {
     }
 
     // Clic en área vacía del timeline deselecciona
-    if (!e.target.closest('[data-clip-id]') && !e.target.closest('.track-title')) {
+    if (!e.target.closest('[data-clip-id]')) {
       if (state.selection.clipId !== null) {
         setState({ selection: { clipId: null } });
       }
     }
   });
 
-  // 2. Renombrar carril con doble clic in situ
+  // 2. División (Split) de clip por doble clic (Sprint 4 — 7.2)
   timelineContainer.addEventListener('dblclick', (e) => {
-    // Si el doble clic es en el título del carril
-    const titleEl = e.target.closest('.track-title');
-    if (titleEl) {
-      const trackId = titleEl.dataset.trackId;
-      const track = state.tracks.find((t) => t.id === trackId);
-      if (!track) return;
-
-      const currentName = track.name;
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'track-rename-input';
-      input.value = currentName;
-      input.setAttribute('aria-label', typeof t === 'function' ? t('timeline.renameTrackAria') : 'Renombrar carril');
-      input.placeholder = typeof t === 'function' ? t('timeline.renameTrackPlaceholder') : 'Nombre del carril';
-
-      titleEl.replaceWith(input);
-      input.focus();
-      input.select();
-
-      let committed = false;
-      const finishRename = (save) => {
-        if (committed) return;
-        committed = true;
-        if (save) {
-          renameTrack(trackId, input.value);
-        } else {
-          renderTimelineTracks();
-          renderIcons();
-        }
-      };
-
-      input.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') {
-          ev.preventDefault();
-          finishRename(true);
-        } else if (ev.key === 'Escape') {
-          ev.preventDefault();
-          finishRename(false);
-        }
-      });
-
-      input.addEventListener('blur', () => {
-        finishRename(true);
-      });
-
-      return;
-    }
-
-    // 3. División (Split) de clip por doble clic (Sprint 4 — 7.2)
     const clipEl = e.target.closest('[data-clip-id]');
     if (clipEl && !e.target.closest('[data-handle]')) {
       const clipId = clipEl.dataset.clipId;
