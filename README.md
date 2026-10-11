@@ -205,6 +205,130 @@ Esta fase establece la primera conexión real entre el frontend y el backend Exp
 
 ---
 
+## 💾 Fase 13: Persistencia Real del Proyecto (Guardado y Carga Automáticos con Debounce)
+
+Esta fase cierra integralmente el ciclo de la estación de trabajo digital: el proyecto completo (título, estado, carriles multipista, clips recortados y biblioteca de audios importados) sobrevive a recargas de página (`F5`), guardándose y cargándose automáticamente contra los endpoints `GET /api/project` y `PUT /api/project` del backend Express local.
+
+### 1. Forma Contractual del Payload Persistido (`PUT /api/project`)
+
+El payload serializado en el cuerpo de la petición cumple con la validación estructural requerida por el backend:
+
+```json
+{
+  "project": {
+    "title": "Untitled Project",
+    "status": "saved"
+  },
+  "library": [
+    {
+      "id": "lib-import-30e2b372-ce30-4d62-aaa0-f0fba1212e68",
+      "name": "sample_podcast",
+      "duration": 5,
+      "url": "/audio-files/30e2b372-ce30-4d62-aaa0-f0fba1212e68.mp3"
+    }
+  ],
+  "tracks": [
+    {
+      "id": "track-4c70ba69-36de-40e1-9e89-1f7ec9146ae6",
+      "name": "Voz Principal",
+      "colorIndex": 0,
+      "clips": [
+        {
+          "id": "clip-1234",
+          "libraryId": "lib-import-30e2b372-ce30-4d62-aaa0-f0fba1212e68",
+          "name": "sample_podcast",
+          "start": 0,
+          "duration": 4
+        }
+      ]
+    },
+    {
+      "id": "track-b5aee147-a1e6-45c5-8206-68a961dd7bbc",
+      "name": "Carril 2",
+      "colorIndex": 1,
+      "clips": []
+    }
+  ]
+}
+```
+
+### 2. Decisiones Clave de Arquitectura
+
+#### 2.1 ¿Por qué NO se duplica la URL del audio dentro de cada clip?
+- **Decisión:** Los clips almacenan únicamente `{ id, libraryId, name, start, duration }`. En el JSON persistido **no se almacena ninguna URL de audio en los clips**.
+- **Mecanismo de resolución:** Durante la fase de hidratación en `loadProjectFromBackend()`, cada clip busca su `libraryId` en la colección `state.library` ya reconstruida y resuelve dinámicamente `objectUrl = libItem ? libItem.objectUrl : null`.
+- **Justificación técnica:**
+  1. **Normalización relacional:** Elimina la redundancia de datos (un audio de la biblioteca arrastrado a múltiples carriles compartiría URLs duplicadas innecesariamente).
+  2. **Independencia de host/puerto:** La biblioteca almacena la ruta relativa (`/audio-files/<uuid>.mp3`) y la hidrata dinámicamente con `${API_BASE_URL}`, evitando atar los archivos o clips a un puerto o dominio estático.
+  3. **Consistencia de origen:** Si un archivo de audio es actualizado o reemplazado en la biblioteca, todos los clips referenciados se sincronizan automáticamente sin inconsistencias.
+
+#### 2.2 Decisión de alcance sobre el Zoom (Preferencia de Sesión vs. Proyecto)
+- **Decisión:** El nivel de zoom (`state.project.zoom`, valor por defecto 50%) se trata como **preferencia efímera de sesión** y **no se persiste en `project.json`**.
+- **Justificación:** El zoom es una configuración ergonómica del entorno de trabajo local que depende de la resolución física de la pantalla (laptop vs. monitor ultrapanorámico) y de la preferencia visual del usuario en ese momento. Persistir el zoom obligaría a que otro usuario o pantalla abra el proyecto con una escala que podría resultar incómoda o desproporcionada.
+
+### 3. Matriz de Estado: Qué se Persiste y Qué NO
+
+| Sección / Propiedad | ¿Se Persiste? | Destino / Justificación |
+|---|:---:|---|
+| `project.title` | **SÍ** | Persistido en `storage/project.json` (título oficial del episodio). |
+| `project.status` | **SÍ** | Persistido como `'saved'` en el backend tras cada guardado exitoso. |
+| `library[].id` | **SÍ** | Identificador UUID único asignado por el backend (`lib-import-...`). |
+| `library[].name` | **SÍ** | Nombre original del archivo MP3 subido. |
+| `library[].duration` | **SÍ** | Duración numérica contractual del audio en segundos. |
+| `library[].url` | **SÍ** | **Ruta relativa limpia** (`/audio-files/<uuid>.mp3`, sin prefijo de host). |
+| `library[].objectUrl` | **NO** | Reconstruido dinámicamente en tiempo de ejecución (`${API_BASE_URL}${item.url}`). |
+| `tracks[].id`, `name`, `colorIndex` | **SÍ** | Estructura de carriles multipista y asignación cromática rotativa. |
+| `tracks[].clips[].id`, `libraryId`, `start`, `duration` | **SÍ** | Posición temporal, duración recortada y enlace relacional al audio. |
+| `tracks[].clips[].objectUrl` | **NO** | Resuelto en tiempo de carga a partir del `libraryId` en la biblioteca. |
+| `project.currentTime` | **NO** | Estado efímero de sesión (al reiniciar, el playhead inicia en `00:00:00`). |
+| `project.isPlaying` | **NO** | Estado efímero (la aplicación inicia pausada por seguridad auditiva). |
+| `project.duration` | **NO** | Se recalcula reactivamente al cargar mediante `recomputeProjectDuration(tracks)`. |
+| `project.zoom` | **NO** | Preferencia de visualización local de sesión (default 50%). |
+| `project.volume` / `isMuted` | **NO** | Configuración de hardware de reproducción local. |
+| `selection` (`clipId`, `libraryId`) | **NO** | Estado transitorio de interacción del puntero. |
+| `ui.draggingLibraryId` | **NO** | Bandera efímera activa únicamente durante el evento drag & drop. |
+
+### 4. Guardado Automático con Debounce (1.5 segundos)
+
+- **Detección diferencial en el Store:** En `renderAll(currentState, prevState)`, se evalúa si hubo cambios en los datos del proyecto:
+  ```javascript
+  const dataChanged = (
+    currentState.tracks !== prevState?.tracks ||
+    currentState.library !== prevState?.library ||
+    currentState.project.title !== prevState?.project?.title ||
+    (currentState.project.status !== prevState?.project?.status && currentState.project.status === 'draft')
+  );
+  if (dataChanged) scheduleAutoSave();
+  ```
+- **Transición inmediata a Borrador:** Apenas se produce una mutación (creación de carril, recorte, renombrado, importación), `scheduleAutoSave()` actualiza de inmediato `state.project.status = 'draft'` y refresca `#project-status`. El badge refleja instantáneamente el estado `Borrador` / `Draft` con animación pulsante (`animate-pulse`).
+- **Debounce de 1.5s:** Se reinicia un temporizador `saveDebounceTimer = setTimeout(..., 1500)`. Ningún fotograma de recorte ni pulsación rápida de teclado dispara peticiones HTTP intermedias.
+- **Confirmación con `setState`:** Al cumplirse el debounce, se ejecuta `PUT /api/project`. Si la petición tiene éxito y no hay nuevos cambios encolados, se invoca `setState({ project: { status: 'saved' } })`, transicionando el badge a `Guardado` / `Saved` de forma reactiva y sin generar bucles de autoguardado.
+
+### 5. Carga e Hidratación al Iniciar (`DOMContentLoaded`)
+
+1. **Secuencia de inicialización:**
+   - Se aplican el tema visual y las traducciones de i18n (`applyTranslations()`).
+   - Se ejecuta de manera asíncrona `await loadProjectFromBackend()` mediante `GET /api/project`.
+   - Se hidratan los objetos de `library` con la URL absoluta del backend y se vincula `objectUrl` en cada clip a partir de su `libraryId`.
+   - Se recalcula `recomputeProjectDuration(state.tracks)`, garantizando que `#total-duration` y `#duration-label` muestren el tiempo exacto desde el primer instante.
+   - Se sincronizan los contadores `trackCounter` y `nextColorIndex` para evitar colisiones con nuevos carriles.
+   - Se ejecuta una única llamada inicial a `renderAll()`.
+2. **Cero `PUT` redundante:** Como en el arranque inicial `prevState` es `undefined` (`isInitial = true`), el detector de autoguardado no programa ningún guardado automático, evitando disparar un `PUT` innecesario inmediatamente después de un `GET`.
+
+### 6. Resiliencia Offline y Modo Sin Conexión
+
+- **Backend no disponible al iniciar:** Si `GET /api/project` falla (backend apagado o inaccesible), `loadProjectFromBackend()` captura la excepción (`catch`), mantiene el estado limpio por defecto (0 carriles, biblioteca vacía, badge en Borrador) y muestra un aviso discreto traducido en `#import-feedback`:
+  - **ES:** `"Servidor local no detectado. Los cambios se mantendrán solo durante esta sesión."`
+  - **EN:** `"Local server not detected. Changes will only persist during this session."`
+  La interfaz continúa 100% funcional y operable para pruebas locales sin pantallas en blanco ni excepciones no capturadas.
+- **Fallo al guardar:** Si el servidor se apaga durante la sesión y se realiza un cambio, el badge permanece en `Borrador` / `Draft` y se despliega una notificación no bloqueante:
+  - **ES:** `"No se pudo guardar en el servidor local. Verifica que el backend esté corriendo."`
+  - **EN:** `"Could not save to local server. Make sure the backend is running."`
+  El usuario está consciente en tiempo real de que los cambios no han sido persistidos.
+- **Recuperación tras reconexión:** Al reiniciar el servidor Express y recargar la página, `loadProjectFromBackend()` recupera exactamente el último estado guardado exitosamente previo a la interrupción.
+
+---
+
 ## 📌 Decisiones de Arquitectura y Alcance — Sprint 5
 
 ### 0.1 Nota de arquitectura: Empaquetado final con Electron Builder (Sprint 7)
