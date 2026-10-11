@@ -214,7 +214,7 @@ window.PodcastCraft = {
  * @param {number} clipDuration - Duración del clip que se está soltando
  * @returns {number} Posición de inicio en segundos
  */
-function calculateDropStart(track, dropX, pixelsPerSecond, clipDuration) {
+function calculateDropStart(track, dropX, pixelsPerSecondOrDuration, maybeClipDuration) {
   const sortedClips = [...(track.clips || [])].sort((a, b) => a.start - b.start);
 
   if (sortedClips.length === 0) {
@@ -222,9 +222,9 @@ function calculateDropStart(track, dropX, pixelsPerSecond, clipDuration) {
     return 0;
   }
 
-  // Carril con clips existentes: se mantiene el comportamiento actual
-  let start = Math.max(0, Math.round(dropX / pixelsPerSecond));
-  const duration = Math.round(clipDuration || 0);
+  // Carril con clips existentes: conversión mediante fuente única de verdad (Fase 14)
+  const duration = Math.round((typeof maybeClipDuration === 'number' ? maybeClipDuration : pixelsPerSecondOrDuration) || 0);
+  let start = Math.max(0, Math.round(pixelsToTime(dropX)));
   let end = start + duration;
 
   // Acomodo automático sin pisar clips existentes
@@ -527,11 +527,13 @@ function renderTransport() {
     durationLabel.textContent = formatTime(state.project.duration);
   }
 
-  // Sincronización del playhead cuando no está reproduciendo activamente (Sprint 5)
+  // Sincronización del playhead con fuente única de verdad temporal (Fase 14)
   const playheadEl = $('#timeline-playhead');
-  if (playheadEl && !state.project.isPlaying) {
-    const pps = getPixelsPerSecond();
-    playheadEl.style.transform = `translateX(${(state.project.currentTime || 0) * pps}px)`;
+  if (playheadEl) {
+    const currentSec = (state.project.isPlaying && globalAudio && !globalAudio.paused)
+      ? (activePlayingClipStart + (globalAudio.currentTime || 0))
+      : (state.project.currentTime || 0);
+    playheadEl.style.transform = `translateX(${timeToPixels(currentSec)}px)`;
   }
 
   // Sincronización de accesibilidad en regla de tiempo (#timeline-ruler)
@@ -823,7 +825,6 @@ function renderTimelineTracks() {
   }
 
   container.className = 'flex-1 min-h-0 py-3 overflow-y-auto space-y-3.5 flex flex-col';
-  const pps = getPixelsPerSecond();
 
   const splitText = typeof t === 'function' ? t('timeline.doubleClickToSplit') : 'Doble clic para dividir';
   const trimStartText = typeof t === 'function' ? t('timeline.dragToTrimStart') : 'Arrastra para recortar inicio';
@@ -839,8 +840,8 @@ function renderTimelineTracks() {
     const clips = track.clips || [];
 
     const clipsHtml = clips.map((clip) => {
-      const leftPx = Math.round((clip.start || 0) * pps);
-      const widthPx = Math.max(32, Math.round((clip.duration || 0) * pps));
+      const leftPx = Math.round(timeToPixels(clip.start || 0));
+      const widthPx = Math.max(32, Math.round(timeToPixels(clip.duration || 0)));
       const isSelected = state.selection.clipId === clip.id;
       const formattedDuration = formatDuration(clip.duration);
       const startFormatted = formatDuration(clip.start);
@@ -1293,7 +1294,7 @@ function startPlayheadLoop() {
       globalAudio.pause();
       stopPlayheadLoop();
       setState({ project: { isPlaying: false, currentTime: activePlayingClipStart } });
-      const px = activePlayingClipStart * getPixelsPerSecond();
+      const px = timeToPixels(activePlayingClipStart);
       if (playheadEl) {
         playheadEl.style.transform = `translateX(${px}px)`;
       }
@@ -1304,7 +1305,7 @@ function startPlayheadLoop() {
     }
 
     const absoluteSeconds = activePlayingClipStart + audioElapsed;
-    const px = absoluteSeconds * getPixelsPerSecond();
+    const px = timeToPixels(absoluteSeconds);
 
     if (playheadEl) {
       playheadEl.style.transform = `translateX(${px}px)`;
@@ -1344,7 +1345,6 @@ function stopPlayheadLoop() {
 function seekTo(targetSeconds) {
   const maxDuration = state.project.duration > 0 ? state.project.duration : Infinity;
   const seconds = clamp(targetSeconds, 0, maxDuration);
-  const pps = getPixelsPerSecond();
 
   // 1. Identificar si algún clip cubre esta posición absoluta del timeline
   let coveringClip = null;
@@ -1399,7 +1399,7 @@ function seekTo(targetSeconds) {
   // 4. Reposicionar el playhead de inmediato sin esperar al siguiente frame
   const playheadEl = $('#timeline-playhead');
   if (playheadEl) {
-    playheadEl.style.transform = `translateX(${seconds * pps}px)`;
+    playheadEl.style.transform = `translateX(${timeToPixels(seconds)}px)`;
   }
   const currentTimeEl = $('#current-time');
   if (currentTimeEl) {
@@ -1419,7 +1419,7 @@ globalAudio.addEventListener('ended', () => {
   setState({ project: { isPlaying: false, currentTime: activePlayingClipStart } });
   const playheadEl = $('#timeline-playhead');
   if (playheadEl) {
-    playheadEl.style.transform = `translateX(${activePlayingClipStart * getPixelsPerSecond()}px)`;
+    playheadEl.style.transform = `translateX(${timeToPixels(activePlayingClipStart)}px)`;
   }
   const currentTimeEl = $('#current-time');
   if (currentTimeEl) {
@@ -1485,7 +1485,7 @@ function bindTransportEvents() {
             setState({ project: { currentTime: activePlayingClipStart } });
             const playheadEl = $('#timeline-playhead');
             if (playheadEl) {
-              playheadEl.style.transform = `translateX(${activePlayingClipStart * getPixelsPerSecond()}px)`;
+              playheadEl.style.transform = `translateX(${timeToPixels(activePlayingClipStart)}px)`;
             }
             const currentTimeEl = $('#current-time');
             if (currentTimeEl) {
@@ -1828,8 +1828,7 @@ function bindTimelineEvents() {
       const scaleEl = $('#timeline-ruler-scale') || ruler;
       const rect = scaleEl.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
-      const pps = getPixelsPerSecond();
-      let seconds = Math.max(0, clickX) / pps;
+      let seconds = pixelsToTime(Math.max(0, clickX));
       const maxDuration = state.project.duration > 0 ? state.project.duration : Infinity;
       seconds = clamp(seconds, 0, maxDuration);
       seekTo(seconds);
@@ -1887,8 +1886,7 @@ function bindTimelineEvents() {
         if (clip) {
           const rect = clipEl.getBoundingClientRect();
           const clickOffsetPx = e.clientX - rect.left;
-          const pps = getPixelsPerSecond();
-          const clickOffsetSec = Math.max(0, clickOffsetPx / pps);
+          const clickOffsetSec = Math.max(0, pixelsToTime(clickOffsetPx));
           const targetSec = clip.start + clickOffsetSec;
           seekTo(targetSec);
         }
@@ -1918,8 +1916,7 @@ function bindTimelineEvents() {
 
       const rect = clipEl.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
-      const pps = getPixelsPerSecond();
-      const splitSec = Math.round(clickX / pps);
+      const splitSec = Math.round(pixelsToTime(clickX));
 
       // Restricción: ambas mitades resultantes deben tener al menos 1 segundo
       if (splitSec >= 1 && (clip.duration - splitSec) >= 1) {
@@ -2000,10 +1997,9 @@ function bindTimelineEvents() {
     // Calcular posición X convertida a segundos con anclaje a 00:00 en carriles vacíos (Fase 9)
     const rect = lane.getBoundingClientRect();
     const dropX = e.clientX - rect.left + lane.scrollLeft;
-    const pps = getPixelsPerSecond();
     const duration = Math.round(payload.duration || 0);
 
-    const start = calculateDropStart(track, dropX, pps, duration);
+    const start = calculateDropStart(track, dropX, duration);
 
     const libItem = getLibraryItem(payload.libraryId);
     const objectUrl = libItem ? (libItem.objectUrl ?? null) : null;
@@ -2072,7 +2068,6 @@ function bindTimelineEvents() {
       initialX: e.clientX,
       initialStart: clip.start,
       initialDuration: clip.duration,
-      pps: getPixelsPerSecond(),
       prevClipEnd: prevClip ? prevClip.start + prevClip.duration : 0,
       nextClipStart: nextClip ? nextClip.start : Infinity,
       clipEl,
@@ -2087,7 +2082,7 @@ function bindTimelineEvents() {
       if (!activeTrim) return;
 
       const deltaX = ev.clientX - activeTrim.initialX;
-      const deltaSec = deltaX / activeTrim.pps;
+      const deltaSec = pixelsToTime(deltaX);
 
       if (activeTrim.handleType === 'right') {
         let newDuration = Math.round(activeTrim.initialDuration + deltaSec);
@@ -2100,7 +2095,7 @@ function bindTimelineEvents() {
         }
 
         activeTrim.pendingDuration = newDuration;
-        activeTrim.clipEl.style.width = Math.max(30, Math.round(newDuration * activeTrim.pps)) + 'px';
+        activeTrim.clipEl.style.width = Math.max(30, Math.round(timeToPixels(newDuration))) + 'px';
       } else if (activeTrim.handleType === 'left') {
         let newStart = Math.round(activeTrim.initialStart + deltaSec);
         newStart = Math.max(0, newStart);
@@ -2119,8 +2114,8 @@ function bindTimelineEvents() {
         activeTrim.pendingStart = newStart;
         activeTrim.pendingDuration = newDuration;
 
-        activeTrim.clipEl.style.left = Math.round(newStart * activeTrim.pps) + 'px';
-        activeTrim.clipEl.style.width = Math.max(30, Math.round(newDuration * activeTrim.pps)) + 'px';
+        activeTrim.clipEl.style.left = Math.round(timeToPixels(newStart)) + 'px';
+        activeTrim.clipEl.style.width = Math.max(30, Math.round(timeToPixels(newDuration))) + 'px';
       }
     };
 
