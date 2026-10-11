@@ -13,6 +13,7 @@
 /* Tema CLARO — Default de la aplicación */
 :root,
 [data-theme="light"] {
+  --track-control-strip-width: 40px;    /* Franja de control minimalista de carriles (Fase 13.5) */
   --bg-primary: #f8fafc;                /* slate-50 */
   --bg-panel: #ffffff;                  /* blanco puro para paneles y tarjetas */
   --bg-panel-header: #ffffff;
@@ -573,6 +574,13 @@ body.is-trimming {
 body.is-trimming * {
   cursor: ew-resize !important;
   user-select: none !important;
+}
+
+/* Franja de control minimalista de carril (Fase 13.5) */
+.timeline-control-strip {
+  width: var(--track-control-strip-width);
+  min-width: var(--track-control-strip-width);
+  max-width: var(--track-control-strip-width);
 }
 
 /* Clases de paleta rotativa para carriles */

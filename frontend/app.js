@@ -756,9 +756,8 @@ function renderTimelineTracks() {
   const trimEndText = typeof t === 'function' ? t('timeline.dragToTrimEnd') : 'Arrastra para recortar final';
   const clipFromText = typeof t === 'function' ? t('timeline.clipFrom') : 'de';
   const clipToText = typeof t === 'function' ? t('timeline.clipTo') : 'a';
-  const renameTitle = typeof t === 'function' ? t('timeline.doubleClickToRename') : 'Doble clic para renombrar';
-  const deleteAriaPrefix = typeof t === 'function' ? t('timeline.deleteTrackAria') : 'Eliminar carril';
-  const deleteTitle = typeof t === 'function' ? t('timeline.deleteTrackTitle') : 'Eliminar carril';
+  const deleteTrackAria = typeof t === 'function' ? t('timeline.deleteTrackAria') : 'Eliminar carril';
+  const deleteTrackTitle = typeof t === 'function' ? t('timeline.deleteTrackTitle') : 'Eliminar carril';
   const emptyLaneText = typeof t === 'function' ? t('timeline.emptyLane') : 'Carril vacío — Arrastra un audio aquí';
 
   const tracksHtml = state.tracks.map((track) => {
@@ -812,25 +811,16 @@ function renderTimelineTracks() {
     }).join('');
 
     return `
-      <div class="timeline-row flex items-stretch gap-3 group/track" data-track-id="${track.id}">
-        <!-- Cabecera del Carril -->
-        <div class="w-40 lg:w-44 shrink-0 flex items-center justify-between px-3 py-2 theme-panel border rounded-lg select-none gap-2">
-          <div class="flex items-center gap-2 min-w-0 flex-1">
-            <span class="w-2.5 h-2.5 rounded-full ${palette.dot} shrink-0"></span>
-            <span
-              id="track-name-${track.id}"
-              class="track-title text-xs font-semibold theme-text-primary truncate cursor-text hover:text-violet-600 dark:hover:text-violet-400"
-              title="${renameTitle}"
-              data-track-id="${track.id}"
-            >${escapeHtml(track.name)}</span>
-          </div>
+      <div class="timeline-row flex items-stretch group/track" data-track-id="${track.id}">
+        <!-- Franja de control minimalista de ancho fijo (Fase 13.5) -->
+        <div class="timeline-control-strip shrink-0 flex items-center justify-center select-none" style="width: var(--track-control-strip-width);">
           <button
             type="button"
             id="track-delete-${track.id}"
             data-delete-track="${track.id}"
-            aria-label="${deleteAriaPrefix} ${escapeHtml(track.name)}"
-            title="${deleteTitle}"
-            class="w-6 h-6 rounded flex items-center justify-center theme-text-muted hover:text-rose-500 hover:bg-rose-500/10 active:scale-90 transition-colors"
+            aria-label="${deleteTrackAria}"
+            title="${deleteTrackTitle}"
+            class="w-7 h-7 rounded-md flex items-center justify-center theme-text-muted hover:text-rose-500 hover:bg-rose-500/10 active:scale-90 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-rose-500"
           >
             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
           </button>
