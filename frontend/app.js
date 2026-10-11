@@ -186,7 +186,9 @@ window.PodcastCraft = {
   getPixelsPerSecond: () => getPixelsPerSecond(),
   seekTo: (sec) => seekTo(sec),
   startPlayheadLoop: () => startPlayheadLoop(),
-  stopPlayheadLoop: () => stopPlayheadLoop(),
+  saveProjectToBackend: () => saveProjectToBackend(),
+  loadProjectFromBackend: () => loadProjectFromBackend(),
+  scheduleAutoSave: () => scheduleAutoSave(),
   get globalAudio() { return globalAudio; },
   get activePlayingClipStart() { return activePlayingClipStart; },
   getCurrentLanguage: () => (typeof getCurrentLanguage === 'function' ? getCurrentLanguage() : 'es'),
@@ -927,12 +929,13 @@ function renderAll(currentState = state, prevState) {
 
   renderIcons();
 
-  // Detección de cambios persistentes para autoguardado en backend (Sprint 6)
+  // Detección de cambios persistentes para autoguardado en backend (Fase 13)
   if (!isInitial) {
     const dataChanged = (
       currentState.tracks !== prevState?.tracks ||
       currentState.library !== prevState?.library ||
-      currentState.project.title !== prevState?.project?.title
+      currentState.project.title !== prevState?.project?.title ||
+      (currentState.project.status !== prevState?.project?.status && currentState.project.status === 'draft')
     );
 
     if (dataChanged) {
@@ -1003,7 +1006,8 @@ let isSaving = false;
 
 /**
  * Programa el guardado automático en el backend con un debounce de 1.5s.
- * Marca visualmente el proyecto en estado 'Borrador' de inmediato.
+ * Marca visualmente el proyecto en estado 'Borrador' de inmediato mientras
+ * el debounce está pendiente.
  */
 function scheduleAutoSave() {
   if (state.project.status !== 'draft') {
@@ -1011,8 +1015,11 @@ function scheduleAutoSave() {
     renderTopbar();
   }
 
-  clearTimeout(saveDebounceTimer);
+  if (saveDebounceTimer !== null) {
+    clearTimeout(saveDebounceTimer);
+  }
   saveDebounceTimer = setTimeout(async () => {
+    saveDebounceTimer = null;
     await saveProjectToBackend();
   }, 1500);
 }
@@ -1021,7 +1028,10 @@ function scheduleAutoSave() {
  * Serializa y envía el estado del proyecto al backend vía PUT /api/project.
  */
 async function saveProjectToBackend() {
-  if (isSaving) return;
+  if (isSaving) {
+    scheduleAutoSave();
+    return;
+  }
   isSaving = true;
 
   try {
@@ -1040,7 +1050,7 @@ async function saveProjectToBackend() {
         id: t.id,
         name: t.name,
         colorIndex: t.colorIndex,
-        clips: t.clips.map((c) => ({
+        clips: (t.clips || []).map((c) => ({
           id: c.id,
           libraryId: c.libraryId,
           name: c.name,
@@ -1062,11 +1072,15 @@ async function saveProjectToBackend() {
       throw new Error(`HTTP ${res.status}`);
     }
 
-    state.project.status = 'saved';
-    renderTopbar();
+    // Solo actualizar a 'saved' si no entraron nuevos cambios durante la llamada HTTP
+    if (saveDebounceTimer === null) {
+      setState({ project: { status: 'saved' } });
+    }
     console.info('[PodcastCraft AI] Proyecto guardado exitosamente en backend.');
   } catch (err) {
     console.warn('[PodcastCraft AI] Error al persistir proyecto en backend:', err);
+    state.project.status = 'draft';
+    renderTopbar();
     const saveErrorMsg = typeof t === 'function'
       ? t('topbar.feedbackSaveError')
       : 'No se pudo guardar en el servidor local. Verifica que el backend esté corriendo.';
