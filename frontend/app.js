@@ -1114,7 +1114,7 @@ async function loadProjectFromBackend() {
     if (data.project?.title) {
       state.project.title = data.project.title;
     }
-    state.project.status = data.project?.status || 'saved';
+    state.project.status = data.project?.status || 'draft';
 
     if (Array.isArray(data.library)) {
       state.library = data.library.map((item) => ({
@@ -1139,7 +1139,7 @@ async function loadProjectFromBackend() {
               return {
                 id: c.id,
                 libraryId: c.libraryId,
-                name: c.name,
+                name: c.name || (libItem ? libItem.name : 'Clip'),
                 start: typeof c.start === 'number' ? c.start : 0,
                 duration: typeof c.duration === 'number' ? c.duration : 0,
                 objectUrl: libItem ? libItem.objectUrl : null
@@ -1154,6 +1154,12 @@ async function loadProjectFromBackend() {
       // Ajustar contadores para evitar colisión con nuevos carriles
       if (state.tracks.length > 0) {
         trackCounter = Math.max(state.tracks.length, trackCounter);
+        state.tracks.forEach((t) => {
+          const match = t.name && t.name.match(/(\d+)$/);
+          if (match) {
+            trackCounter = Math.max(trackCounter, parseInt(match[1], 10));
+          }
+        });
         const maxColor = Math.max(...state.tracks.map((t) => t.colorIndex || 0));
         nextColorIndex = Math.max(maxColor + 1, nextColorIndex);
       }
@@ -2276,16 +2282,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Inicialización de tema visual e icono del toggle
   applyTheme(getCurrentTheme());
 
-  // Carga previa e hidratación del estado persistido desde el backend (Sprint 6)
-  await loadProjectFromBackend();
-
-  // Renderizado inicial (con datos del backend o clean slate si está desconectado)
-  renderAll();
-
   // Inicialización de internacionalización y traducciones visibles (Fase 10)
   if (typeof applyTranslations === 'function') {
     applyTranslations();
   }
+
+  // Carga previa e hidratación del estado persistido desde el backend (Fase 13)
+  await loadProjectFromBackend();
+
+  // Renderizado inicial único (con datos del backend o clean slate si está desconectado)
+  renderAll();
 
   // Vinculación de escuchadores de eventos
   bindTransportEvents();
@@ -2295,5 +2301,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindGlobalDragGuard();
   bindViewportGuard();
 
-  console.info('[PodcastCraft AI] Sprint 6 (Reestructuración Frontend/Backend + Persistencia Real) inicializado.');
+  console.info('[PodcastCraft AI] Fase 13 (Persistencia Real y Autoguardado) inicializado.');
 });
