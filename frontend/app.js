@@ -727,7 +727,6 @@ function renderTimelineTracks() {
     container.className = 'flex-1 min-h-0 p-4 lg:p-6 overflow-y-auto flex flex-col justify-center';
     const emptyTitle = typeof t === 'function' ? t('timeline.emptyTracksTitle') : 'Aún no tienes carriles';
     const emptyDesc = typeof t === 'function' ? t('timeline.emptyTracksDesc') : 'Crea un carril para empezar a construir tu episodio y arrastrar archivos de audio.';
-    const createFirstText = typeof t === 'function' ? t('timeline.createFirstTrack') : 'Crear Primer Carril';
     const createFirstAria = typeof t === 'function' ? t('timeline.createFirstTrackAria') : 'Crear primer carril';
 
     container.innerHTML = `
@@ -739,9 +738,8 @@ function renderTimelineTracks() {
         <p class="text-xs theme-text-muted max-w-sm leading-relaxed mb-4">
           ${emptyDesc}
         </p>
-        <button id="btn-empty-add-track" type="button" aria-label="${createFirstAria}" class="theme-btn-export inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold active:scale-95 shadow-md transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
-          <i data-lucide="plus" class="w-4 h-4"></i>
-          <span>${createFirstText}</span>
+        <button id="btn-empty-add-track" type="button" aria-label="${createFirstAria}" title="${createFirstAria}" class="theme-btn-export inline-flex items-center justify-center w-10 h-10 rounded-xl active:scale-95 shadow-md transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+          <i data-lucide="plus" class="w-5 h-5"></i>
         </button>
       </div>
     `;
