@@ -182,6 +182,9 @@ window.PodcastCraft = {
   calculateDropStart,
   recomputeProjectDuration: () => recomputeProjectDuration(),
   getPixelsPerSecond: () => getPixelsPerSecond(),
+  timeToPixels: (sec) => timeToPixels(sec),
+  pixelsToTime: (px) => pixelsToTime(px),
+  renderTimelineRuler: () => renderTimelineRuler(),
   seekTo: (sec) => seekTo(sec),
   startPlayheadLoop: () => startPlayheadLoop(),
   saveProjectToBackend: () => saveProjectToBackend(),
@@ -270,6 +273,29 @@ function getPixelsPerSecond() {
   const zoom = typeof state.project.zoom === 'number' ? state.project.zoom : 50;
   const zoomFactor = Math.max(0.25, zoom / 50);
   return PIXELS_PER_SECOND_BASE * zoomFactor;
+}
+
+/**
+ * Única fuente de verdad para conversión tiempo -> píxeles (Fase 14).
+ * Retorna la coordenada X exacta en píxeles relativa al origen común (después de la franja de control de 40px).
+ * @param {number} seconds - Tiempo en segundos
+ * @returns {number} Posición en píxeles
+ */
+function timeToPixels(seconds) {
+  if (typeof seconds !== 'number' || isNaN(seconds) || seconds < 0) return 0;
+  return seconds * getPixelsPerSecond();
+}
+
+/**
+ * Única fuente de verdad para conversión píxeles -> tiempo (Fase 14).
+ * Convierte un desplazamiento en píxeles relativo al origen común a segundos.
+ * @param {number} pixels - Posición en píxeles
+ * @returns {number} Tiempo en segundos
+ */
+function pixelsToTime(pixels) {
+  if (typeof pixels !== 'number' || isNaN(pixels) || pixels < 0) return 0;
+  const pps = getPixelsPerSecond();
+  return pps > 0 ? pixels / pps : 0;
 }
 
 /**
@@ -715,6 +741,56 @@ function renderLibraryList() {
 }
 
 /**
+ * Renderiza dinámicamente las marcas de tiempo de la regla (#timeline-ruler-scale)
+ * adaptando la granularidad de las marcas al nivel de zoom actual y a la duración del proyecto.
+ * Fase 14: Todas las marcas se posicionan con timeToPixels(t), compartiendo exactamente
+ * la misma escala temporal que el playhead y los clips.
+ */
+function renderTimelineRuler() {
+  const scaleEl = $('#timeline-ruler-scale');
+  if (!scaleEl) return;
+
+  const pps = getPixelsPerSecond();
+  const visibleWidth = scaleEl.clientWidth || (scaleEl.parentElement?.clientWidth ? scaleEl.parentElement.clientWidth - 40 : 800);
+  const visibleSeconds = pps > 0 ? visibleWidth / pps : 200;
+  const projectDur = state.project.duration || 0;
+  // La regla se extiende a lo largo de toda la ventana visible o hasta el fin del audio
+  const maxSeconds = Math.max(projectDur, visibleSeconds, 60);
+
+  // Intervalos estándar legibles (en segundos) estilo DAW
+  const NICE_INTERVALS = [1, 2, 5, 10, 15, 20, 30, 60, 120, 300, 600, 1200, 1800, 3600];
+  const minPixelGap = 65; // al menos 65px entre marcas para evitar solapamientos
+  let interval = NICE_INTERVALS.find((sec) => sec * pps >= minPixelGap);
+  if (!interval) {
+    interval = NICE_INTERVALS[NICE_INTERVALS.length - 1];
+  }
+
+  const ticks = [];
+  for (let t = 0; t <= maxSeconds + interval; t += interval) {
+    const px = Math.round(timeToPixels(t));
+    if (px > visibleWidth + 300) break; // límite prudencial de renderizado
+    const label = formatTime(t);
+    const isOrigin = t === 0;
+
+    ticks.push(`
+      <div
+        class="timeline-ruler-tick absolute top-0 bottom-0 pointer-events-none select-none text-[9px] font-mono theme-text-muted"
+        style="left: ${px}px;"
+      >
+        <div class="w-[1px] h-1.5 bg-current opacity-40"></div>
+        <span
+          class="absolute top-2 tabular-nums font-mono leading-none opacity-85 whitespace-nowrap"
+          style="${isOrigin ? 'left: 2px;' : 'left: 0px; transform: translateX(-50%);'}"
+        >${label}</span>
+        <div class="absolute bottom-0 w-[1px] h-1 bg-current opacity-20"></div>
+      </div>
+    `);
+  }
+
+  scaleEl.innerHTML = ticks.join('');
+}
+
+/**
  * Renderiza los carriles dinámicos (0 a N) en el timeline (#timeline-tracks).
  * Sprint 4: Estado vacío general si tracks.length === 0, o carriles con asas de recorte y clips coloreados.
  */
@@ -885,7 +961,8 @@ function renderAll(currentState = state, prevState) {
     renderLibraryCount();
   }
 
-  if (tracksChanged) {
+  if (tracksChanged || projectChanged) {
+    renderTimelineRuler();
     renderTimelineTracks();
     renderTransport();
   }
@@ -905,7 +982,38 @@ function renderAll(currentState = state, prevState) {
       scheduleAutoSave();
     }
   }
+
+  // Medición diagnóstica obligatoria Fase 14
+  if (typeof window.__diagMeasure === 'function') {
+    window.__diagMeasure();
+  }
 }
+
+window.__diagMeasure = function() {
+  const lane = document.querySelector('.timeline-lane')?.getBoundingClientRect();
+  const playhead = document.querySelector('#timeline-playhead')?.getBoundingClientRect();
+  const rulerScale = document.querySelector('#timeline-ruler-scale')?.getBoundingClientRect();
+  const ruler = document.querySelector('#timeline-ruler')?.getBoundingClientRect();
+  const gutter = document.querySelector('.timeline-ruler-gutter')?.getBoundingClientRect();
+  const strip = document.querySelector('.timeline-control-strip')?.getBoundingClientRect();
+  const col = document.querySelector('#col-timeline')?.getBoundingClientRect();
+  const res = {
+    colLeft: col ? Number(col.left.toFixed(2)) : null,
+    laneLeft: lane ? Number(lane.left.toFixed(2)) : null,
+    playheadLeft: playhead ? Number(playhead.left.toFixed(2)) : null,
+    rulerScaleLeft: rulerScale ? Number(rulerScale.left.toFixed(2)) : null,
+    rulerLeft: ruler ? Number(ruler.left.toFixed(2)) : null,
+    gutterRight: gutter ? Number(gutter.right.toFixed(2)) : null,
+    gutterWidth: gutter ? Number(gutter.width.toFixed(2)) : null,
+    stripWidth: strip ? Number(strip.width.toFixed(2)) : null,
+    stripRight: strip ? Number(strip.right.toFixed(2)) : null,
+    diff_lane_vs_playhead: lane && playhead ? Number((lane.left - playhead.left).toFixed(2)) : null,
+    diff_rulerScale_vs_playhead: rulerScale && playhead ? Number((rulerScale.left - playhead.left).toFixed(2)) : null,
+    diff_rulerScale_vs_lane: rulerScale && lane ? Number((rulerScale.left - lane.left).toFixed(2)) : null
+  };
+  console.log('[DIAGNOSTICO_FASE14]', JSON.stringify(res));
+  return res;
+};
 
 
 /* ==========================================================================
@@ -2211,6 +2319,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindTimelineEvents();
   bindGlobalDragGuard();
   bindViewportGuard();
+
+  // Re-renderizado reactivo de la regla ante cambios de tamaño de ventana (Fase 14)
+  window.addEventListener('resize', () => {
+    renderTimelineRuler();
+  });
 
   console.info('[PodcastCraft AI] Fase 13 (Persistencia Real y Autoguardado) inicializado.');
 });
