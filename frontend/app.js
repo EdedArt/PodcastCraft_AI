@@ -1168,6 +1168,11 @@ async function loadProjectFromBackend() {
     console.info('[PodcastCraft AI] Proyecto cargado exitosamente desde backend.');
   } catch (err) {
     console.warn('[PodcastCraft AI] Servidor local no disponible o inaccesible. Modo de sesión local activo:', err.message);
+    state.project.title = 'Untitled Project';
+    state.project.status = 'draft';
+    state.library = [];
+    state.tracks = [];
+    state.project.duration = 0;
     const offlineMsg = typeof t === 'function'
       ? t('topbar.feedbackServerOffline')
       : 'Servidor local no detectado. Los cambios se mantendrán solo durante esta sesión.';
