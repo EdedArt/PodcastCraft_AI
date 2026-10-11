@@ -493,3 +493,42 @@ console.log('PPS actual:', PodcastCraft.getPixelsPerSecond());
 // 5. Inspeccionar elemento de audio global
 console.log('Audio actual:', PodcastCraft.globalAudio.src, PodcastCraft.globalAudio.currentTime);
 ```
+
+---
+
+## 7. Fase 14: Unificación Temporal — Regla de Tiempo, Playhead y Carriles
+
+### 7.1 Diagnóstico de Causa Raíz y Mediciones Reales
+Previo a la implementación, se realizó la medición física en píxeles de los componentes del timeline mediante `getBoundingClientRect()` en consola:
+
+| Elemento / Métrica | Coordenada / Valor Real |
+|---|---|
+| Borde izquierdo de columna de timeline (`#col-timeline`) | `274.00 px` |
+| Ancho de franja de control de carril (`--track-control-strip-width`) | `40.00 px` |
+| Ancho de gutter de regla (`.timeline-ruler-gutter`) | `40.00 px` |
+| Borde izquierdo del área de carriles (`.timeline-lane`) | `314.00 px` |
+| Posición del playhead en reposo (`t=0`) | `314.00 px` |
+| Inicio de la escala de la regla (`#timeline-ruler-scale`) | `314.00 px` |
+| **Diferencia carril vs playhead (`diff_lane_vs_playhead`)** | **0.00 px** |
+| **Diferencia escala regla vs playhead (`diff_rulerScale_vs_playhead`)** | **0.00 px** |
+| **Diferencia escala regla vs carril (`diff_rulerScale_vs_lane`)** | **0.00 px** |
+
+#### Hallazgos Clave:
+1. **Marcas estáticas de la regla:** La regla (`#timeline-ruler-scale`) contenía 5 elementos `<span>` fijos (`00:00:00` a `00:40:00`) distribuidos mediante flexbox `justify-between`. No se recalculaban ni escalaban según el zoom ni la duración real del proyecto. A zoom 50% (4 px/s), la marca fija "00:10:00" se dibujaba a ~175px (equivalente a ~44s reales de audio), generando la discrepancia de ~34s–40s observada por el usuario.
+2. **Causa del desfase residual aparente (~2-3s):** Debido a que la regla estática extendía 40 minutos en el ancho disponible de la pantalla (~700px), cada segundo visual correspondía a ~17.5px en lugar de los 4px reales de los clips. Cualquier lectura visual contra las marcas de la regla resultaba artificialmente desplazada 2-3s a pesar de que el offset físico era matemáticamente exacto (40px).
+
+### 7.2 Arquitectura de Fuente Única de Verdad Temporal
+1. **Conversión centralizada:** Se crearon las funciones canónicas `timeToPixels(seconds)` y `pixelsToTime(pixels)` basadas en `getPixelsPerSecond()`. Absolutamente ningún elemento calcula posiciones o dimensiones de clips/playhead de forma manual.
+2. **Regla de tiempo adaptativa dinámica (`renderTimelineRuler`):**
+   - Se recalculan las marcas en cada cambio de zoom, proyecto o redimensionamiento de ventana.
+   - Algoritmo de intervalos legibles estilo DAW (`[1s, 2s, 5s, 10s, 15s, 20s, 30s, 60s, 120s, 300s, 600s, ...]`) garantizando al menos 65px entre marcas para evitar amontonamiento.
+   - Cada marca se posiciona estrictamente con `style="left: ${timeToPixels(t)}px"`.
+   - En `t=0`, la línea indicadora se ancla en `0px` y la etiqueta textual se desplaza con un margen sutil de `2px` hacia la derecha para garantizar legibilidad completa sin cortes por overflow.
+3. **Sincronización instantánea al cambiar el zoom en caliente:**
+   - Al deslizar el control de zoom (incluso durante la reproducción activa de audio), `renderTimelineRuler()`, `renderTimelineTracks()` y `renderTransport()` se ejecutan sincrónicamente en el mismo ciclo, reposicionando el playhead de inmediato a `timeToPixels(currentSec)` sin esperar al siguiente frame del bucle rAF.
+4. **Unificación de interacciones:**
+   - Scrubbing por clic en regla (`pixelsToTime(clickX)`).
+   - Doble clic para dividir clip (`pixelsToTime(clickX)`).
+   - Arrastre de asas de recorte (trim) mediante `pixelsToTime` y `timeToPixels`.
+   - Soltado de audio (drag & drop) coordinado con la misma conversión temporal.
+
