@@ -89,10 +89,8 @@ const state = {
     libraryId: null           // ID de la tarjeta seleccionada en la biblioteca
   },
   ai: {
-    isAnalyzed: false,
-    isProcessing: false,
-    fillersDetected: 0,
-    transcript: []
+    transcriptByClip: {}, // { [clipId]: { status: 'idle'|'processing'|'done', segments: [...] } }
+    isMassCleaning: false
   }
 };
 
@@ -127,7 +125,10 @@ function setState(patch) {
     project: { ...state.project },
     ui: { ...state.ui },
     selection: { ...state.selection },
-    ai: { ...state.ai },
+    ai: {
+      ...state.ai,
+      transcriptByClip: { ...(state.ai?.transcriptByClip || {}) }
+    },
     library: state.library,
     tracks: state.tracks
   };
@@ -195,7 +196,8 @@ window.PodcastCraft = {
   getCurrentLanguage: () => (typeof getCurrentLanguage === 'function' ? getCurrentLanguage() : 'es'),
   setLanguage: (lang) => (typeof setLanguage === 'function' ? setLanguage(lang) : null),
   t: (key) => (typeof t === 'function' ? t(key) : key),
-  applyTranslations: () => (typeof applyTranslations === 'function' ? applyTranslations() : null)
+  applyTranslations: () => (typeof applyTranslations === 'function' ? applyTranslations() : null),
+  generateMockTranscript: (clip) => generateMockTranscript(clip)
 };
 
 
@@ -296,6 +298,39 @@ function pixelsToTime(pixels) {
   if (typeof pixels !== 'number' || isNaN(pixels) || pixels < 0) return 0;
   const pps = getPixelsPerSecond();
   return pps > 0 ? pixels / pps : 0;
+}
+
+/* ==========================================================================
+   4.1 SIMULACIÓN DE IA (Fase 15: Transcripción y Detección de Muletillas)
+   ========================================================================== */
+
+const FILLER_WORDS_ES = ['eh', 'o sea', 'este', 'mmm', 'tipo', 'bueno'];
+const FILLER_WORDS_EN = ['uh', 'like', 'um', 'you know', 'so', 'basically'];
+const SAMPLE_WORDS_ES = ['entonces', 'quiero', 'contarles', 'sobre', 'el', 'tema', 'de', 'hoy', 'que', 'es', 'realmente', 'interesante', 'para', 'todos', 'ustedes'];
+const SAMPLE_WORDS_EN = ['so', 'today', 'I', 'want', 'to', 'talk', 'about', 'something', 'really', 'interesting', 'for', 'all', 'of', 'you', 'listening'];
+
+/**
+ * Genera una transcripción simulada con palabras normales y muletillas intercaladas (Fase 15).
+ * Se genera en el idioma activo en el momento de transcribir.
+ * @param {object} clip - Instancia del clip seleccionado en el timeline
+ * @returns {Array<{ id: string, text: string, isFiller: boolean, markedForDeletion: boolean }>}
+ */
+function generateMockTranscript(clip) {
+  if (!clip) return [];
+  const lang = typeof getCurrentLanguage === 'function' ? getCurrentLanguage() : 'es';
+  const fillers = lang === 'en' ? FILLER_WORDS_EN : FILLER_WORDS_ES;
+  const words = lang === 'en' ? SAMPLE_WORDS_EN : SAMPLE_WORDS_ES;
+  const clipDuration = typeof clip.duration === 'number' && clip.duration > 0 ? clip.duration : 20;
+  const wordCount = Math.max(8, Math.min(40, Math.round(clipDuration / 2)));
+  const segments = [];
+  for (let i = 0; i < wordCount; i++) {
+    const isFiller = Math.random() < 0.15;
+    const text = isFiller
+      ? fillers[Math.floor(Math.random() * fillers.length)]
+      : words[Math.floor(Math.random() * words.length)];
+    segments.push({ id: `seg-${clip.id}-${i}`, text, isFiller, markedForDeletion: false });
+  }
+  return segments;
 }
 
 /**
@@ -453,11 +488,23 @@ function deleteTrack(trackId) {
     activePlayingClipDuration = 0;
   }
 
+  // Limpiar transcripciones de clips pertenecientes al carril eliminado (Fase 15)
+  const nextTranscriptByClip = { ...(state.ai.transcriptByClip || {}) };
+  if (track.clips) {
+    track.clips.forEach((c) => {
+      delete nextTranscriptByClip[c.id];
+    });
+  }
+
   setState({
     tracks: nextTracks,
     selection: {
       ...state.selection,
       clipId: nextClipId
+    },
+    ai: {
+      ...state.ai,
+      transcriptByClip: nextTranscriptByClip
     },
     project: {
       duration: nextDuration,
@@ -1943,10 +1990,18 @@ function bindTimelineEvents() {
         const nextTracks = state.tracks.map((t) => (t.id === trackId ? { ...t, clips: nextClips } : t));
         const nextDuration = recomputeProjectDuration(nextTracks);
 
+        // Limpiar entrada de transcripción del clip original dividido (Fase 15)
+        const nextTranscriptByClip = { ...(state.ai.transcriptByClip || {}) };
+        delete nextTranscriptByClip[clipId];
+
         setState({
           tracks: nextTracks,
           selection: { clipId: clip2.id },
-          project: { duration: nextDuration }
+          project: { duration: nextDuration },
+          ai: {
+            ...state.ai,
+            transcriptByClip: nextTranscriptByClip
+          }
         });
 
         console.info(`[PodcastCraft AI] Clip dividido en dos mitades (${splitSec}s y ${clip2.duration}s).`);
@@ -2217,9 +2272,16 @@ function bindTimelineEvents() {
           activePlayingClipDuration = 0;
         }
 
+        const nextTranscriptByClip = { ...(state.ai.transcriptByClip || {}) };
+        delete nextTranscriptByClip[clipIdToDelete];
+
         setState({
           tracks: nextTracks,
           selection: { ...state.selection, clipId: null },
+          ai: {
+            ...state.ai,
+            transcriptByClip: nextTranscriptByClip
+          },
           project: {
             duration: nextDuration,
             isPlaying: remainingClips === 0 ? false : state.project.isPlaying,
