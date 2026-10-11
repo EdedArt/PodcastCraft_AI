@@ -276,8 +276,8 @@ El payload serializado en el cuerpo de la petición cumple con la validación es
 | `library[].name` | **SÍ** | Nombre original del archivo MP3 subido. |
 | `library[].duration` | **SÍ** | Duración numérica contractual del audio en segundos. |
 | `library[].url` | **SÍ** | **Ruta relativa limpia** (`/audio-files/<uuid>.mp3`, sin prefijo de host). |
-| `library[].objectUrl` | **NO** | Reconstruido dinámicamente en tiempo de ejecución (`${API_BASE_URL}${item.url}`). |
-| `tracks[].id`, `name`, `colorIndex` | **SÍ** | Estructura de carriles multipista y asignación cromática rotativa. |
+| `tracks[].id`, `colorIndex` | **SÍ** | Estructura de carriles e identificación cromática rotativa (Fase 13.5 eliminó 'name'). |
+| `tracks[].name` | **NO** | Eliminado en Fase 13.5 (reemplaza Fase 4); los carriles se distinguen solo por color. |
 | `tracks[].clips[].id`, `libraryId`, `start`, `duration` | **SÍ** | Posición temporal, duración recortada y enlace relacional al audio. |
 | `tracks[].clips[].objectUrl` | **NO** | Resuelto en tiempo de carga a partir del `libraryId` en la biblioteca. |
 | `project.currentTime` | **NO** | Estado efímero de sesión (al reiniciar, el playhead inicia en `00:00:00`). |
@@ -326,6 +326,42 @@ El payload serializado en el cuerpo de la petición cumple con la validación es
   - **EN:** `"Could not save to local server. Make sure the backend is running."`
   El usuario está consciente en tiempo real de que los cambios no han sido persistidos.
 - **Recuperación tras reconexión:** Al reiniciar el servidor Express y recargar la página, `loadProjectFromBackend()` recupera exactamente el último estado guardado exitosamente previo a la interrupción.
+
+---
+
+## 🎛️ Fase 13.5: Eliminación de Nombres de Carril y Corrección de Alineación del Playhead (Versión Final)
+
+Esta fase reemplaza formalmente la decisión previa de la Fase 4 (que contemplaba nombres editables como "Voz Principal" o "Carril N") y corrige el desfase físico detectado entre el playhead, la regla de tiempo y el área de clips.
+
+### 1. Eliminación Completa del Sistema de Nombres de Carril (Reemplaza Fase 4)
+- **Decisión de producto y diseño:** En un editor de audio real, cada clip ya porta su propio nombre descriptivo original (`clip.name` derivado del archivo MP3 importado). La caja de texto del carril ("Carril 1", "Carril 2") no aportaba información útil, consumía espacio horizontal valioso y distorsionaba la alineación visual del timeline.
+- **Implementación:**
+  - Se eliminó del renderizado dinámico cualquier elemento textual de nombre de carril.
+  - Se eliminó por completo la función `renameTrack()`, los campos `<input class="track-rename-input">` in-situ y sus manejadores de eventos (`Enter`, `Escape`, `blur`, `dblclick`).
+  - La propiedad `name` fue removida del estado de cada carril (`state.tracks`), del payload de persistencia `PUT /api/project` y del proceso de hidratación `loadProjectFromBackend()`. Los carriles se identifican únicamente por su `id` interno y su coloración rotativa (`TRACK_PALETTE`).
+  - Se limpiaron del diccionario `frontend/i18n.js` las claves de texto visible obsoletas (`timeline.defaultTrackPrefix`, `timeline.doubleClickToRename`, `timeline.renameTrackAria`, `timeline.renameTrackPlaceholder`, `timeline.addTrackBtn`, `timeline.createFirstTrack`).
+
+### 2. Nueva Franja de Control Minimalista (`--track-control-strip-width: 40px`)
+- **Estructura fija:** Cada fila de carril (`.timeline-row`) incorpora a la izquierda una franja angosta de ancho fijo (`width: var(--track-control-strip-width, 40px)`).
+- **Controles visibles:** Contiene únicamente el botón de borrado (`#track-delete-${track.id}`) con el ícono `trash-2`, que ejecuta el flujo seguro de eliminación (confirmación nativa si el carril contiene clips y recálculo reactivo de la duración del proyecto).
+- **Accesibilidad integral:** El botón de borrado preserva atributos `aria-label` y `title` completamente traducidos tanto en español ("Eliminar carril") como en inglés ("Delete track").
+- **Minimalismo cromático:** Se prescindió de puntos o barras redundantes de color en la franja, dado que el propio fondo y borde del carril (`.timeline-lane`) ya expresan claramente el tono de la paleta.
+
+### 3. Corrección de Alineación y Cero "Recorrido Muerto" del Playhead
+- **Diagnóstico de causa raíz:**
+  - El playhead (`#timeline-playhead`) tenía `left: 0` y calculaba su posición como `translateX(${px}px)` desde el borde izquierdo absoluto de la columna.
+  - La zona de clips (`.timeline-lane`) estaba desplazada hacia la derecha debido al padding del contenedor (`p-4 lg:p-6`) y a las antiguas cabeceras de pista (`w-40`/`w-44` = 160px-176px). A un zoom del 50% (4 px/s), esto causaba un "recorrido muerto" de más de 40 segundos antes de que el playhead alcanzara el audio real.
+  - La regla de tiempo (`#timeline-ruler`) expandía sus marcas mediante `justify-between` y `px-4` sobre toda la columna sin compensar el encabezado de carril.
+- **Solución arquitectónica (Origen común unificado en `40px`):**
+  1. Se definió la variable CSS `--track-control-strip-width: 40px;` en `:root`, `[data-theme="light"]` y `[data-theme="dark"]`.
+  2. `#timeline-tracks` utiliza `px-0 py-3`, iniciando cada fila en `x = 0`. La franja de control abarca de `0` a `40px`, por lo que el carril de clips (`.timeline-lane`) comienza exactamente en `x = 40px`.
+  3. `#timeline-ruler` incorpora un canal espaciador `.timeline-ruler-gutter` de ancho fijo `40px` (`style="width: var(--track-control-strip-width);"`), seguido de la escala `#timeline-ruler-scale`. La marca `00:00:00` inicia exactamente en `x = 40px`.
+  4. `#timeline-playhead` tiene asignado `left: var(--track-control-strip-width, 40px);`. A `currentTime = 0`, `translateX(0px)` ubica la línea del playhead exactamente en `x = 40px`.
+  5. Durante la reproducción o búsqueda (scrubbing), el contador de transporte `#current-time`, la regla y el playhead avanzan en sincronía milimétrica 1:1, sin desfase ni recorrido muerto.
+
+### 4. Botones de Agregar Carril Minimalistas (Solo Ícono "+")
+- `#btn-add-track` en la cabecera del timeline y `#btn-empty-add-track` en el estado vacío general fueron simplificados a botones cuadrados de solo ícono `+` sin texto visible.
+- Preservan `aria-label` y `title` completamente traducidos ("Agregar nuevo carril" / "Add new track", "Crear primer carril" / "Create first track") para accesibilidad WCAG.
 
 ---
 
@@ -415,7 +451,7 @@ podcastcraft-ai/
 ### 4.1 Identificadores Activos
 - **Navegación:** `topbar`, `project-title`, `project-status`, `total-duration`, `btn-ai-analysis`, `btn-export`, `btn-theme-toggle` *(Nuevo - Fase A: Conmutador de tema)*, `btn-language-toggle` *(Nuevo - Fase 10: Conmutador de idioma)*
 - **Biblioteca:** `col-library`, `library-count`, `library-list`, `btn-import-audio`, `audio-file-input`, `import-feedback`, `lib-card-${item.id}`
-- **Línea de tiempo:** `col-timeline`, `zoom-slider`, `zoom-value`, `timeline-ruler` *(Slider accesible con scrubbing S5)*, `timeline-playhead` *(Nuevo S5)*, `timeline-tracks`, `btn-add-track`, `btn-empty-add-track`, `track-name-${id}`, `track-delete-${id}`, `timeline-clip-${clip.id}`, `.clip-handle-left`, `.clip-handle-right`
+- **Línea de tiempo:** `col-timeline`, `zoom-slider`, `zoom-value`, `timeline-ruler` *(Slider accesible con scrubbing S5)*, `.timeline-ruler-gutter`, `timeline-ruler-scale`, `timeline-playhead` *(Nuevo S5)*, `timeline-tracks`, `btn-add-track` *(Icon-only S13.5)*, `btn-empty-add-track` *(Icon-only S13.5)*, `.timeline-control-strip`, `track-delete-${id}`, `timeline-clip-${clip.id}`, `.clip-handle-left`, `.clip-handle-right`
 - **Panel IA:** `col-ai-panel`, `ai-transcript`, `ai-cta`
 - **Transporte:** `transport`, `now-playing-name`, `now-playing-meta`, `btn-rewind`, `btn-play`, `btn-forward`, `current-time`, `duration-label`, `btn-mute`, `volume-slider`
 - **Guardia de pantalla:** `viewport-warning`
