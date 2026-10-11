@@ -96,8 +96,23 @@ const I18N = {
     'aiPanel.sectionAria': 'Panel de asistente de inteligencia artificial',
     'aiPanel.title': 'Asistente de IA',
     'aiPanel.betaBadge': 'Beta',
+    'aiPanel.transcribe': 'Transcribir',
+    'aiPanel.retranscribe': 'Volver a transcribir',
+    'aiPanel.processing': 'Transcribiendo audio y detectando muletillas...',
+    'aiPanel.confirmCleanup': 'Confirmar borrado',
+    'aiPanel.confirmCleanupAria': 'Confirmar borrado de palabras marcadas',
+    'aiPanel.confirmCleanupTitle': 'Confirmar borrado',
+    'aiPanel.wordsRemoved': '{count} palabra(s) eliminada(s)',
+    'aiPanel.cleanAllWithCount': 'Limpiar Audio con IA ({count} detectadas)',
+    'aiPanel.cleanAllToast': '{count} muletilla(s) eliminada(s) con éxito',
+    'aiPanel.emptyStateHint': 'Selecciona un clip en la línea de tiempo para comenzar',
+    'aiPanel.selectedClipHint': 'Clip seleccionado. Haz clic en «Transcribir» para comenzar.',
     'aiPanel.transcriptEmptyTitle': 'La transcripción aparecerá aquí',
     'aiPanel.transcriptEmptyDesc': 'El modelo transcribirá tus archivos de audio y resaltará muletillas y silencios automáticamente.',
+    'aiPanel.wordAria': 'Palabra: {text}',
+    'aiPanel.fillerWordAria': 'Muletilla detectada: {text}',
+    'aiPanel.markedAria': 'Marcada para eliminar',
+    'aiPanel.notMarkedAria': 'No marcada para eliminar',
     'aiPanel.ctaAria': 'Limpiar audio con IA (Se activará tras el análisis)',
     'aiPanel.ctaTitle': 'Limpiar Audio con IA',
     'aiPanel.ctaBtn': 'Limpiar Audio con IA',
@@ -199,8 +214,23 @@ const I18N = {
     'aiPanel.sectionAria': 'Artificial intelligence assistant panel',
     'aiPanel.title': 'AI Assistant',
     'aiPanel.betaBadge': 'Beta',
+    'aiPanel.transcribe': 'Transcribe',
+    'aiPanel.retranscribe': 'Re-transcribe',
+    'aiPanel.processing': 'Transcribing audio and detecting filler words...',
+    'aiPanel.confirmCleanup': 'Confirm deletion',
+    'aiPanel.confirmCleanupAria': 'Confirm deletion of marked words',
+    'aiPanel.confirmCleanupTitle': 'Confirm deletion',
+    'aiPanel.wordsRemoved': '{count} word(s) removed',
+    'aiPanel.cleanAllWithCount': 'Clean Audio with AI ({count} detected)',
+    'aiPanel.cleanAllToast': '{count} filler word(s) removed successfully',
+    'aiPanel.emptyStateHint': 'Select a clip on the timeline to begin',
+    'aiPanel.selectedClipHint': 'Clip selected. Click «Transcribe» to begin.',
     'aiPanel.transcriptEmptyTitle': 'Transcript will appear here',
     'aiPanel.transcriptEmptyDesc': 'The model will transcribe your audio files and automatically highlight filler words and silences.',
+    'aiPanel.wordAria': 'Word: {text}',
+    'aiPanel.fillerWordAria': 'Filler word detected: {text}',
+    'aiPanel.markedAria': 'Marked for deletion',
+    'aiPanel.notMarkedAria': 'Not marked for deletion',
     'aiPanel.ctaAria': 'Clean audio with AI (Enabled after analysis)',
     'aiPanel.ctaTitle': 'Clean Audio with AI',
     'aiPanel.ctaBtn': 'Clean Audio with AI',
@@ -244,13 +274,20 @@ function setLanguage(lang) {
 }
 
 /**
- * Traduce una clave al idioma activo con doble fallback (primero español, luego la clave misma).
+ * Traduce una clave al idioma activo con doble fallback e interpolación de variables {param}.
  * @param {string} key
+ * @param {Record<string, string | number>} [params]
  * @returns {string}
  */
-function t(key) {
+function t(key, params) {
   const lang = getCurrentLanguage();
-  return (I18N[lang] && I18N[lang][key]) || (I18N.es && I18N.es[key]) || key;
+  let str = (I18N[lang] && I18N[lang][key]) || (I18N.es && I18N.es[key]) || key;
+  if (params && typeof params === 'object') {
+    for (const [k, v] of Object.entries(params)) {
+      str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+    }
+  }
+  return str;
 }
 
 /**
