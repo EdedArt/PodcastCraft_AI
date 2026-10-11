@@ -18,10 +18,10 @@
   <!-- Orden estricto de carga de scripts y estilos -->
   <script src="./vendor/tailwind.js"></script>
   <script src="./tailwind-config.js"></script>
-  <link rel="stylesheet" href="./styles.css?v=14.0">
+  <link rel="stylesheet" href="./styles.css?v=15.0">
   <script src="./vendor/lucide.min.js"></script>
-  <script src="./i18n.js?v=14.0"></script>
-  <script src="./app.js?v=14.0" defer></script>
+  <script src="./i18n.js?v=15.0"></script>
+  <script src="./app.js?v=15.0" defer></script>
 </head>
 <body class="h-full flex flex-col overflow-hidden theme-bg-app theme-text-app font-sans antialiased selection:bg-violet-500/30 selection:text-violet-700">
 
@@ -211,8 +211,34 @@
         </span>
       </div>
 
-      <!-- Contenedor de Transcripción -->
-      <div id="ai-transcript" class="flex-1 min-h-0 p-4 overflow-y-auto flex flex-col">
+      <!-- Barra de acción de transcripción y confirmación de borrado (Fase 15) -->
+      <div id="ai-toolbar" class="px-3.5 py-2.5 border-b flex items-center justify-between gap-2 shrink-0 theme-panel-header">
+        <button
+          id="btn-transcribe-clip"
+          type="button"
+          disabled
+          aria-disabled="true"
+          class="theme-btn-secondary flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+        >
+          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-violet-600 dark:text-violet-400"></i>
+          <span id="btn-transcribe-text" data-i18n="aiPanel.transcribe">Transcribir</span>
+        </button>
+
+        <button
+          id="btn-confirm-cleanup"
+          type="button"
+          class="hidden theme-btn-secondary px-2.5 py-1.5 rounded-lg text-xs font-semibold border text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 active:scale-95 transition-all shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          data-i18n-aria-label="aiPanel.confirmCleanupAria"
+          data-i18n-title="aiPanel.confirmCleanupTitle"
+          aria-label="Confirmar borrado de palabras marcadas"
+          title="Confirmar borrado"
+        >
+          <i data-lucide="check" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Contenedor de Transcripción (Renderizado dinámico vía renderAiPanel) -->
+      <div id="ai-transcript" class="flex-1 min-h-0 p-3.5 overflow-y-auto flex flex-col relative" role="region" aria-live="polite">
         <div class="flex-1 flex flex-col items-center justify-center p-6 text-center border-2 border-dashed rounded-xl theme-empty-box">
           <div class="w-12 h-12 rounded-full border flex items-center justify-center theme-ai-icon-wrapper mb-3 shadow-sm">
             <i data-lucide="message-square-text" class="w-6 h-6"></i>
@@ -221,14 +247,27 @@
           <p class="text-[11px] theme-text-secondary leading-relaxed max-w-[210px]" data-i18n="aiPanel.transcriptEmptyDesc">
             El modelo transcribirá tus archivos de audio y resaltará muletillas y silencios automáticamente.
           </p>
+          <span class="mt-3 text-[11px] font-medium text-violet-600 dark:text-violet-400 bg-violet-500/10 px-2.5 py-1 rounded-full text-center" data-i18n="aiPanel.emptyStateHint">
+            Selecciona un clip en la línea de tiempo para comenzar
+          </span>
         </div>
       </div>
 
-      <!-- Contenedor CTA de IA -->
+      <!-- Contenedor CTA de IA (Limpieza masiva Fase 15) -->
       <div id="ai-cta" class="p-3.5 border-t shrink-0 theme-panel-footer">
-        <button type="button" disabled data-i18n-aria-label="aiPanel.ctaAria" data-i18n-title="aiPanel.ctaTitle" aria-label="Limpiar audio con IA (Se activará tras el análisis)" title="Limpiar Audio con IA" class="theme-btn-ai-cta w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold border shadow-sm">
+        <button
+          id="btn-ai-clean-all"
+          type="button"
+          disabled
+          aria-disabled="true"
+          data-i18n-aria-label="aiPanel.ctaAria"
+          data-i18n-title="aiPanel.ctaTitle"
+          aria-label="Limpiar audio con IA (Se activará tras el análisis)"
+          title="Limpiar Audio con IA"
+          class="theme-btn-ai-cta w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold border shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.98] transition-all"
+        >
           <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
-          <span data-i18n="aiPanel.ctaBtn">Limpiar Audio con IA</span>
+          <span id="btn-ai-clean-all-text" data-i18n="aiPanel.ctaBtn">Limpiar Audio con IA</span>
         </button>
       </div>
     </aside>
@@ -288,6 +327,9 @@
       <input id="volume-slider" type="range" min="0" max="100" value="80" data-i18n-aria-label="transport.volumeAria" data-i18n-title="transport.volumeTitle" aria-label="Control de volumen de reproducción" title="Volumen" class="w-24 lg:w-28">
     </div>
   </footer>
+
+  <!-- Contenedor de Notificaciones Toast flotantes (Fase 15) -->
+  <div id="toast-container" class="fixed bottom-20 right-6 z-50 flex flex-col gap-2 pointer-events-none" aria-live="polite"></div>
 
 </body>
 </html>

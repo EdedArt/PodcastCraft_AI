@@ -344,6 +344,9 @@ function applyTranslations() {
   if (typeof renderTimelineTracks === 'function') {
     renderTimelineTracks();
   }
+  if (typeof renderAiPanel === 'function') {
+    renderAiPanel();
+  }
   if (typeof renderIcons === 'function') {
     renderIcons();
   }

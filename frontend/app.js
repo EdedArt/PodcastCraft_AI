@@ -197,8 +197,15 @@ window.PodcastCraft = {
   setLanguage: (lang) => (typeof setLanguage === 'function' ? setLanguage(lang) : null),
   t: (key) => (typeof t === 'function' ? t(key) : key),
   applyTranslations: () => (typeof applyTranslations === 'function' ? applyTranslations() : null),
-  generateMockTranscript: (clip) => generateMockTranscript(clip)
+  generateMockTranscript: (clip) => generateMockTranscript(clip),
+  transcribeSelectedClip: () => transcribeSelectedClip(),
+  toggleSegmentMark: (clipId, segId) => toggleSegmentMark(clipId, segId),
+  confirmSegmentCleanup: (clipId) => confirmSegmentCleanup(clipId),
+  cleanAllFillers: (clipId) => cleanAllFillers(clipId),
+  renderAiPanel: () => renderAiPanel(),
+  showToast: (msg, type) => showToast(msg, type)
 };
+window.renderAiPanel = renderAiPanel;
 
 
 /* ==========================================================================
@@ -331,6 +338,215 @@ function generateMockTranscript(clip) {
     segments.push({ id: `seg-${clip.id}-${i}`, text, isFiller, markedForDeletion: false });
   }
   return segments;
+}
+
+/**
+ * Muestra una notificación toast temporal y accesible (Fase 15).
+ * @param {string} message - Texto del mensaje
+ * @param {'success' | 'info' | 'warning'} [type='success']
+ */
+function showToast(message, type = 'success') {
+  let container = $('#toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'fixed bottom-20 right-6 z-50 flex flex-col gap-2 pointer-events-none';
+    container.setAttribute('aria-live', 'polite');
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  const bgClass = type === 'warning'
+    ? 'bg-amber-600 text-white'
+    : 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border border-slate-700/50 dark:border-slate-300';
+
+  toast.className = `px-3.5 py-2 rounded-lg text-xs font-semibold shadow-xl flex items-center gap-2 transform translate-y-2 opacity-0 transition-all duration-200 pointer-events-auto ${bgClass}`;
+  toast.innerHTML = `
+    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 dark:text-emerald-600 shrink-0"></i>
+    <span>${escapeHtml(message)}</span>
+  `;
+
+  container.appendChild(toast);
+  renderIcons();
+
+  requestAnimationFrame(() => {
+    toast.classList.remove('translate-y-2', 'opacity-0');
+  });
+
+  setTimeout(() => {
+    toast.classList.add('translate-y-2', 'opacity-0');
+    setTimeout(() => {
+      toast.remove();
+    }, 250);
+  }, 3000);
+}
+
+/**
+ * Inicia la transcripción simulada del clip actualmente seleccionado en el timeline (Fase 15).
+ */
+function transcribeSelectedClip() {
+  const selectedClipId = state.selection.clipId;
+  if (!selectedClipId) return;
+
+  let targetClip = null;
+  for (const track of state.tracks) {
+    const found = track.clips?.find((c) => c.id === selectedClipId);
+    if (found) {
+      targetClip = found;
+      break;
+    }
+  }
+  if (!targetClip) return;
+
+  // Estado 'processing' inmediato
+  const nextTranscriptByClip = {
+    ...state.ai.transcriptByClip,
+    [selectedClipId]: {
+      status: 'processing',
+      segments: []
+    }
+  };
+
+  setState({
+    ai: {
+      ...state.ai,
+      transcriptByClip: nextTranscriptByClip
+    }
+  });
+
+  // Retraso simulado de 1.5s
+  setTimeout(() => {
+    // Verificar si el clip todavía existe en el proyecto
+    const stillExists = state.tracks.some((t) => t.clips?.some((c) => c.id === selectedClipId));
+    if (!stillExists) return;
+
+    const generated = generateMockTranscript(targetClip);
+    const updated = {
+      ...state.ai.transcriptByClip,
+      [selectedClipId]: {
+        status: 'done',
+        segments: generated
+      }
+    };
+
+    setState({
+      ai: {
+        ...state.ai,
+        transcriptByClip: updated
+      }
+    });
+  }, 1500);
+}
+
+/**
+ * Alterna el marcado para eliminación de una palabra en la transcripción de un clip (Fase 15).
+ * @param {string} clipId
+ * @param {string} segmentId
+ */
+function toggleSegmentMark(clipId, segmentId) {
+  const clipData = state.ai.transcriptByClip?.[clipId];
+  if (!clipData || !clipData.segments) return;
+
+  const nextSegments = clipData.segments.map((seg) => {
+    if (seg.id === segmentId) {
+      return { ...seg, markedForDeletion: !seg.markedForDeletion };
+    }
+    return seg;
+  });
+
+  setState({
+    ai: {
+      ...state.ai,
+      transcriptByClip: {
+        ...state.ai.transcriptByClip,
+        [clipId]: {
+          ...clipData,
+          segments: nextSegments
+        }
+      }
+    }
+  });
+}
+
+/**
+ * Elimina definitivamente todas las palabras marcadas para borrado (markedForDeletion) (Fase 15).
+ * @param {string} clipId
+ */
+function confirmSegmentCleanup(clipId) {
+  const clipData = state.ai.transcriptByClip?.[clipId];
+  if (!clipData || !clipData.segments) return;
+
+  const markedCount = clipData.segments.filter((s) => s.markedForDeletion).length;
+  if (markedCount === 0) return;
+
+  const nextSegments = clipData.segments.filter((s) => !s.markedForDeletion);
+
+  setState({
+    ai: {
+      ...state.ai,
+      transcriptByClip: {
+        ...state.ai.transcriptByClip,
+        [clipId]: {
+          ...clipData,
+          segments: nextSegments
+        }
+      }
+    }
+  });
+
+  const msg = typeof t === 'function'
+    ? t('aiPanel.wordsRemoved', { count: markedCount })
+    : `${markedCount} palabra(s) eliminada(s)`;
+  showToast(msg);
+}
+
+/**
+ * Limpieza automática masiva: borra todas las muletillas detectadas (isFiller: true) de una vez (Fase 15).
+ * @param {string} clipId
+ */
+function cleanAllFillers(clipId) {
+  const clipData = state.ai.transcriptByClip?.[clipId];
+  if (!clipData || !clipData.segments) return;
+
+  const fillersCount = clipData.segments.filter((s) => s.isFiller).length;
+  if (fillersCount === 0) return;
+
+  setState({
+    ai: {
+      ...state.ai,
+      isMassCleaning: true
+    }
+  });
+
+  setTimeout(() => {
+    // Si el clip sigue existiendo
+    const currentClipData = state.ai.transcriptByClip?.[clipId];
+    if (!currentClipData || !currentClipData.segments) {
+      setState({ ai: { ...state.ai, isMassCleaning: false } });
+      return;
+    }
+
+    const nextSegments = currentClipData.segments.filter((s) => !s.isFiller);
+
+    setState({
+      ai: {
+        ...state.ai,
+        isMassCleaning: false,
+        transcriptByClip: {
+          ...state.ai.transcriptByClip,
+          [clipId]: {
+            ...currentClipData,
+            segments: nextSegments
+          }
+        }
+      }
+    });
+
+    const msg = typeof t === 'function'
+      ? t('aiPanel.cleanAllToast', { count: fillersCount })
+      : `${fillersCount} muletilla(s) eliminada(s) con éxito`;
+    showToast(msg);
+  }, 1500);
 }
 
 /**
@@ -968,6 +1184,204 @@ function renderTimelineTracks() {
 }
 
 /**
+ * Renderiza el panel de Asistente de IA (#col-ai-panel) en función del clip seleccionado
+ * y el estado de su transcripción en state.ai.transcriptByClip (Fase 15).
+ */
+function renderAiPanel() {
+  const btnTranscribe = $('#btn-transcribe-clip');
+  const btnTranscribeText = $('#btn-transcribe-text');
+  const btnConfirmCleanup = $('#btn-confirm-cleanup');
+  const btnCleanAll = $('#btn-ai-clean-all');
+  const btnCleanAllText = $('#btn-ai-clean-all-text');
+  const transcriptContainer = $('#ai-transcript');
+
+  if (!transcriptContainer) return;
+
+  const selectedClipId = state.selection.clipId;
+  let targetClip = null;
+  if (selectedClipId) {
+    for (const track of state.tracks) {
+      const c = track.clips?.find((item) => item.id === selectedClipId);
+      if (c) {
+        targetClip = c;
+        break;
+      }
+    }
+  }
+
+  // 1. Sin clip seleccionado
+  if (!targetClip) {
+    if (btnTranscribe) {
+      btnTranscribe.disabled = true;
+      btnTranscribe.setAttribute('aria-disabled', 'true');
+      if (btnTranscribeText) btnTranscribeText.textContent = typeof t === 'function' ? t('aiPanel.transcribe') : 'Transcribir';
+    }
+    if (btnConfirmCleanup) {
+      btnConfirmCleanup.classList.add('hidden');
+    }
+    if (btnCleanAll) {
+      btnCleanAll.disabled = true;
+      btnCleanAll.setAttribute('aria-disabled', 'true');
+      if (btnCleanAllText) btnCleanAllText.textContent = typeof t === 'function' ? t('aiPanel.ctaBtn') : 'Limpiar Audio con IA';
+    }
+
+    transcriptContainer.innerHTML = `
+      <div class="flex-1 flex flex-col items-center justify-center p-6 text-center border-2 border-dashed rounded-xl theme-empty-box">
+        <div class="w-12 h-12 rounded-full border flex items-center justify-center theme-ai-icon-wrapper mb-3 shadow-sm">
+          <i data-lucide="message-square-text" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-xs font-semibold theme-text-primary mb-1">${typeof t === 'function' ? t('aiPanel.transcriptEmptyTitle') : 'La transcripción aparecerá aquí'}</h3>
+        <p class="text-[11px] theme-text-secondary leading-relaxed max-w-[210px]">
+          ${typeof t === 'function' ? t('aiPanel.transcriptEmptyDesc') : 'El modelo transcribirá tus archivos de audio y resaltará muletillas y silencios automáticamente.'}
+        </p>
+        <span class="mt-3 text-[11px] font-medium text-violet-600 dark:text-violet-400 bg-violet-500/10 px-2.5 py-1 rounded-full text-center">
+          ${typeof t === 'function' ? t('aiPanel.emptyStateHint') : 'Selecciona un clip en la línea de tiempo para comenzar'}
+        </span>
+      </div>
+    `;
+    renderIcons();
+    return;
+  }
+
+  // 2. Con clip seleccionado: consultar estado
+  const clipData = state.ai.transcriptByClip?.[targetClip.id];
+  const status = clipData?.status || 'idle';
+  const segments = clipData?.segments || [];
+  const markedCount = segments.filter((s) => s.markedForDeletion).length;
+  const fillerCount = segments.filter((s) => s.isFiller).length;
+
+  // Botón Transcribir / Volver a transcribir
+  if (btnTranscribe) {
+    if (status === 'processing') {
+      btnTranscribe.disabled = true;
+      btnTranscribe.setAttribute('aria-disabled', 'true');
+      if (btnTranscribeText) btnTranscribeText.textContent = typeof t === 'function' ? t('aiPanel.processing') : 'Transcribiendo...';
+    } else {
+      btnTranscribe.disabled = false;
+      btnTranscribe.removeAttribute('aria-disabled');
+      const label = status === 'done'
+        ? (typeof t === 'function' ? t('aiPanel.retranscribe') : 'Volver a transcribir')
+        : (typeof t === 'function' ? t('aiPanel.transcribe') : 'Transcribir');
+      if (btnTranscribeText) btnTranscribeText.textContent = label;
+    }
+  }
+
+  // Botón Confirmar borrado manual
+  if (btnConfirmCleanup) {
+    if (status === 'done' && markedCount > 0) {
+      btnConfirmCleanup.classList.remove('hidden');
+      const tooltip = typeof t === 'function' ? `${t('aiPanel.confirmCleanup')} (${markedCount})` : `Confirmar borrado (${markedCount})`;
+      btnConfirmCleanup.title = tooltip;
+      btnConfirmCleanup.setAttribute('aria-label', tooltip);
+    } else {
+      btnConfirmCleanup.classList.add('hidden');
+    }
+  }
+
+  // Botón Limpieza masiva con IA
+  if (btnCleanAll) {
+    if (state.ai.isMassCleaning) {
+      btnCleanAll.disabled = true;
+      btnCleanAll.setAttribute('aria-disabled', 'true');
+      if (btnCleanAllText) btnCleanAllText.textContent = typeof t === 'function' ? t('aiPanel.processing') : 'Procesando...';
+    } else if (status === 'done' && fillerCount > 0) {
+      btnCleanAll.disabled = false;
+      btnCleanAll.removeAttribute('aria-disabled');
+      const label = typeof t === 'function' ? t('aiPanel.cleanAllWithCount', { count: fillerCount }) : `Limpiar Audio con IA (${fillerCount} detectadas)`;
+      if (btnCleanAllText) btnCleanAllText.textContent = label;
+    } else {
+      btnCleanAll.disabled = true;
+      btnCleanAll.setAttribute('aria-disabled', 'true');
+      if (btnCleanAllText) btnCleanAllText.textContent = typeof t === 'function' ? t('aiPanel.ctaBtn') : 'Limpiar Audio con IA';
+    }
+  }
+
+  // Contenido de la transcripción
+  if (status === 'idle') {
+    transcriptContainer.innerHTML = `
+      <div class="flex-1 flex flex-col items-center justify-center p-6 text-center border-2 border-dashed rounded-xl theme-empty-box">
+        <div class="w-12 h-12 rounded-full border flex items-center justify-center theme-ai-icon-wrapper mb-3 shadow-sm">
+          <i data-lucide="message-square-text" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-xs font-semibold theme-text-primary mb-1">${typeof t === 'function' ? t('aiPanel.transcriptEmptyTitle') : 'La transcripción aparecerá aquí'}</h3>
+        <p class="text-[11px] theme-text-secondary leading-relaxed max-w-[210px]">
+          ${typeof t === 'function' ? t('aiPanel.transcriptEmptyDesc') : 'El modelo transcribirá tus archivos de audio y resaltará muletillas y silencios automáticamente.'}
+        </p>
+        <span class="mt-3 text-[11px] font-medium text-violet-600 dark:text-violet-400 bg-violet-500/10 px-2.5 py-1 rounded-full text-center">
+          ${typeof t === 'function' ? t('aiPanel.selectedClipHint') : 'Clip seleccionado. Haz clic en «Transcribir» para comenzar.'}
+        </span>
+      </div>
+    `;
+  } else if (status === 'processing') {
+    transcriptContainer.innerHTML = `
+      <div id="ai-transcript-loading" class="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <div class="w-14 h-14 rounded-2xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center text-violet-600 dark:text-violet-400 mb-4 shadow-lg glow-ai animate-ai-pulse">
+          <i data-lucide="sparkles" class="w-7 h-7"></i>
+        </div>
+        <h4 class="text-xs font-semibold theme-text-primary mb-1 animate-pulse">
+          ${typeof t === 'function' ? t('aiPanel.processing') : 'Transcribiendo audio y detectando muletillas...'}
+        </h4>
+        <p class="text-[11px] theme-text-muted">
+          ${escapeHtml(targetClip.name)} (${formatDuration(targetClip.duration)})
+        </p>
+      </div>
+    `;
+  } else if (status === 'done') {
+    const summaryFillersText = fillerCount > 0
+      ? (typeof t === 'function' ? t('aiPanel.fillersCount', { count: fillerCount }) : `${fillerCount} muletillas detectadas`)
+      : (typeof t === 'function' ? t('aiPanel.noFillers') : 'Sin muletillas detectadas');
+
+    const chipsHtml = segments.map((seg) => {
+      let classes = 'ai-word-chip ';
+      if (seg.isFiller) {
+        classes += 'ai-word-filler ';
+      }
+      if (seg.markedForDeletion) {
+        classes += 'ai-word-marked ';
+      }
+
+      const wordAria = seg.isFiller
+        ? (typeof t === 'function' ? t('aiPanel.fillerWordAria', { text: seg.text }) : `Muletilla: ${seg.text}`)
+        : (typeof t === 'function' ? t('aiPanel.wordAria', { text: seg.text }) : `Palabra: ${seg.text}`);
+
+      const stateAria = seg.markedForDeletion
+        ? (typeof t === 'function' ? t('aiPanel.markedAria') : 'Marcada para eliminar')
+        : (typeof t === 'function' ? t('aiPanel.notMarkedAria') : 'No marcada');
+
+      const fullAria = `${wordAria}, ${stateAria}`;
+
+      return `
+        <span
+          id="seg-${seg.id}"
+          data-segment-id="${seg.id}"
+          role="button"
+          tabindex="0"
+          aria-pressed="${seg.markedForDeletion ? 'true' : 'false'}"
+          aria-label="${escapeHtml(fullAria)}"
+          class="${classes.trim()}"
+        >${escapeHtml(seg.text)}</span>
+      `;
+    }).join(' ');
+
+    transcriptContainer.innerHTML = `
+      <div id="ai-transcript-segments" class="flex flex-col gap-2.5">
+        <div class="flex items-center justify-between text-[11px] font-medium pb-2 border-b theme-text-secondary">
+          <span class="truncate max-w-[170px] font-semibold theme-text-primary">${escapeHtml(targetClip.name)}</span>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded-full ${fillerCount > 0 ? 'bg-amber-500/15 text-amber-800 dark:text-amber-200 border border-amber-500/30' : 'theme-text-muted'}">
+            ${summaryFillersText}
+          </span>
+        </div>
+        <div class="leading-relaxed text-justify p-1">
+          ${chipsHtml || `<span class="italic text-xs theme-text-muted">Clip vacío o sin palabras detectadas.</span>`}
+        </div>
+      </div>
+    `;
+  }
+
+  renderIcons();
+}
+
+/**
  * ÚNICO punto de invocación de Lucide Icons en el ciclo de vida.
  */
 function renderIcons() {
@@ -999,6 +1413,12 @@ function renderAll(currentState = state, prevState) {
     currentState.project.zoom !== prevState?.project?.zoom
   );
 
+  const aiChanged = isInitial || (
+    currentState.ai !== prevState?.ai ||
+    currentState.selection.clipId !== prevState?.selection?.clipId ||
+    currentState.tracks !== prevState?.tracks
+  );
+
   if (projectChanged) {
     renderTopbar();
     renderTransport();
@@ -1013,6 +1433,10 @@ function renderAll(currentState = state, prevState) {
     renderTimelineRuler();
     renderTimelineTracks();
     renderTransport();
+  }
+
+  if (aiChanged) {
+    renderAiPanel();
   }
 
   renderIcons();
@@ -2244,6 +2668,17 @@ function bindTimelineEvents() {
       return;
     }
 
+    // Guardia Fase 15: si el foco está dentro de #ai-transcript sobre una palabra enfocada, Delete/Backspace alterna su marcado
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      const activeWordEl = document.activeElement ? document.activeElement.closest('#ai-transcript [data-segment-id]') : null;
+      if (activeWordEl && state.selection.clipId) {
+        e.preventDefault();
+        const segId = activeWordEl.dataset.segmentId;
+        toggleSegmentMark(state.selection.clipId, segId);
+        return;
+      }
+    }
+
     if ((e.key === 'Delete' || e.key === 'Backspace') && state.selection.clipId) {
       e.preventDefault();
       const clipIdToDelete = state.selection.clipId;
@@ -2347,6 +2782,58 @@ function bindViewportGuard() {
   checkViewport();
 }
 
+/**
+ * Vincula los eventos del Panel de IA (Fase 15).
+ */
+function bindAiPanelEvents() {
+  const btnTranscribe = $('#btn-transcribe-clip');
+  if (btnTranscribe) {
+    btnTranscribe.addEventListener('click', () => {
+      if (btnTranscribe.disabled || btnTranscribe.getAttribute('aria-disabled') === 'true') return;
+      transcribeSelectedClip();
+    });
+  }
+
+  const btnConfirmCleanup = $('#btn-confirm-cleanup');
+  if (btnConfirmCleanup) {
+    btnConfirmCleanup.addEventListener('click', () => {
+      if (state.selection.clipId) {
+        confirmSegmentCleanup(state.selection.clipId);
+      }
+    });
+  }
+
+  const btnCleanAll = $('#btn-ai-clean-all');
+  if (btnCleanAll) {
+    btnCleanAll.addEventListener('click', () => {
+      if (btnCleanAll.disabled || btnCleanAll.getAttribute('aria-disabled') === 'true') return;
+      if (state.selection.clipId) {
+        cleanAllFillers(state.selection.clipId);
+      }
+    });
+  }
+
+  const transcriptContainer = $('#ai-transcript');
+  if (transcriptContainer) {
+    transcriptContainer.addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-segment-id]');
+      if (!chip || !state.selection.clipId) return;
+      const segId = chip.dataset.segmentId;
+      toggleSegmentMark(state.selection.clipId, segId);
+    });
+
+    transcriptContainer.addEventListener('keydown', (e) => {
+      const chip = e.target.closest('[data-segment-id]');
+      if (!chip || !state.selection.clipId) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        const segId = chip.dataset.segmentId;
+        toggleSegmentMark(state.selection.clipId, segId);
+      }
+    });
+  }
+}
+
 
 /* ==========================================================================
    10. INIT
@@ -2374,6 +2861,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindTopbarEvents();
   bindImportAudioEvents();
   bindTimelineEvents();
+  bindAiPanelEvents();
   bindGlobalDragGuard();
   bindViewportGuard();
 
@@ -2382,5 +2870,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderTimelineRuler();
   });
 
-  console.info('[PodcastCraft AI] Fase 13 (Persistencia Real y Autoguardado) inicializado.');
+  console.info('[PodcastCraft AI] Fase 15 (Panel de IA — Transcripción y Limpieza) inicializado.');
 });

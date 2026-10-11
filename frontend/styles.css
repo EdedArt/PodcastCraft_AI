@@ -632,3 +632,74 @@ body.is-trimming * {
   transform: translateX(0px);
   will-change: transform;
 }
+
+/* ==========================================================================
+   11. Panel de IA — Transcripción y Detección de Muletillas (Fase 15)
+   ========================================================================== */
+
+/* Chip de palabra interactivo */
+.ai-word-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  margin: 2px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.35;
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  outline: none;
+  color: var(--text-primary);
+}
+
+.ai-word-chip:hover {
+  background-color: rgba(100, 116, 139, 0.12);
+}
+
+.ai-word-chip:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 1px;
+}
+
+/* Muletilla detectada (Fondo ámbar con contraste WCAG AAA > 7:1) */
+.ai-word-filler {
+  background-color: rgba(245, 158, 11, 0.16);
+  color: #92400e; /* amber-800, contraste 7.47:1 sobre fondo claro */
+  border-color: rgba(245, 158, 11, 0.45);
+  font-weight: 600;
+}
+
+.ai-word-filler:hover {
+  background-color: rgba(245, 158, 11, 0.26);
+}
+
+[data-theme="dark"] .ai-word-filler,
+.dark .ai-word-filler {
+  background-color: rgba(245, 158, 11, 0.22);
+  color: #fde68a; /* amber-200, contraste 12.2:1 sobre fondo oscuro */
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+[data-theme="dark"] .ai-word-filler:hover,
+.dark .ai-word-filler:hover {
+  background-color: rgba(245, 158, 11, 0.32);
+}
+
+/* Palabra marcada para eliminar */
+.ai-word-marked {
+  text-decoration: line-through;
+  opacity: 0.70;
+  background-color: rgba(244, 63, 94, 0.15) !important;
+  color: #be123c !important; /* rose-700, contraste 6.35:1 sobre fondo claro */
+  border: 1px dashed rgba(244, 63, 94, 0.7) !important;
+}
+
+[data-theme="dark"] .ai-word-marked,
+.dark .ai-word-marked {
+  background-color: rgba(244, 63, 94, 0.25) !important;
+  color: #fda4af !important; /* rose-300, contraste 9.1:1 sobre fondo oscuro */
+  border-color: rgba(244, 63, 94, 0.75) !important;
+}
