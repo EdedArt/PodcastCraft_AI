@@ -127,6 +127,7 @@
 
 /* Tema OSCURO — Valores existentes del proyecto */
 [data-theme="dark"] {
+  --track-control-strip-width: 40px;    /* Franja de control minimalista de carriles (Fase 13.5) */
   --bg-primary: #020617;                /* slate-950 */
   --bg-panel: #0f172a;                  /* slate-900 */
   --bg-panel-header: rgba(15, 23, 42, 0.9);
@@ -611,11 +612,18 @@ body.is-trimming * {
 }
 
 /* 10. Playhead de Alta Fidelidad adaptable */
+.timeline-control-strip {
+  width: var(--track-control-strip-width, 40px);
+}
+.timeline-ruler-gutter {
+  width: var(--track-control-strip-width, 40px);
+}
+
 #timeline-playhead {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: var(--track-control-strip-width);
+  left: var(--track-control-strip-width, 40px);
   width: 2px;
   background: var(--playhead-color);
   box-shadow: 0 0 4px 1px var(--playhead-glow);
