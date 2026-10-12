@@ -468,7 +468,8 @@ podcastcraft-ai/
 | **4** | **Carriles Dinámicos Ilimitados + Import MP3 + Edición (Trim/Split/Delete)** | **Completado ✅** |
 | **5** | **Playhead de Alta Fidelidad + Scrubbing en Regla (rAF 60 FPS + A11y Slider)** | **Completado ✅** |
 | **6** | **Motor de simulación de IA (transcripción + limpieza de muletillas manual y masiva + toasts)** | **Completado (Fase 15) ✅** |
-| 7 | Pulido final, microinteracciones, atajos globales y **empaquetado nativo (.exe con Electron Builder)** | Planificado |
+| **7** | **Atajos globales de teclado + Deshacer (Ctrl+Z) + Auditoría visual** | **Completado (Fase 16) ✅** |
+| 8 | Pulido final y **empaquetado nativo (.exe con Electron Builder)** | Planificado (Fase 17+) |
 
 ---
 
@@ -498,6 +499,12 @@ PodcastCraft.transcribeSelectedClip();
 
 // 7. Limpiar muletillas masivamente del clip activo
 PodcastCraft.cleanAllFillers(PodcastCraft.getState().selection.clipId);
+
+// 8. Deshacer última acción estructural (Fase 16)
+PodcastCraft.undo();
+
+// 9. Consultar pila de deshacer en memoria
+console.log('Historial de undo en sesión:', PodcastCraft.undoStack.length);
 ```
 
 ---
@@ -599,5 +606,78 @@ Para cumplir con los más altos estándares cromáticos en ambos temas:
 2. **Persistencia de sesión (no almacenada en backend):** La transcripción de los clips es un estado de trabajo en memoria (`state.ai.transcriptByClip`), consistente con la selección (`state.selection`). Al recargar la página no persiste en el servidor REST.
 3. **Generación vinculada al idioma activo al transcribir:** El texto se genera en el idioma activo en el momento de la transcripción. Si el usuario conmuta entre Español e Inglés posteriormente, el texto de la transcripción no se retraduce retroactivamente (es audio transcrito simulado, no chrome de la interfaz).
 4. **División de clips (Split):** Al dividir un clip en dos mitades en el timeline, ambas mitades nacen sin transcripción previa y deben transcribirse de manera independiente.
+
+---
+
+## ⌨️ 9. Fase 16: Atajos de Teclado DAW + Deshacer (Ctrl+Z) + Auditoría Final de Consistencia Visual
+
+Esta fase cierra la construcción funcional de la estación de trabajo digital antes de la fase de empaquetado nativo con Electron, implementando un sistema de atajos de teclado estándar de la industria, un motor de reversión histórica (*Undo*) acotado y una auditoría rigurosa de consistencia cromática, accesibilidad e internacionalización.
+
+### 9.1 Tabla Completa de Atajos de Teclado
+
+| Atajo | Acción DAW / Timeline | Ámbito / Contexto |
+|---|---|---|
+| **`Espacio`** | Reproducir / Pausar reproducción de audio | Global (excepto en inputs) |
+| **`J`** | Retroceder 5 segundos en el tiempo de reproducción | Global (excepto en inputs) |
+| **`L`** | Avanzar 5 segundos en el tiempo de reproducción | Global (excepto en inputs) |
+| **`M`** | Silenciar / Activar sonido (*Mute* / *Unmute*) | Global (excepto en inputs) |
+| **`Ctrl+Z`** / **`Cmd+Z`** | Deshacer la última acción estructural del timeline | Global (en inputs delega al undo nativo del navegador) |
+| **`Delete`** / **`Backspace`** | Eliminar clip seleccionado en el timeline | Timeline / Global (con clip seleccionado) |
+| **`Delete`** / **`Backspace`** | Alternar marcado de palabra para borrado | En foco sobre ficha de transcripción (`#ai-transcript`) |
+| **`ArrowLeft`** / **`ArrowRight`** | Scrubbing continuo manual (±5s) | En foco sobre la regla de tiempo (`#timeline-ruler`) |
+| **`Enter`** / **`Espacio`** | Alternar marcado de ficha de palabra | En foco sobre ficha de transcripción (`#ai-transcript`) |
+
+> [!IMPORTANT]
+> **Guardia de Foco Contextual:** Todos los atajos de teclado DAW respetan estrictamente la interacción con campos de texto (`<input>`, `<textarea>`, `contentEditable`). Si el usuario escribe en un campo de texto (por ejemplo el título del proyecto), presionar `J`, `L`, `M` o `Espacio` escribe el carácter correspondiente sin disparar eventos de transporte. `Ctrl+Z` dentro de un campo de texto permite que el navegador ejecute su operación nativa de deshacer sobre el texto editado sin alterar el timeline.
+
+### 9.2 Arquitectura y Alcance del Deshacer (*Undo*)
+
+Se diseñó una pila simple y determinista de snapshots profundos (`undoStack`) con un límite estricto de **20 pasos**:
+
+```javascript
+const undoStack = [];
+const MAX_UNDO_STEPS = 20;
+
+function pushUndoSnapshot() {
+  undoStack.push(JSON.parse(JSON.stringify(state.tracks)));
+  if (undoStack.length > MAX_UNDO_STEPS) undoStack.shift();
+  updateUndoButtonState();
+}
+```
+
+#### Acciones Estructurales Cubiertas (Exactamente 6):
+1. **Crear carril (`createTrack`):** Captura el estado previo antes de agregar el carril dinámico.
+2. **Eliminar carril (`deleteTrack`):** Tras confirmar el diálogo de borrado, captura el carril y todos sus clips para permitir su restauración íntegra.
+3. **Soltar un clip en un carril (*Drop*):** Captura el carril destino antes de insertar la nueva instancia de clip.
+4. **Eliminar un clip del timeline (`Delete` / `Backspace`):** Captura la estructura antes de remover el clip seleccionado.
+5. **Recortar un clip (*Trim* con asas):** Al soltar el puntero en `onPointerUp`, si la duración o el inicio sufrieron cambios reales, registra el snapshot previo.
+6. **Dividir un clip (*Split* por doble clic):** Captura el clip entero antes de separarlo en dos mitades independientes.
+
+#### Acciones Deliberadamente Fuera de Alcance:
+- **Preferencias de interfaz:** Cambios de tema (claro/oscuro) e idioma (es/en) no son ediciones del timeline.
+- **Módulo de IA:** Transcripciones simuladas y eliminación de muletillas corresponden al estado de sesión de IA.
+- **Biblioteca:** Importación de archivos MP3 al catálogo de medios.
+- **Navegación:** Scrubbing, búsqueda temporal y reproducción.
+
+#### Características Operativas:
+- **Alcance de Sesión:** La pila de snapshots reside en memoria durante la sesión del navegador. Al recargar la página, la pila se vacía de forma esperada mientras que el estado guardado del proyecto se restaura fielmente desde el backend REST (`/api/project`).
+- **Autoguardado Automático:** Dado que `undo()` muta `state.tracks` a través de `setState()`, el motor de persistencia de la Fase 13 activa inmediatamente el debouncer de 2s para sincronizar el estado restaurado en el servidor local.
+- **Control Visual `#btn-undo`:** Ubicado en la cabecera de la línea de tiempo junto al botón de añadir carril (`+`), con icono Lucide `undo-2`, tooltip bilingüe `"Deshacer (Ctrl+Z)"` y estado accesible (`disabled`, `aria-disabled="true"`) sincronizado con la disponibilidad de pasos en la pila.
+
+### 9.3 Resultados de la Auditoría Final de Consistencia Visual (Bloque C)
+
+1. **Regla de Oro Cromática:**
+   - Auditoría integral de todas las hojas de estilo y clases Tailwind: cero uso espurio de violeta/fucsia.
+   - El violeta (`#9333ea`, `#8b5cf6`, `focus-visible:ring-violet-500`) se mantiene estrictamente restringido al asistente de IA, branding, botón de reproducción Play y anillos de foco accesibles.
+   - Las muletillas utilizan ámbar (`#92400e` / `#fde68a`, WCAG AAA > 7:1) y las palabras marcadas utilizan rose (`#be123c` / `#fda4af`, WCAG AA/AAA).
+2. **Cobertura Completa de i18n:**
+   - Se auditó la ausencia de strings huérfanos. Se incorporaron y tradujeron claves complementarias (`aiPanel.noWordsDetected`, `timeline.undoTitle`, `timeline.undoAria`, `timeline.undoToast`).
+3. **Anillos de Foco Unificados:**
+   - Todos los controles interactivos (`#btn-undo`, `#btn-add-track`, botones de transporte, fichas de transcripción) implementan el mismo anillo de foco accesible `focus-visible:ring-2 focus-visible:ring-violet-500` con `outline-none`.
+4. **Estados de Accesibilidad (`aria-disabled`):**
+   - Se verificó que `#btn-undo`, `#btn-play`, `#btn-transcribe-clip` y `#btn-ai-clean-all` alternan sincronizadamente tanto el atributo HTML `disabled` como `aria-disabled="true|false"` para lectores de pantalla.
+5. **Estrategia de Cache-Busting (`?v=`):**
+   - Durante el desarrollo local contra servidor web estático, las etiquetas de versión (`?v=16.0`) garantizan la invalidación instantánea de caché en hojas de estilo y scripts. En la fase final de empaquetado como aplicación de escritorio nativa con Electron (Fase 17+), los archivos se resuelven directamente vía protocolo local `file://`, donde los query strings de caché resultan innecesarios y podrán removerse limpiamente.
+
 
 
