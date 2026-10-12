@@ -203,7 +203,10 @@ window.PodcastCraft = {
   confirmSegmentCleanup: (clipId) => confirmSegmentCleanup(clipId),
   cleanAllFillers: (clipId) => cleanAllFillers(clipId),
   renderAiPanel: () => renderAiPanel(),
-  showToast: (msg, type) => showToast(msg, type)
+  showToast: (msg, type) => showToast(msg, type),
+  undo: () => undo(),
+  pushUndoSnapshot: () => pushUndoSnapshot(),
+  get undoStack() { return undoStack; }
 };
 window.renderAiPanel = renderAiPanel;
 
@@ -643,14 +646,101 @@ function $$(selector) {
 
 
 /* ==========================================================================
-   5. TRACK MANAGEMENT (Sprint 4 — 2)
+   5. TRACK MANAGEMENT & UNDO (Sprint 4 — 2, Fase 16)
    ========================================================================== */
+
+/**
+ * Pila de snapshots profundos de carriles para deshacer acciones estructurales (Fase 16).
+ * Alcance acotado: sólo sesión, máximo 20 pasos.
+ * @type {Array<Array<object>>}
+ */
+const undoStack = [];
+const MAX_UNDO_STEPS = 20;
+
+/**
+ * Guarda un snapshot profundo del estado de carriles (tracks) en la pila de deshacer (Fase 16).
+ */
+function pushUndoSnapshot() {
+  try {
+    undoStack.push(JSON.parse(JSON.stringify(state.tracks)));
+    if (undoStack.length > MAX_UNDO_STEPS) {
+      undoStack.shift();
+    }
+    updateUndoButtonState();
+  } catch (err) {
+    console.warn('[PodcastCraft AI] Error guardando snapshot de deshacer:', err);
+  }
+}
+
+/**
+ * Sincroniza el estado visual y accesible del botón de deshacer (#btn-undo).
+ */
+function updateUndoButtonState() {
+  const btnUndo = $('#btn-undo');
+  if (!btnUndo) return;
+  const canUndo = undoStack.length > 0;
+  btnUndo.disabled = !canUndo;
+  if (canUndo) {
+    btnUndo.removeAttribute('aria-disabled');
+    btnUndo.classList.remove('opacity-40', 'cursor-not-allowed');
+  } else {
+    btnUndo.setAttribute('aria-disabled', 'true');
+    btnUndo.classList.add('opacity-40', 'cursor-not-allowed');
+  }
+}
+
+/**
+ * Deshace la última acción estructural del timeline restaurando el snapshot previo (Fase 16).
+ */
+function undo() {
+  if (undoStack.length === 0) return;
+  const previousTracks = undoStack.pop();
+  updateUndoButtonState();
+
+  // Limpiar selección de clip si ya no existe en el estado restaurado
+  let nextClipId = state.selection.clipId;
+  if (nextClipId) {
+    const exists = previousTracks.some((t) => t.clips && t.clips.some((c) => c.id === nextClipId));
+    if (!exists) {
+      nextClipId = null;
+    }
+  }
+
+  const nextDuration = recomputeProjectDuration(previousTracks);
+  const remainingClips = previousTracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
+
+  if (remainingClips === 0) {
+    if (typeof globalAudio !== 'undefined' && globalAudio) {
+      globalAudio.pause();
+      globalAudio.src = '';
+    }
+    stopPlayheadLoop();
+    activePlayingClipStart = 0;
+    activePlayingClipDuration = 0;
+  }
+
+  setState({
+    tracks: previousTracks,
+    selection: { ...state.selection, clipId: nextClipId },
+    project: {
+      ...state.project,
+      duration: nextDuration,
+      currentTime: Math.min(state.project.currentTime, nextDuration)
+    }
+  });
+
+  const toastMsg = typeof t === 'function' ? t('timeline.undoToast') : 'Acción deshecha (Ctrl+Z)';
+  showToast(toastMsg, 'info');
+  console.info(`[PodcastCraft AI] Deshacer ejecutado. Pasos restantes en pila: ${undoStack.length}`);
+}
 
 /**
  * Crea un nuevo carril dinámico con color rotativo (Fase 13.5: sin nombres de carril).
  * @returns {object} El nuevo carril creado
  */
 function createTrack() {
+  pushUndoSnapshot();
+
   const newTrack = {
     id: `track-${crypto.randomUUID()}`,
     colorIndex: (nextColorIndex++) % TRACK_PALETTE.length,
@@ -682,6 +772,8 @@ function deleteTrack(trackId) {
       return;
     }
   }
+
+  pushUndoSnapshot();
 
   const nextTracks = state.tracks.filter((t) => t.id !== trackId);
 
@@ -1372,7 +1464,7 @@ function renderAiPanel() {
           </span>
         </div>
         <div class="leading-relaxed text-justify p-1">
-          ${chipsHtml || `<span class="italic text-xs theme-text-muted">Clip vacío o sin palabras detectadas.</span>`}
+          ${chipsHtml || `<span class="italic text-xs theme-text-muted">${typeof t === 'function' ? t('aiPanel.noWordsDetected') : 'Clip vacío o sin palabras detectadas.'}</span>`}
         </div>
       </div>
     `;
@@ -2324,6 +2416,14 @@ function bindTimelineEvents() {
     });
   }
 
+  // Botón de deshacer en cabecera (Fase 16)
+  const btnUndo = $('#btn-undo');
+  if (btnUndo) {
+    btnUndo.addEventListener('click', () => {
+      undo();
+    });
+  }
+
   const timelineContainer = $('#timeline-tracks');
   if (!timelineContainer) return;
 
@@ -2391,6 +2491,8 @@ function bindTimelineEvents() {
 
       // Restricción: ambas mitades resultantes deben tener al menos 1 segundo
       if (splitSec >= 1 && (clip.duration - splitSec) >= 1) {
+        pushUndoSnapshot();
+
         const clip1 = {
           ...clip,
           duration: splitSec
@@ -2482,6 +2584,8 @@ function bindTimelineEvents() {
 
     const libItem = getLibraryItem(payload.libraryId);
     const objectUrl = libItem ? (libItem.objectUrl ?? null) : null;
+
+    pushUndoSnapshot();
 
     const newClip = {
       id: `clip-${crypto.randomUUID()}`,
@@ -2611,8 +2715,13 @@ function bindTimelineEvents() {
 
       if (!activeTrim) return;
 
-      const { trackId: tId, clipId: cId, pendingStart, pendingDuration } = activeTrim;
+      const { trackId: tId, clipId: cId, pendingStart, pendingDuration, initialStart, initialDuration } = activeTrim;
       activeTrim = null;
+
+      // Solo si hubo cambio real en inicio o duración, guardar en historial de deshacer (Fase 16)
+      if (pendingStart !== initialStart || pendingDuration !== initialDuration) {
+        pushUndoSnapshot();
+      }
 
       // Actualizar estado central con una sola mutación
       const nextTracks = state.tracks.map((t) => {
@@ -2660,11 +2769,25 @@ function bindTimelineEvents() {
     handleEl.addEventListener('pointercancel', onPointerCancel);
   });
 
-  // 6. Borrado de clip con Delete / Backspace (Sprint 4 — 6)
+  // 6. Atajos de teclado globales (Sprint 4 — 6, Fase 15, Fase 16)
   document.addEventListener('keydown', (e) => {
-    // Guardia: si el usuario está escribiendo en un input o editable, ignorar
+    // Guardia de campo editable: si el usuario está en un input, textarea o contentEditable
     const activeTag = document.activeElement ? document.activeElement.tagName : '';
-    if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable)) {
+    const isEditable = activeTag === 'INPUT' || activeTag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable);
+
+    // Atajo: Ctrl+Z / Cmd+Z para deshacer acción estructural del timeline (Fase 16)
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+      if (isEditable) {
+        // En campos de texto, dejar pasar el undo nativo del navegador
+        return;
+      }
+      e.preventDefault();
+      undo();
+      return;
+    }
+
+    // Para el resto de los atajos, si el foco está en un campo editable, ignorar
+    if (isEditable) {
       return;
     }
 
@@ -2679,6 +2802,7 @@ function bindTimelineEvents() {
       }
     }
 
+    // Atajo: Delete / Backspace para eliminar clip seleccionado del timeline
     if ((e.key === 'Delete' || e.key === 'Backspace') && state.selection.clipId) {
       e.preventDefault();
       const clipIdToDelete = state.selection.clipId;
@@ -2694,6 +2818,8 @@ function bindTimelineEvents() {
       });
 
       if (found) {
+        pushUndoSnapshot();
+
         const nextDuration = recomputeProjectDuration(nextTracks);
         const remainingClips = nextTracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
 
@@ -2741,6 +2867,29 @@ function bindTimelineEvents() {
       if (activeBtnPlay && !activeBtnPlay.disabled && activeBtnPlay.getAttribute('aria-disabled') !== 'true') {
         e.preventDefault();
         activeBtnPlay.click();
+      }
+    }
+
+    // Atajos de navegación DAW: J (retroceder 5s) / L (avanzar 5s) / M (silenciar) (Fase 16)
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (e.key === 'j' || e.key === 'J') {
+        const btnRewind = $('#btn-rewind');
+        if (btnRewind) {
+          e.preventDefault();
+          btnRewind.click();
+        }
+      } else if (e.key === 'l' || e.key === 'L') {
+        const btnForward = $('#btn-forward');
+        if (btnForward) {
+          e.preventDefault();
+          btnForward.click();
+        }
+      } else if (e.key === 'm' || e.key === 'M') {
+        const btnMute = $('#btn-mute');
+        if (btnMute) {
+          e.preventDefault();
+          btnMute.click();
+        }
       }
     }
   });
@@ -2856,6 +3005,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Renderizado inicial único (con datos del backend o clean slate si está desconectado)
   renderAll();
 
+  // Inicialización del estado del botón Deshacer (Fase 16)
+  updateUndoButtonState();
+
   // Vinculación de escuchadores de eventos
   bindTransportEvents();
   bindTopbarEvents();
@@ -2870,5 +3022,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderTimelineRuler();
   });
 
-  console.info('[PodcastCraft AI] Fase 15 (Panel de IA — Transcripción y Limpieza) inicializado.');
+  console.info('[PodcastCraft AI] Fase 16 (Atajos de Teclado, Deshacer y Auditoría Visual) inicializado.');
 });
