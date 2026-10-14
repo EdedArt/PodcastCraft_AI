@@ -5,4 +5,8 @@ storage/project.json
 storage/project.json.tmp
 storage/auth.json
 storage/auth.json.tmp
+storage/tmp/*
+!storage/tmp/.gitkeep
+.env
+.env.local
 *.log
