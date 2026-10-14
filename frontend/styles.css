@@ -661,6 +661,8 @@ body.is-trimming * {
   line-height: 1.35;
   cursor: pointer;
   user-select: none;
+  white-space: normal;
+  text-align: left;
   border: 1px solid transparent;
   transition: all 0.15s ease;
   outline: none;

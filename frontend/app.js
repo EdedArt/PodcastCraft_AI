@@ -202,6 +202,8 @@ window.PodcastCraft = {
   toggleSegmentMark: (clipId, segId) => toggleSegmentMark(clipId, segId),
   confirmSegmentCleanup: (clipId) => confirmSegmentCleanup(clipId),
   cleanAllFillers: (clipId) => cleanAllFillers(clipId),
+  computeKeptRanges: (clipDuration, removedRanges) => computeKeptRanges(clipDuration, removedRanges),
+  executeIntervalSubtraction: (clipId, removedRanges) => executeIntervalSubtraction(clipId, removedRanges),
   renderAiPanel: () => renderAiPanel(),
   showToast: (msg, type) => showToast(msg, type),
   undo: () => undo(),
@@ -519,47 +521,208 @@ function toggleSegmentMark(clipId, segmentId) {
 }
 
 /**
- * Elimina definitivamente todas las palabras marcadas para borrado (markedForDeletion) (Fase 15).
+ * Calcula los rangos de tiempo que sobreviven tras restar los rangos eliminados de un clip (Fase 19).
+ * @param {number} clipDuration - Duración total del clip en segundos
+ * @param {Array<{start: number, end: number}>} removedRanges - Rangos a eliminar, relativos al clip (0 = inicio del clip)
+ * @returns {Array<{start: number, end: number}>} Rangos sobrevivientes ordenados
+ */
+function computeKeptRanges(clipDuration, removedRanges) {
+  const MIN_PIECE_DURATION = 0.3; // descarta fragmentos insignificantes
+  if (!removedRanges || removedRanges.length === 0) {
+    return clipDuration >= MIN_PIECE_DURATION ? [{ start: 0, end: clipDuration }] : [];
+  }
+
+  // Ordenar y fusionar rangos solapados o adyacentes
+  const sorted = [...removedRanges].sort((a, b) => a.start - b.start);
+  const mergedRemoved = [];
+  for (const r of sorted) {
+    const s = Math.max(0, Math.min(clipDuration, r.start));
+    const e = Math.max(0, Math.min(clipDuration, r.end));
+    if (e <= s) continue;
+
+    if (mergedRemoved.length === 0) {
+      mergedRemoved.push({ start: s, end: e });
+    } else {
+      const prev = mergedRemoved[mergedRemoved.length - 1];
+      if (s <= prev.end) {
+        prev.end = Math.max(prev.end, e);
+      } else {
+        mergedRemoved.push({ start: s, end: e });
+      }
+    }
+  }
+
+  const kept = [];
+  let cursor = 0;
+  for (const r of mergedRemoved) {
+    if (r.start - cursor >= MIN_PIECE_DURATION) {
+      kept.push({ start: cursor, end: r.start });
+    }
+    cursor = Math.max(cursor, r.end);
+  }
+  if (clipDuration - cursor >= MIN_PIECE_DURATION) {
+    kept.push({ start: cursor, end: clipDuration });
+  }
+
+  return kept;
+}
+
+/**
+ * Ejecuta el algoritmo de corte por sustracción de intervalos sobre el clip especificado (Fase 19).
+ * Reemplaza el clip original en el carril por los 0 a N pedazos resultantes colocados en cascada contigua (ripple),
+ * preserva los segmentos de transcripción correspondientes ajustando sus tiempos relativos a cada nuevo clip,
+ * y se integra con la pila de deshacer (pushUndoSnapshot).
+ * @param {string} clipId
+ * @param {Array<{start: number, end: number}>} removedRanges
+ * @returns {{ success: boolean, piecesCount: number }}
+ */
+function executeIntervalSubtraction(clipId, removedRanges) {
+  let targetTrack = null;
+  let targetClip = null;
+  for (const t of state.tracks) {
+    const found = t.clips?.find((c) => c.id === clipId);
+    if (found) {
+      targetTrack = t;
+      targetClip = found;
+      break;
+    }
+  }
+  if (!targetTrack || !targetClip) return { success: false, piecesCount: 0 };
+
+  const clipDuration = typeof targetClip.duration === 'number' ? targetClip.duration : 0;
+  const keptRanges = computeKeptRanges(clipDuration, removedRanges);
+
+  // Snapshot antes de la mutación estructural (Fase 16 & 19)
+  pushUndoSnapshot();
+
+  const originalStart = targetClip.start || 0;
+  const originalSourceOffset = targetClip.sourceOffset || 0;
+  const originalSegments = state.ai.transcriptByClip?.[clipId]?.segments || [];
+
+  const nextTranscriptByClip = { ...(state.ai.transcriptByClip || {}) };
+  delete nextTranscriptByClip[clipId];
+
+  const newClips = [];
+  let accumulatedOffset = 0;
+
+  for (const range of keptRanges) {
+    const pieceDuration = +(range.end - range.start).toFixed(2);
+    if (pieceDuration < 0.3) continue;
+
+    const pieceId = `clip-${crypto.randomUUID()}`;
+    const pieceStart = +(originalStart + accumulatedOffset).toFixed(2);
+    const pieceSourceOffset = +(originalSourceOffset + range.start).toFixed(2);
+
+    const newClip = {
+      id: pieceId,
+      libraryId: targetClip.libraryId,
+      name: targetClip.name,
+      start: pieceStart,
+      duration: pieceDuration,
+      sourceOffset: pieceSourceOffset,
+      objectUrl: targetClip.objectUrl
+    };
+    newClips.push(newClip);
+    accumulatedOffset += pieceDuration;
+
+    // 3.3 Reasignar segmentos que caen dentro de este pedazo
+    const pieceSegments = [];
+    for (const seg of originalSegments) {
+      const segMid = (seg.startTime + seg.endTime) / 2;
+      if (segMid >= range.start && segMid <= range.end) {
+        pieceSegments.push({
+          id: `seg-${pieceId}-${pieceSegments.length + 1}`,
+          text: seg.text,
+          startTime: Math.max(0, +(seg.startTime - range.start).toFixed(2)),
+          endTime: Math.min(pieceDuration, +(seg.endTime - range.start).toFixed(2)),
+          isFiller: Boolean(seg.isFiller),
+          markedForDeletion: false
+        });
+      }
+    }
+
+    nextTranscriptByClip[pieceId] = {
+      status: 'done',
+      segments: pieceSegments
+    };
+  }
+
+  // 3.4 Reemplazo en el estado (inmutable)
+  const nextTrackClips = [];
+  for (const c of targetTrack.clips) {
+    if (c.id === clipId) {
+      nextTrackClips.push(...newClips);
+    } else {
+      nextTrackClips.push(c);
+    }
+  }
+  nextTrackClips.sort((a, b) => a.start - b.start);
+
+  const nextTracks = state.tracks.map((t) => {
+    if (t.id === targetTrack.id) {
+      return { ...t, clips: nextTrackClips };
+    }
+    return t;
+  });
+
+  const nextDuration = recomputeProjectDuration(nextTracks);
+  const nextSelectionClipId = newClips.length > 0 ? newClips[0].id : null;
+
+  setState({
+    tracks: nextTracks,
+    selection: { clipId: nextSelectionClipId },
+    project: { duration: nextDuration },
+    ai: {
+      ...state.ai,
+      transcriptByClip: nextTranscriptByClip
+    }
+  });
+
+  return { success: true, piecesCount: newClips.length };
+}
+
+/**
+ * Elimina definitivamente todos los segmentos marcados para borrado cortando el clip en el timeline (Fase 19).
  * @param {string} clipId
  */
 function confirmSegmentCleanup(clipId) {
   const clipData = state.ai.transcriptByClip?.[clipId];
   if (!clipData || !clipData.segments) return;
 
-  const markedCount = clipData.segments.filter((s) => s.markedForDeletion).length;
-  if (markedCount === 0) return;
+  const markedSegments = clipData.segments.filter((s) => s.markedForDeletion);
+  if (markedSegments.length === 0) return;
 
-  const nextSegments = clipData.segments.filter((s) => !s.markedForDeletion);
+  const removedRanges = markedSegments.map((s) => ({
+    start: s.startTime,
+    end: s.endTime
+  }));
 
-  setState({
-    ai: {
-      ...state.ai,
-      transcriptByClip: {
-        ...state.ai.transcriptByClip,
-        [clipId]: {
-          ...clipData,
-          segments: nextSegments
-        }
-      }
-    }
-  });
+  const result = executeIntervalSubtraction(clipId, removedRanges);
+  if (!result.success) return;
 
-  const msg = typeof t === 'function'
-    ? t('aiPanel.wordsRemoved', { count: markedCount })
-    : `${markedCount} palabra(s) eliminada(s)`;
+  let msg = '';
+  if (result.piecesCount === 0) {
+    msg = typeof t === 'function' ? t('aiPanel.clipDeleted') : 'Se eliminó el clip por completo';
+  } else if (result.piecesCount === 1) {
+    msg = typeof t === 'function' ? t('aiPanel.clipTrimmed') : 'Se recortó el clip';
+  } else {
+    msg = typeof t === 'function'
+      ? t('aiPanel.splitSuccess', { count: result.piecesCount })
+      : `Se dividió el clip en ${result.piecesCount} partes`;
+  }
   showToast(msg);
 }
 
 /**
- * Limpieza automática masiva: borra todas las muletillas detectadas (isFiller: true) de una vez (Fase 15).
+ * Limpieza automática masiva: corta el clip eliminando todas las muletillas detectadas (isFiller: true) (Fase 19).
  * @param {string} clipId
  */
 function cleanAllFillers(clipId) {
   const clipData = state.ai.transcriptByClip?.[clipId];
   if (!clipData || !clipData.segments) return;
 
-  const fillersCount = clipData.segments.filter((s) => s.isFiller).length;
-  if (fillersCount === 0) return;
+  const fillerSegments = clipData.segments.filter((s) => s.isFiller);
+  if (fillerSegments.length === 0) return;
 
   setState({
     ai: {
@@ -569,32 +732,37 @@ function cleanAllFillers(clipId) {
   });
 
   setTimeout(() => {
-    // Si el clip sigue existiendo
     const currentClipData = state.ai.transcriptByClip?.[clipId];
     if (!currentClipData || !currentClipData.segments) {
       setState({ ai: { ...state.ai, isMassCleaning: false } });
       return;
     }
 
-    const nextSegments = currentClipData.segments.filter((s) => !s.isFiller);
+    const removedRanges = fillerSegments.map((s) => ({
+      start: s.startTime,
+      end: s.endTime
+    }));
 
+    const result = executeIntervalSubtraction(clipId, removedRanges);
     setState({
       ai: {
         ...state.ai,
-        isMassCleaning: false,
-        transcriptByClip: {
-          ...state.ai.transcriptByClip,
-          [clipId]: {
-            ...currentClipData,
-            segments: nextSegments
-          }
-        }
+        isMassCleaning: false
       }
     });
 
-    const msg = typeof t === 'function'
-      ? t('aiPanel.cleanAllToast', { count: fillersCount })
-      : `${fillersCount} muletilla(s) eliminada(s) con éxito`;
+    if (!result.success) return;
+
+    let msg = '';
+    if (result.piecesCount === 0) {
+      msg = typeof t === 'function' ? t('aiPanel.clipDeleted') : 'Se eliminó el clip por completo';
+    } else if (result.piecesCount === 1) {
+      msg = typeof t === 'function' ? t('aiPanel.clipTrimmed') : 'Se recortó el clip';
+    } else {
+      msg = typeof t === 'function'
+        ? t('aiPanel.splitSuccess', { count: result.piecesCount })
+        : `Se dividió el clip en ${result.piecesCount} partes`;
+    }
     showToast(msg);
   }, 1500);
 }
@@ -1405,11 +1573,13 @@ function renderAiPanel() {
     }
   }
 
-  // Botón Confirmar borrado manual
+  // Botón Confirmar borrado manual (corte por segmentos)
   if (btnConfirmCleanup) {
     if (status === 'done' && markedCount > 0) {
       btnConfirmCleanup.classList.remove('hidden');
-      const tooltip = typeof t === 'function' ? `${t('aiPanel.confirmCleanup')} (${markedCount})` : `Confirmar borrado (${markedCount})`;
+      const tooltip = typeof t === 'function'
+        ? (t('aiPanel.confirmCleanupSegments', { count: markedCount }) || `${t('aiPanel.confirmCleanup')} (${markedCount})`)
+        : `Cortar audio (${markedCount})`;
       btnConfirmCleanup.title = tooltip;
       btnConfirmCleanup.setAttribute('aria-label', tooltip);
     } else {
@@ -1496,8 +1666,8 @@ function renderAiPanel() {
       }
 
       const wordAria = seg.isFiller
-        ? (typeof t === 'function' ? t('aiPanel.fillerWordAria', { text: seg.text }) : `Muletilla: ${seg.text}`)
-        : (typeof t === 'function' ? t('aiPanel.wordAria', { text: seg.text }) : `Palabra: ${seg.text}`);
+        ? (typeof t === 'function' ? t('aiPanel.fillerSegmentAria', { text: seg.text }) : `Muletilla: ${seg.text}`)
+        : (typeof t === 'function' ? t('aiPanel.segmentAria', { text: seg.text }) : `Segmento: ${seg.text}`);
 
       const stateAria = seg.markedForDeletion
         ? (typeof t === 'function' ? t('aiPanel.markedAria') : 'Marcada para eliminar')
@@ -1513,7 +1683,7 @@ function renderAiPanel() {
           tabindex="0"
           aria-pressed="${seg.markedForDeletion ? 'true' : 'false'}"
           aria-label="${escapeHtml(fullAria)}"
-          class="${classes.trim()}"
+          class="${classes.trim()} inline-block my-1"
         >${escapeHtml(seg.text)}</span>
       `;
     }).join(' ');
@@ -1526,7 +1696,7 @@ function renderAiPanel() {
             ${summaryFillersText}
           </span>
         </div>
-        <div class="leading-relaxed text-justify p-1">
+        <div class="leading-relaxed p-1 flex flex-wrap gap-1.5 items-center">
           ${chipsHtml || `<span class="italic text-xs theme-text-muted">${typeof t === 'function' ? t('aiPanel.noWordsDetected') : 'Clip vacío o sin palabras detectadas.'}</span>`}
         </div>
       </div>
