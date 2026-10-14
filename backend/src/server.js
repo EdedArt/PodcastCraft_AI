@@ -1,3 +1,4 @@
+require('dotenv').config();
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
@@ -5,6 +6,7 @@ const { readProject, readAuth } = require('./storage');
 const projectRoutes = require('./routes/project');
 const audioRoutes = require('./routes/audio');
 const authRoutes = require('./routes/auth');
+const aiRoutes = require('./routes/ai');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -37,6 +39,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/project', projectRoutes);
 app.use('/api/audio', audioRoutes);
+app.use('/api/ai', aiRoutes);
 
 // 7. Middleware de 404 genérico para rutas no definidas (JSON consistente)
 app.use((req, res) => {
@@ -62,6 +65,12 @@ async function startServer() {
     const authData = await readAuth();
     const isConfigured = Boolean(authData && authData.username && authData.passwordHash && authData.salt);
     console.log(`Estado de autenticación local: ${isConfigured ? `Configurado (usuario: "${authData.username}")` : 'Sin configurar (primer uso)'}`);
+
+    if (!process.env.GEMINI_API_KEY) {
+      console.warn('[Advertencia de IA] GEMINI_API_KEY no configurada — la transcripción con IA no funcionará hasta que se configure .env');
+    } else {
+      console.log(`[IA Gemini] Integración activa con modelo "${process.env.GEMINI_MODEL || 'gemini-3.5-flash'}"`);
+    }
 
     app.listen(PORT, () => {
       console.log(`PodcastCraft AI backend escuchando en http://localhost:${PORT}`);
