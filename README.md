@@ -826,5 +826,90 @@ Para usuarios que utilicen planes de pago o el nivel gratuito de Google AI Studi
 2. Establecer un **Presupuesto y Alerta de Gasto** (Spending Limit / Budget Alert) a fin de prevenir consumos no deseados.
 3. El modelo por defecto (`gemini-3.5-flash`) ofrece una excelente relación de velocidad, precisión y bajo costo por millón de tokens de audio procesados.
 
+---
+
+## ✂️ 12. Fase 19: Edición Basada en Transcripción (Corte de Audio en Línea de Tiempo)
+
+Esta fase implementa la edición reactiva guiada por texto: al marcar segmentos de texto y confirmar su eliminación, el clip de audio en la línea de tiempo se divide y recorta automáticamente en los puntos exactos correspondientes, sincronizando visual y auditivamente las pistas de la estación de trabajo.
+
+### 12.1 Diagnóstico y Corrección Fundamental de `sourceOffset`
+#### Hallazgo del Diagnóstico Previo:
+- Antes de la Fase 19, el motor de reproducción (`globalAudio.currentTime`) asumía incorrectamente que cualquier clip comenzaba a sonar desde el segundo `0.0` de su archivo fuente (`globalAudio.currentTime = seconds - clip.start`).
+- Ni el recorte de borde izquierdo (asa izquierda de la Fase 4) ni la división por doble clic (*split* de la Fase 9) registraban un puntero al segundo del archivo fuente original. En consecuencia, si se recortaban los primeros 5 segundos de un clip o se reproducía la segunda mitad de un clip dividido, el audio sonaba erróneamente desde el principio del archivo original.
+
+#### Solución Implementada:
+1. **Nuevo campo contractual `sourceOffset`:** Cada clip en el store y en la persistencia incorpora:
+   ```javascript
+   {
+     id: "clip-...",
+     libraryId: "lib-import-...",
+     name: "Audio",
+     start: 10,        // Posición en segundos en el TIMELINE
+     duration: 15,     // Largo en segundos en el TIMELINE
+     sourceOffset: 8   // Segundo exacto del ARCHIVO FUENTE donde inicia este fragmento
+   }
+   ```
+2. **Reproducción sincronizada:** Al hacer scrub o pulsar Play, la posición real cargada en el elemento nativo de audio se calcula como:
+   $$\text{globalAudio.currentTime} = \text{clip.sourceOffset} + (\text{timelineCurrentTime} - \text{clip.start})$$
+3. **Bucle de animación del playhead (60 FPS):** El tiempo transcurrido descuenta el offset base del archivo:
+   $$\text{audioElapsed} = \max(0, \text{globalAudio.currentTime} - \text{activePlayingClipSourceOffset})$$
+   $$\text{timelinePosition} = \text{activePlayingClipStart} + \text{audioElapsed}$$
+4. **Actualización en operaciones de edición:**
+   - **Soltado inicial (*drop*):** `sourceOffset = 0`.
+   - **División manual (*split* por doble clic en $t_{\text{split}}$):** `clip1.sourceOffset = clip.sourceOffset`, `clip2.sourceOffset = clip.sourceOffset + splitSec`.
+   - **Recorte con asa izquierda:** Al arrastrar el inicio, `sourceOffset` avanza en la misma cantidad que se recortó: `sourceOffset += (pendingStart - initialStart)`.
+   - **Persistencia en backend:** `saveProjectToBackend` y `loadProjectFromBackend` serializan y restauran `sourceOffset` de forma transparente.
+
+### 12.2 Pivote de la UI: De Palabras a Nivel de Segmento
+En lugar de seleccionar palabras sueltas sin marcas de tiempo individuales precisas, la interfaz conmuta a **segmentos completos** (las frases de 3 a 8 palabras devueltas por Gemini con sus correspondientes marcas decimales `startTime` y `endTime`):
+- Cada segmento funciona como un bloque interactivo con `role="button"`, `tabindex="0"`, atributos `aria-pressed` y `aria-label` descriptivos.
+- Estilos consistentes: fondo y borde ámbar para muletillas (`.ai-word-filler`), tachado con borde discontinuo para marcado (`.ai-word-marked`).
+- El botón de confirmación de borrado en el encabezado del panel muestra la cantidad de segmentos a cortar: `t('aiPanel.confirmCleanupSegments', { count })` (ej. *"Cortar audio (1)"*).
+
+### 12.3 Algoritmo Central: Sustracción de Intervalos (`computeKeptRanges`)
+Dada la duración $D$ del clip original y un conjunto de rangos eliminados $\{[s_i, e_i]\}$:
+1. Se fusionan rangos que se solapan o son adyacentes.
+2. Se calculan los rangos sobrevivientes descartando fragmentos residuales insignificantes (`MIN_PIECE_DURATION = 0.3s`):
+   ```javascript
+   function computeKeptRanges(clipDuration, removedRanges) {
+     const MIN_PIECE_DURATION = 0.3;
+     const sorted = [...removedRanges].sort((a, b) => a.start - b.start);
+     const merged = []; // rangos fusionados
+     ...
+     const kept = [];
+     let cursor = 0;
+     for (const r of merged) {
+       if (r.start - cursor >= MIN_PIECE_DURATION) {
+         kept.push({ start: cursor, end: r.start });
+       }
+       cursor = Math.max(cursor, r.end);
+     }
+     if (clipDuration - cursor >= MIN_PIECE_DURATION) {
+       kept.push({ start: cursor, end: clipDuration });
+     }
+     return kept;
+   }
+   ```
+
+### 12.4 Posicionamiento Contiguo (*Ripple Cut*)
+- Los pedazos sobrevivientes se sitúan de forma contigua en el carril a partir de `originalClip.start`, cerrando el espacio vacío del material suprimido (comportamiento tipo *ripple delete* de DAWs profesionales).
+- Si se eliminan todos los segmentos del clip, este desaparece del carril limpiamente sin dejar residuos ni errores de reproducción.
+- Si solo sobrevive un rango (por ejemplo, corte al inicio o al final), el clip resultante se contrae con su `sourceOffset` y duración ajustados.
+
+### 12.5 Preservación de Transcripción sin Re-transcribir
+Para optimizar el uso de tokens y cuota de Gemini:
+- Cada nuevo clip hereda los segmentos de transcripción originales cuyo punto medio caía dentro de su intervalo conservado.
+- Las marcas temporales se recalculan automáticamente para ser relativas al nuevo clip:
+  $$\text{seg.startTime}' = \text{seg.startTime} - \text{rango.start}$$
+  $$\text{seg.endTime}' = \text{seg.endTime} - \text{rango.start}$$
+- La entrada `state.ai.transcriptByClip[nuevoClipId]` se genera de inmediato en estado `done`. Al seleccionar cualquiera de las piezas en el timeline, su transcripción aparece al instante sin necesidad de reenviar el audio a Gemini.
+
+### 12.6 Integración con el Sistema de Deshacer (Undo / Ctrl+Z)
+Antes de sustituir el clip original en `track.clips`, se invoca `pushUndoSnapshot()`. Al presionar `Ctrl+Z` o hacer clic en `#btn-undo`, la acción de corte se revierte al 100%, restaurando el clip original, su duración y su transcripción íntegra.
+
+### 12.7 Limitaciones Técnicas Documentadas
+- **Granularidad mínima:** El corte se efectúa a nivel de segmento de frase (3 a 8 palabras), no por fonema o palabra aislada dentro de una frase, lo cual garantiza que los límites temporales reportados por el modelo de IA conserven coherencia fonética y no generen artefactos de audio abruptly recortados.
+
+
 
 
