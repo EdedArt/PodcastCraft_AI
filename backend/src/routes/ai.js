@@ -169,8 +169,9 @@ Instrucciones obligatorias:
     const fallbackModels = [
       primaryModel,
       'gemini-3.5-flash',
-      'gemini-3.7-flash',
       'gemini-3.8-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.5-transcribe',
       'gemini-flash-latest'
     ];
     // Eliminar duplicados manteniendo orden
@@ -189,14 +190,14 @@ Instrucciones obligatorias:
         }
       } catch (geminiErr) {
         lastError = geminiErr;
-        const status = geminiErr.status || 500;
-        // Si es 404 (modelo descontinuado) o 503 (congestión temporal), probamos el siguiente modelo
-        if (status === 404 || status === 503) {
-          console.warn(`[aiRoutes] Modelo ${currentModel} respondió ${status}. Intentando modelo alternativo...`);
-          continue;
+        const status = geminiErr.status || (geminiErr.message?.includes('404') ? 404 : (geminiErr.message?.includes('503') ? 503 : 500));
+        // Si es 401 (clave inválida) o 429 (quota excedida), salir de inmediato
+        if (status === 401 || status === 429 || geminiErr.message?.includes('API_KEY_INVALID') || geminiErr.message?.includes('quota') || geminiErr.message?.includes('Resource has been exhausted')) {
+          break;
         }
-        // Para otros errores (401 clave inválida, 429 quota excedida), salir de inmediato
-        break;
+        // Para cualquier otro error (404, 503, fetch failed, error de socket, etc.), probar modelo alternativo
+        console.warn(`[aiRoutes] Modelo ${currentModel} falló (${status} / ${geminiErr.message}). Intentando modelo alternativo...`);
+        continue;
       }
     }
 
