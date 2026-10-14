@@ -1608,18 +1608,20 @@ function applyTheme(theme) {
     console.warn('[PodcastCraft AI] No se pudo guardar la preferencia de tema en localStorage:', err);
   }
 
-  const toggleBtn = $('#btn-theme-toggle');
-  if (toggleBtn) {
-    const isDark = finalTheme === 'dark';
-    const label = isDark
-      ? (typeof t === 'function' ? t('theme.switchToLight') : 'Cambiar a modo claro')
-      : (typeof t === 'function' ? t('theme.switchToDark') : 'Cambiar a modo oscuro');
-    toggleBtn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
-    toggleBtn.setAttribute('aria-label', label);
-    toggleBtn.setAttribute('title', label);
-    toggleBtn.innerHTML = `<i data-lucide="${isDark ? 'sun' : 'moon'}" class="w-4 h-4"></i>`;
-    renderIcons();
-  }
+  ['btn-theme-toggle', 'auth-theme-toggle'].forEach((id) => {
+    const toggleBtn = document.getElementById(id);
+    if (toggleBtn) {
+      const isDark = finalTheme === 'dark';
+      const label = isDark
+        ? (typeof t === 'function' ? t('theme.switchToLight') : 'Cambiar a modo claro')
+        : (typeof t === 'function' ? t('theme.switchToDark') : 'Cambiar a modo oscuro');
+      toggleBtn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+      toggleBtn.setAttribute('aria-label', label);
+      toggleBtn.setAttribute('title', label);
+      toggleBtn.innerHTML = `<i data-lucide="${isDark ? 'sun' : 'moon'}" class="w-4 h-4"></i>`;
+    }
+  });
+  renderIcons();
 }
 
 /**
@@ -1633,8 +1635,300 @@ function toggleTheme() {
 
 
 /* ==========================================================================
+   6.0 LOCAL AUTHENTICATION & LOCK SCREEN (Fase 17)
+   ========================================================================== */
+
+const authState = {
+  isConfigured: false,
+  isAuthenticated: false,
+  currentUser: null,
+  isChecking: true,
+  offline: false
+};
+
+window.PodcastCraftAuth = authState;
+
+let appHydrated = false;
+
+/**
+ * Consulta el estado de configuración de la autenticación local en el backend.
+ * @returns {Promise<boolean>} Devuelve true si la petición fue exitosa.
+ */
+async function checkAuthStatus() {
+  authState.isChecking = true;
+  const errorBanner = $('#auth-error-banner');
+  if (errorBanner) errorBanner.classList.add('hidden');
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/status`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    });
+
+    if (!res.ok) {
+      throw new Error(`Error HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    authState.isConfigured = Boolean(data.configured);
+    authState.offline = false;
+    authState.isChecking = false;
+    renderAuthScreen();
+    return true;
+  } catch (err) {
+    console.warn('[PodcastCraft AI] Backend de autenticación no disponible:', err);
+    authState.offline = true;
+    authState.isChecking = false;
+    renderAuthScreen();
+    return false;
+  }
+}
+
+/**
+ * Renderiza los textos, estados e inputs de la pantalla de bloqueo.
+ */
+function renderAuthScreen() {
+  const lockScreen = $('#auth-lock-screen');
+  if (!lockScreen) return;
+
+  const authForm = $('#auth-form');
+  const offlineBanner = $('#auth-offline-banner');
+  const errorBanner = $('#auth-error-banner');
+  const titleEl = $('#auth-title');
+  const subtitleEl = $('#auth-subtitle');
+  const submitTextEl = $('#auth-submit-text');
+  const submitIconEl = $('#auth-submit-icon');
+
+  if (authState.offline) {
+    if (authForm) authForm.classList.add('hidden');
+    if (errorBanner) errorBanner.classList.add('hidden');
+    if (offlineBanner) offlineBanner.classList.remove('hidden');
+    renderIcons();
+    return;
+  }
+
+  // Backend conectado y activo
+  if (offlineBanner) offlineBanner.classList.add('hidden');
+  if (authForm) authForm.classList.remove('hidden');
+
+  if (!authState.isConfigured) {
+    if (titleEl) titleEl.textContent = typeof t === 'function' ? t('auth.setupTitle') : 'Configuración Inicial';
+    if (subtitleEl) subtitleEl.textContent = typeof t === 'function' ? t('auth.setupSubtitle') : 'Crea tu usuario y contraseña de acceso local.';
+    if (submitTextEl) submitTextEl.textContent = typeof t === 'function' ? t('auth.createAccount') : 'Crear cuenta';
+    if (submitIconEl) submitIconEl.setAttribute('data-lucide', 'user-plus');
+  } else {
+    if (titleEl) titleEl.textContent = typeof t === 'function' ? t('auth.loginTitle') : 'Pantalla de Bloqueo';
+    if (subtitleEl) subtitleEl.textContent = typeof t === 'function' ? t('auth.loginSubtitle') : 'Ingresa tus credenciales para acceder al editor.';
+    if (submitTextEl) submitTextEl.textContent = typeof t === 'function' ? t('auth.login') : 'Iniciar sesión';
+    if (submitIconEl) submitIconEl.setAttribute('data-lucide', 'log-in');
+  }
+
+  renderIcons();
+}
+
+/**
+ * Muestra un mensaje de error en la pantalla de bloqueo.
+ * @param {string} message
+ */
+function showAuthError(message) {
+  const errorBanner = $('#auth-error-banner');
+  const errorText = $('#auth-error-text');
+  if (errorBanner && errorText) {
+    errorText.textContent = message;
+    errorBanner.classList.remove('hidden');
+    renderIcons();
+  }
+}
+
+/**
+ * Procesa el envío del formulario de login o de configuración inicial.
+ * @param {Event} e
+ */
+async function handleAuthSubmit(e) {
+  e.preventDefault();
+  const errorBanner = $('#auth-error-banner');
+  if (errorBanner) errorBanner.classList.add('hidden');
+
+  const usernameInput = $('#auth-username');
+  const passwordInput = $('#auth-password');
+  const submitBtn = $('#auth-submit-btn');
+
+  const username = usernameInput ? usernameInput.value.trim() : '';
+  const password = passwordInput ? passwordInput.value : '';
+
+  if (!username) {
+    showAuthError(typeof t === 'function' ? t('auth.usernameRequired') : 'Debes ingresar un nombre de usuario.');
+    if (usernameInput) usernameInput.focus();
+    return;
+  }
+
+  if (!password || password.length < 6) {
+    showAuthError(typeof t === 'function' ? t('auth.passwordTooShort') : 'La contraseña debe tener al menos 6 caracteres.');
+    if (passwordInput) passwordInput.focus();
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.classList.add('opacity-70', 'cursor-wait');
+  }
+
+  const endpoint = !authState.isConfigured ? '/api/auth/setup' : '/api/auth/login';
+
+  try {
+    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ username, password })
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const defaultErr = !authState.isConfigured
+        ? (data.error || 'Error al crear la cuenta.')
+        : (typeof t === 'function' ? t('auth.invalidCredentials') : 'Credenciales incorrectas.');
+      showAuthError(data.error || defaultErr);
+      if (passwordInput) {
+        passwordInput.value = '';
+        passwordInput.focus();
+      }
+      return;
+    }
+
+    // Éxito: marcamos autenticación y entramos a la app
+    authState.isConfigured = true;
+    await onAuthSuccess(data.username || username);
+  } catch (err) {
+    console.error('[PodcastCraft AI] Error de red en autenticación:', err);
+    showAuthError(typeof t === 'function' ? t('auth.connectingError') : 'No se pudo conectar con el servidor local para iniciar sesión.');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('opacity-70', 'cursor-wait');
+    }
+  }
+}
+
+/**
+ * Transición tras login exitoso: oculta lock screen y muestra el workspace.
+ * @param {string} username
+ */
+async function onAuthSuccess(username) {
+  authState.isAuthenticated = true;
+  authState.currentUser = username;
+
+  const lockScreen = $('#auth-lock-screen');
+  const topbar = $('#topbar');
+  const workspace = $('#workspace');
+  const transport = $('#transport');
+  const passwordInput = $('#auth-password');
+
+  if (passwordInput) passwordInput.value = '';
+  if (lockScreen) lockScreen.classList.add('hidden');
+  if (topbar) topbar.classList.remove('hidden');
+  if (workspace) workspace.classList.remove('hidden');
+  if (transport) transport.classList.remove('hidden');
+
+  // Si aún no se hidrató el proyecto desde el backend, cargarlo ahora
+  if (!appHydrated) {
+    await loadProjectFromBackend();
+    appHydrated = true;
+  }
+
+  renderAll();
+  updateUndoButtonState();
+  renderTimelineRuler();
+  renderIcons();
+  console.info(`[PodcastCraft AI] Usuario "${username}" autenticado exitosamente.`);
+}
+
+/**
+ * Cierre de sesión voluntario (bloqueo local de pantalla sin reiniciar el backend ni perder estado).
+ */
+function logout() {
+  if (state.project.isPlaying) {
+    if (typeof globalAudio !== 'undefined' && globalAudio) {
+      globalAudio.pause();
+    }
+    if (typeof stopPlayheadLoop === 'function') {
+      stopPlayheadLoop();
+    }
+    setState({ project: { isPlaying: false } });
+  }
+
+  authState.isAuthenticated = false;
+  authState.currentUser = null;
+
+  const lockScreen = $('#auth-lock-screen');
+  const topbar = $('#topbar');
+  const workspace = $('#workspace');
+  const transport = $('#transport');
+  const passwordInput = $('#auth-password');
+  const errorBanner = $('#auth-error-banner');
+
+  if (topbar) topbar.classList.add('hidden');
+  if (workspace) workspace.classList.add('hidden');
+  if (transport) transport.classList.add('hidden');
+
+  if (passwordInput) passwordInput.value = '';
+  if (errorBanner) errorBanner.classList.add('hidden');
+
+  if (lockScreen) {
+    lockScreen.classList.remove('hidden');
+    renderAuthScreen();
+    if (passwordInput) passwordInput.focus();
+  }
+
+  console.info('[PodcastCraft AI] Sesión cerrada. Pantalla de bloqueo activada.');
+}
+
+/**
+ * Vincula los eventos específicos de la pantalla de bloqueo.
+ */
+function bindAuthEvents() {
+  const authForm = $('#auth-form');
+  if (authForm) {
+    authForm.addEventListener('submit', handleAuthSubmit);
+  }
+
+  const retryBtn = $('#auth-retry-btn');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', async () => {
+      retryBtn.classList.add('animate-spin');
+      await checkAuthStatus();
+      retryBtn.classList.remove('animate-spin');
+    });
+  }
+
+  const authThemeToggle = $('#auth-theme-toggle');
+  if (authThemeToggle) {
+    authThemeToggle.addEventListener('click', toggleTheme);
+  }
+
+  const authLangToggle = $('#auth-language-toggle');
+  if (authLangToggle) {
+    authLangToggle.addEventListener('click', () => {
+      const current = typeof getCurrentLanguage === 'function' ? getCurrentLanguage() : 'es';
+      const nextLang = current === 'es' ? 'en' : 'es';
+      if (typeof setLanguage === 'function') {
+        setLanguage(nextLang);
+      }
+      if (typeof applyTranslations === 'function') {
+        applyTranslations();
+      }
+    });
+  }
+}
+
+
+/* ==========================================================================
    6.1 PERSISTENCE & BACKEND API (Sprint 6)
    ========================================================================== */
+
 
 let saveDebounceTimer = null;
 let isSaving = false;
@@ -2170,6 +2464,13 @@ function bindTopbarEvents() {
       if (typeof applyTranslations === 'function') {
         applyTranslations();
       }
+    });
+  }
+
+  const btnLogout = $('#btn-logout');
+  if (btnLogout) {
+    btnLogout.addEventListener('click', () => {
+      logout();
     });
   }
 }
@@ -2999,16 +3300,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     applyTranslations();
   }
 
-  // Carga previa e hidratación del estado persistido desde el backend (Fase 13)
-  await loadProjectFromBackend();
-
-  // Renderizado inicial único (con datos del backend o clean slate si está desconectado)
-  renderAll();
-
-  // Inicialización del estado del botón Deshacer (Fase 16)
-  updateUndoButtonState();
-
   // Vinculación de escuchadores de eventos
+  bindAuthEvents();
   bindTransportEvents();
   bindTopbarEvents();
   bindImportAudioEvents();
@@ -3019,8 +3312,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Re-renderizado reactivo de la regla ante cambios de tamaño de ventana (Fase 14)
   window.addEventListener('resize', () => {
-    renderTimelineRuler();
+    if (authState.isAuthenticated) {
+      renderTimelineRuler();
+    }
   });
 
-  console.info('[PodcastCraft AI] Fase 16 (Atajos de Teclado, Deshacer y Auditoría Visual) inicializado.');
+  // Fase 17: Verificación de autenticación local antes de dar acceso al workspace
+  await checkAuthStatus();
+
+  console.info('[PodcastCraft AI] Fase 17 (Sistema de login local y pantalla de bloqueo) inicializado.');
 });

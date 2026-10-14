@@ -315,6 +315,18 @@ body {
   color: var(--text-muted);
 }
 
+.theme-input {
+  background-color: var(--card-bg);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+.theme-input:focus {
+  border-color: var(--ai-accent);
+}
+.theme-input::placeholder {
+  color: var(--text-muted);
+}
+
 /* Componentes del Panel de IA */
 .theme-ai-header {
   background-color: var(--ai-header-bg);

@@ -39,8 +39,132 @@
     </p>
   </div>
 
+  <!-- Overlay de Pantalla de Bloqueo / Autenticación Local (Fase 17) -->
+  <div id="auth-lock-screen" role="dialog" aria-modal="true" aria-labelledby="auth-title" class="fixed inset-0 z-40 flex flex-col justify-between p-4 sm:p-6 md:p-8 theme-bg-app select-none overflow-y-auto">
+    <!-- Barra superior de la pantalla de bloqueo (Marca + Controles de Idioma y Tema) -->
+    <header class="w-full max-w-4xl mx-auto flex items-center justify-between py-2">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-violet-600 to-fuchsia-500 flex items-center justify-center text-white shadow-md shadow-violet-500/20">
+          <i data-lucide="sparkles" class="w-4 h-4"></i>
+        </div>
+        <span class="font-bold tracking-tight theme-text-primary text-sm md:text-base">PodcastCraft<span class="text-violet-600">.AI</span></span>
+      </div>
+
+      <!-- Controles de tema e idioma accesibles antes de iniciar sesión -->
+      <div class="flex items-center gap-1.5" role="group" data-i18n-aria-label="settings.quickGroupAria" aria-label="Ajustes rápidos de interfaz">
+        <button id="auth-language-toggle" type="button" aria-label="Cambiar a inglés" title="Cambiar a inglés" class="theme-btn-secondary inline-flex items-center justify-center w-8 h-8 rounded-lg active:scale-95 border focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150 text-xs font-bold tracking-wider">
+          EN
+        </button>
+        <button id="auth-theme-toggle" type="button" aria-pressed="false" aria-label="Cambiar a modo oscuro" title="Cambiar a modo oscuro" class="theme-btn-secondary inline-flex items-center justify-center w-8 h-8 rounded-lg active:scale-95 border focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
+          <i data-lucide="moon" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Tarjeta Central de Autenticación -->
+    <main class="w-full max-w-md mx-auto my-auto py-6">
+      <div class="theme-panel border rounded-2xl p-6 sm:p-8 shadow-2xl relative">
+        
+        <!-- Logo / Icono Principal de Seguridad -->
+        <div class="flex justify-center mb-4">
+          <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-violet-600 to-fuchsia-500 flex items-center justify-center text-white shadow-lg shadow-violet-500/25 glow-ai">
+            <i data-lucide="shield-check" class="w-7 h-7"></i>
+          </div>
+        </div>
+
+        <!-- Títulos Dinámicos -->
+        <h1 id="auth-title" class="text-xl font-bold text-center tracking-tight theme-text-primary mb-1" data-i18n="auth.loginTitle">
+          Pantalla de Bloqueo
+        </h1>
+        <p id="auth-subtitle" class="text-xs text-center theme-text-secondary mb-6 leading-relaxed" data-i18n="auth.loginSubtitle">
+          Ingresa tus credenciales para acceder al editor.
+        </p>
+
+        <!-- Banner de Error Dinámico (credenciales incorrectas, password corto, etc.) -->
+        <div id="auth-error-banner" role="alert" aria-live="assertive" class="hidden mb-4 p-3 rounded-lg text-xs font-medium border bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400 flex items-center gap-2">
+          <i data-lucide="alert-circle" class="w-4 h-4 shrink-0 text-rose-500"></i>
+          <span id="auth-error-text" class="flex-1"></span>
+        </div>
+
+        <!-- Banner de Conexión Fallida / Backend Apagado -->
+        <div id="auth-offline-banner" role="alert" aria-live="assertive" class="hidden mb-4 p-4 rounded-xl text-xs font-medium border bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 flex flex-col items-center text-center gap-3">
+          <div class="w-9 h-9 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-300">
+            <i data-lucide="wifi-off" class="w-5 h-5"></i>
+          </div>
+          <p id="auth-offline-text" data-i18n="auth.connectingError">
+            No se pudo conectar con el servidor local para iniciar sesión.
+          </p>
+          <button id="auth-retry-btn" type="button" class="w-full py-2 px-3 rounded-lg text-xs font-semibold theme-btn-secondary border active:scale-95 transition-all flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span data-i18n="auth.retry">Reintentar</span>
+          </button>
+        </div>
+
+        <!-- Formulario de Autenticación -->
+        <form id="auth-form" class="space-y-4">
+          <div>
+            <label for="auth-username" class="block text-xs font-semibold theme-text-primary mb-1.5" data-i18n="auth.username">
+              Usuario
+            </label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="user" class="w-4 h-4"></i>
+              </span>
+              <input
+                id="auth-username"
+                name="username"
+                type="text"
+                autocomplete="username"
+                required
+                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                data-i18n-placeholder="auth.usernamePlaceholder"
+                placeholder="Ej. podcaster"
+              >
+            </div>
+          </div>
+
+          <div>
+            <label for="auth-password" class="block text-xs font-semibold theme-text-primary mb-1.5" data-i18n="auth.password">
+              Contraseña
+            </label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="key-round" class="w-4 h-4"></i>
+              </span>
+              <input
+                id="auth-password"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                required
+                minlength="6"
+                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                data-i18n-placeholder="auth.passwordPlaceholder"
+                placeholder="Mínimo 6 caracteres"
+              >
+            </div>
+          </div>
+
+          <button
+            id="auth-submit-btn"
+            type="submit"
+            class="w-full mt-2 py-2.5 px-4 rounded-lg text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 active:scale-[0.99] transition-all shadow-md shadow-violet-500/25 flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+          >
+            <i id="auth-submit-icon" data-lucide="log-in" class="w-4 h-4"></i>
+            <span id="auth-submit-text" data-i18n="auth.login">Iniciar sesión</span>
+          </button>
+        </form>
+      </div>
+    </main>
+
+    <!-- Footer Discreto -->
+    <footer class="w-full max-w-4xl mx-auto py-2 text-center text-[11px] theme-text-secondary opacity-75">
+      <span>PodcastCraft AI &bull; Estación de Trabajo de Audio Digital Local</span>
+    </footer>
+  </div>
+
   <!-- 1. Top Navbar (h-14, shrink-0, panel adaptable) -->
-  <header id="topbar" data-i18n-aria-label="topbar.ariaLabel" aria-label="Barra superior de herramientas" class="h-14 shrink-0 theme-panel border-b px-4 grid grid-cols-[1fr_auto_1fr] items-center select-none z-10">
+  <header id="topbar" data-i18n-aria-label="topbar.ariaLabel" aria-label="Barra superior de herramientas" class="h-14 shrink-0 theme-panel border-b px-4 grid grid-cols-[1fr_auto_1fr] items-center select-none z-10 hidden">
     
     <!-- Zona Izquierda: Logo, Nombre del Proyecto y Badge de Estado -->
     <div class="flex items-center gap-3 min-w-0">
@@ -106,12 +230,20 @@
         <button id="btn-theme-toggle" type="button" aria-pressed="false" aria-label="Cambiar a modo oscuro" title="Cambiar a modo oscuro" class="theme-btn-secondary inline-flex items-center justify-center w-8 h-8 rounded-lg active:scale-95 border focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
           <i data-lucide="moon" class="w-4 h-4"></i>
         </button>
+
+        <!-- Separador vertical -->
+        <div class="h-4 w-px bg-slate-300 dark:bg-slate-800 shrink-0 mx-0.5"></div>
+
+        <!-- Botón de Cerrar Sesión (Fase 17) -->
+        <button id="btn-logout" type="button" data-i18n-aria-label="auth.logoutAria" data-i18n-title="auth.logout" aria-label="Cerrar sesión" title="Cerrar sesión" class="theme-btn-secondary inline-flex items-center justify-center w-8 h-8 rounded-lg active:scale-95 border focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300">
+          <i data-lucide="log-out" class="w-4 h-4"></i>
+        </button>
       </div>
     </div>
   </header>
 
   <!-- 2. Workspace Principal (Grid de 3 columnas, flex-1, min-h-0) -->
-  <main id="workspace" data-i18n-aria-label="workspace.ariaLabel" aria-label="Espacio de trabajo del editor" class="flex-1 min-h-0 flex overflow-hidden">
+  <main id="workspace" data-i18n-aria-label="workspace.ariaLabel" aria-label="Espacio de trabajo del editor" class="flex-1 min-h-0 flex overflow-hidden hidden">
     
     <!-- Columna Izquierda: Biblioteca de Medios (20%, min 260px, max 320px) -->
     <aside id="col-library" data-i18n-aria-label="library.asideAria" aria-label="Biblioteca de bloques de audio" class="w-[20%] min-w-[260px] max-w-[320px] theme-panel border-r flex flex-col min-h-0">
@@ -279,7 +411,7 @@
   </main>
 
   <!-- 3. Footer de Transporte (h-16, shrink-0, en flujo normal) -->
-  <footer id="transport" data-i18n-aria-label="transport.ariaLabel" aria-label="Controles de transporte y reproducción" class="h-16 shrink-0 theme-panel border-t px-4 grid grid-cols-[1fr_auto_1fr] items-center select-none z-10">
+  <footer id="transport" data-i18n-aria-label="transport.ariaLabel" aria-label="Controles de transporte y reproducción" class="h-16 shrink-0 theme-panel border-t px-4 grid grid-cols-[1fr_auto_1fr] items-center select-none z-10 hidden">
     
     <!-- Zona Izquierda: Clip en reproducción -->
     <div class="flex items-center gap-3 min-w-0">
