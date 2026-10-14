@@ -732,5 +732,99 @@ Al ser un software local sin servidor de correo ni nube:
 - Tanto el conmutador de **Idioma (ES / EN)** como el de **Tema (Claro / Oscuro)** están ubicados en la barra superior de la pantalla de bloqueo (`#auth-language-toggle`, `#auth-theme-toggle`), permitiendo al usuario configurar sus preferencias visuales antes de iniciar sesión.
 - Todos los textos, etiquetas aria, placeholders y mensajes de validación están 100% traducidos en inglés y español bajo el espacio de nombres `auth.*`.
 
+---
+
+## 🎙️ 11. Fase 18: Transcripción Real con IA (Google Gemini) y Recorte con FFmpeg
+
+Esta fase reemplaza de forma definitiva el generador simulado de la Fase 15 (`generateMockTranscript`, diccionarios `SAMPLE_WORDS_*` y `FILLER_WORDS_*`) por una integración real con la API multimodal de **Google Gemini** (Google AI Studio).
+
+### 11.1 Arquitectura del Flujo de Transcripción
+```
+[Timeline / Clip seleccionado]
+       │ (libraryId, start, duration)
+       ▼
+[Frontend: POST /api/ai/transcribe]
+       │
+       ▼
+[Backend: src/routes/ai.js]
+       │
+       ├──► 1. Resuelve la ruta física del audio en backend/storage/audio-files/
+       │
+       ├──► 2. Recorta exactamente [start, duration] vía ffmpeg-static + fluent-ffmpeg
+       │       a archivo temporal en backend/storage/tmp/
+       │
+       ├──► 3. Codifica el recorte en Base64 y lo envía a Google Gemini con responseSchema
+       │
+       ├──► 4. Gemini devuelve JSON estructurado con segmentos, tiempos (relativos al clip)
+       │       y muletillas clasificadas (isFiller: true/false)
+       │
+       ├──► 5. Borrado garantizado del archivo temporal en storage/tmp/ (bloque finally)
+       │
+       ▼
+[Frontend: Actualiza Store & Renderiza Fichas de Palabras]
+```
+
+### 11.2 Dependencias Cero-Nativas (Preparadas para Electron)
+Para mantener la portabilidad del backend y facilitar el futuro empaquetado de escritorio con Electron (Fase 20), ninguna dependencia requiere compilación C/C++ ni `node-gyp`:
+- `@google/generative-ai` (^0.21.0): SDK oficial de Google para Node.js.
+- `dotenv` (^16.4.5): Carga segura de variables de entorno desde `.env`.
+- `ffmpeg-static` (^5.2.0): Binario de FFmpeg precompilado para la arquitectura del sistema operativo sin dependencias externas.
+- `fluent-ffmpeg` (^2.1.3): Capa de abstracción en JavaScript para ejecutar operaciones de recorte y transcodificación.
+
+### 11.3 Seguridad Crítica de Credenciales y Política de Git
+- **El archivo `backend/.env` NUNCA se versiona:** Incluye la clave real `GEMINI_API_KEY`. Está estrictamente ignorado en `backend/.gitignore` (`.env`, `.env.local`, `.env.*`).
+- **Archivo de ejemplo versionado (`backend/.env.example`):**
+  ```env
+  GEMINI_API_KEY=tu_clave_aqui
+  GEMINI_MODEL=gemini-3.5-flash
+  ```
+- **Arranque tolerante a fallos:** Si `process.env.GEMINI_API_KEY` no está configurada, el servidor arranca normalmente emitiendo una advertencia en consola. La app sigue operativa y la interfaz notifica al usuario si intenta transcribir.
+- **Riesgo aceptado para Electron (Fase 20):** Al empaquetar una aplicación de escritorio local, cualquier archivo `.env` o clave embebida en el cliente es técnicamente extraíble por usuarios avanzados mediante descompilación. Esta decisión fue evaluada y aceptada por el usuario para este proyecto de entrega académica / prototipo de escritorio.
+
+### 11.4 Recorte de Audio con FFmpeg (`backend/src/utils/audioTrimmer.js`)
+Para optimizar el ancho de banda y la cuota de la API de Gemini:
+- No se envía el archivo de audio completo. Se envía únicamente la porción precisa del clip en el timeline (`start` y `duration` en segundos).
+- Se genera un archivo temporal con identificador criptográfico único (`crypto.randomUUID()`) en `backend/storage/tmp/`.
+- **Garantía de limpieza:** Tanto en caso de éxito como en caso de error, el archivo temporal se elimina inmediatamente en el bloque `finally` mediante `fs.promises.unlink`.
+
+### 11.5 Salida Estructurada con `responseSchema`
+Se utiliza la característica nativa de Gemini de salida JSON forzada mediante esquema (`responseSchema`), evitando el parseo frágil de texto libre:
+```javascript
+const schema = {
+  type: "object",
+  properties: {
+    segments: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          startTime: { type: "number" },
+          endTime: { type: "number" },
+          isFiller: { type: "boolean" }
+        },
+        required: ["text", "startTime", "endTime", "isFiller"]
+      }
+    }
+  },
+  required: ["segments"]
+};
+```
+- **Detección de Idioma Automática:** A diferencia de la Fase 15 (que generaba texto simulado según el idioma de la interfaz), Gemini detecta de forma autónoma el idioma del audio (ej. español, inglés, italiano) y transcribe en ese mismo idioma.
+- **Tiempos Relativos:** Los campos `startTime` y `endTime` se calculan respecto al inicio del recorte del clip (`0.0` = inicio del clip).
+- **Marcado de Muletillas:** La IA etiqueta automáticamente como `isFiller: true` aquellas palabras de relleno típicas del idioma detectado (ej. *"eh"*, *"o sea"*, *"bueno"*, *"um"*, *"like"*, etc.).
+
+### 11.6 Resiliencia y Cascada de Modelos de IA
+Para mitigar la congestión temporal (código HTTP 503) o modelos descontinuados (código HTTP 404):
+- El backend evalúa en orden una cascada de modelos activos: `process.env.GEMINI_MODEL`, `gemini-3.5-flash`, `gemini-3.8-flash`, `gemini-3.5-flash-lite`, `gemini-3.5-transcribe` y `gemini-flash-latest`.
+- Si un modelo reporta error temporal de alta demanda o no disponibilidad, el backend conmuta al siguiente modelo automáticamente sin interrumpir al usuario.
+- Si el fallo se debe a credenciales inválidas (HTTP 401) o cuota agotada (HTTP 429), la petición se aborta de inmediato con un mensaje informativo y traducido.
+
+### 11.7 Recomendación de Costos y Límites de Gasto
+Para usuarios que utilicen planes de pago o el nivel gratuito de Google AI Studio / Google Cloud:
+1. Acceder a la consola de Google Cloud Billing.
+2. Establecer un **Presupuesto y Alerta de Gasto** (Spending Limit / Budget Alert) a fin de prevenir consumos no deseados.
+3. El modelo por defecto (`gemini-3.5-flash`) ofrece una excelente relación de velocidad, precisión y bajo costo por millón de tokens de audio procesados.
+
 
 
