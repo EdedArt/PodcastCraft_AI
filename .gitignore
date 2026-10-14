@@ -1,0 +1,30 @@
+# Dependencias de Node
+node_modules/
+package-lock.json
+
+# Salida de empaquetado de Electron Builder
+dist/
+
+# Variables de entorno críticas (NUNCA commitear .env)
+.env
+.env.*
+backend/.env
+backend/.env.*
+
+# Almacenamiento local del backend
+backend/storage/audio-files/*
+!backend/storage/audio-files/.gitkeep
+backend/storage/tmp/*
+!backend/storage/tmp/.gitkeep
+backend/storage/project.json
+backend/storage/project.json.tmp
+backend/storage/auth.json
+backend/storage/auth.json.tmp
+
+# Logs y temporales del sistema
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db

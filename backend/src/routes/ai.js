@@ -4,11 +4,9 @@ const fs = require('fs');
 const fsPromises = require('fs').promises;
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { trimAudioForTranscription, cleanupTmpFile } = require('../utils/audioTrimmer');
-const { readProject } = require('../storage');
+const { readProject, AUDIO_DIR } = require('../storage');
 
 const router = express.Router();
-
-const AUDIO_DIR = path.join(__dirname, '..', '..', 'storage', 'audio-files');
 
 /**
  * Esquema estructurado JSON contractual para la respuesta de Gemini.

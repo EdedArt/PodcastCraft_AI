@@ -1,12 +1,18 @@
-require('dotenv').config();
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const express = require('express');
 const cors = require('cors');
-const { readProject, readAuth } = require('./storage');
+const { readProject, readAuth, AUDIO_DIR } = require('./storage');
 const projectRoutes = require('./routes/project');
 const audioRoutes = require('./routes/audio');
 const authRoutes = require('./routes/auth');
 const aiRoutes = require('./routes/ai');
+
+// Salir limpiamente si el proceso padre (Electron) se desconecta
+process.on('disconnect', () => {
+  console.log('[Servidor embebido] Proceso padre desconectado. Saliendo...');
+  process.exit(0);
+});
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -21,14 +27,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// 2. CORS (abierto para desarrollo local)
+// 2. CORS (abierto para desarrollo local y Electron)
 app.use(cors());
 
 // 3. Parser para cuerpos JSON
 app.use(express.json());
 
 // 4. Servir archivos de audio como estáticos
-app.use('/audio-files', express.static(path.join(__dirname, '..', 'storage', 'audio-files')));
+app.use('/audio-files', express.static(AUDIO_DIR));
 
 // 5. Endpoint de verificación de salud
 app.get('/health', (req, res) => {

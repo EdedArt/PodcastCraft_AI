@@ -4,11 +4,10 @@ const fsPromises = require('fs').promises;
 const crypto = require('crypto');
 const ffmpegPath = require('ffmpeg-static');
 const ffmpeg = require('fluent-ffmpeg');
+const { TMP_DIR } = require('../storage');
 
 // Configuración de la ruta al ejecutable estático de ffmpeg
 ffmpeg.setFfmpegPath(ffmpegPath);
-
-const TMP_DIR = path.join(__dirname, '..', '..', 'storage', 'tmp');
 
 /**
  * Asegura que el directorio temporal exista.

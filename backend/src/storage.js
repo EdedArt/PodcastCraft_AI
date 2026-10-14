@@ -1,7 +1,9 @@
 const fs = require('fs').promises;
 const path = require('path');
 
-const STORAGE_DIR = path.join(__dirname, '..', 'storage');
+const STORAGE_DIR = process.env.PODCASTCRAFT_STORAGE_DIR || path.join(__dirname, '..', 'storage');
+const AUDIO_DIR = path.join(STORAGE_DIR, 'audio-files');
+const TMP_DIR = path.join(STORAGE_DIR, 'tmp');
 const PROJECT_FILE = path.join(STORAGE_DIR, 'project.json');
 const PROJECT_TMP_FILE = path.join(STORAGE_DIR, 'project.json.tmp');
 const AUTH_FILE = path.join(STORAGE_DIR, 'auth.json');
@@ -21,6 +23,8 @@ const INITIAL_AUTH = {
 
 async function ensureStorageDir() {
   await fs.mkdir(STORAGE_DIR, { recursive: true });
+  await fs.mkdir(AUDIO_DIR, { recursive: true });
+  await fs.mkdir(TMP_DIR, { recursive: true });
 }
 
 /**
@@ -107,6 +111,8 @@ module.exports = {
   readAuth,
   writeAuth,
   STORAGE_DIR,
+  AUDIO_DIR,
+  TMP_DIR,
   PROJECT_FILE,
   AUTH_FILE
 };

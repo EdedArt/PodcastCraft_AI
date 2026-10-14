@@ -1,0 +1,56 @@
+{
+  "name": "podcastcraft-ai",
+  "version": "1.0.0",
+  "description": "PodcastCraft AI — Digital Audio Workstation con asistencia de Inteligencia Artificial",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder -mwl"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.podcastcraft.ai",
+    "productName": "PodcastCraft AI",
+    "files": [
+      "electron/**/*",
+      "frontend/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          ".env",
+          "!storage/audio-files/*",
+          "!storage/tmp/*",
+          "!storage/project.json",
+          "!storage/auth.json"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PodcastCraft AI"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

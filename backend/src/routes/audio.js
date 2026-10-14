@@ -4,10 +4,9 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
+const { AUDIO_DIR } = require('../storage');
 
 const router = express.Router();
-
-const AUDIO_DIR = path.join(__dirname, '..', '..', 'storage', 'audio-files');
 
 // Asegura que el directorio exista antes de que multer intente escribir en él
 if (!fs.existsSync(AUDIO_DIR)) {
