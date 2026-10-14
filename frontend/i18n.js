@@ -130,7 +130,28 @@ const I18N = {
 
     // Mensajes de Conexión del Backend
     'topbar.feedbackSaveError': 'No se pudo guardar en el servidor local. Verifica que el backend esté corriendo.',
-    'topbar.feedbackServerOffline': 'Servidor local no detectado. Los cambios se mantendrán solo durante esta sesión.'
+    'topbar.feedbackServerOffline': 'Servidor local no detectado. Los cambios se mantendrán solo durante esta sesión.',
+
+    // Autenticación Local y Pantalla de Bloqueo (Fase 17)
+    'auth.lockScreenTitle': 'PodcastCraft AI',
+    'auth.setupTitle': 'Configuración Inicial',
+    'auth.setupSubtitle': 'Crea tu usuario y contraseña para proteger tu estación de trabajo local.',
+    'auth.loginTitle': 'Pantalla de Bloqueo',
+    'auth.loginSubtitle': 'Ingresa tus credenciales para acceder al editor.',
+    'auth.createAccount': 'Crear cuenta',
+    'auth.login': 'Iniciar sesión',
+    'auth.username': 'Usuario',
+    'auth.password': 'Contraseña',
+    'auth.usernamePlaceholder': 'Ej. podcaster',
+    'auth.passwordPlaceholder': 'Mínimo 6 caracteres',
+    'auth.invalidCredentials': 'Credenciales incorrectas. Verifica tu usuario y contraseña.',
+    'auth.passwordTooShort': 'La contraseña debe tener al menos 6 caracteres.',
+    'auth.usernameRequired': 'Debes ingresar un nombre de usuario.',
+    'auth.connectingError': 'No se pudo conectar con el servidor local para iniciar sesión.',
+    'auth.connecting': 'Conectando con el servidor local...',
+    'auth.retry': 'Reintentar',
+    'auth.logout': 'Cerrar sesión',
+    'auth.logoutAria': 'Cerrar sesión y bloquear pantalla'
   },
   en: {
     // Aplicación y Barra Superior (Topbar)
@@ -254,7 +275,28 @@ const I18N = {
 
     // Mensajes de Conexión del Backend
     'topbar.feedbackSaveError': 'Could not save to local server. Make sure the backend is running.',
-    'topbar.feedbackServerOffline': 'Local server not detected. Changes will only persist during this session.'
+    'topbar.feedbackServerOffline': 'Local server not detected. Changes will only persist during this session.',
+
+    // Autenticación Local y Pantalla de Bloqueo (Fase 17)
+    'auth.lockScreenTitle': 'PodcastCraft AI',
+    'auth.setupTitle': 'Initial Setup',
+    'auth.setupSubtitle': 'Create your username and password to secure your local digital audio workstation.',
+    'auth.loginTitle': 'Lock Screen',
+    'auth.loginSubtitle': 'Enter your credentials to access the editor.',
+    'auth.createAccount': 'Create account',
+    'auth.login': 'Log in',
+    'auth.username': 'Username',
+    'auth.password': 'Password',
+    'auth.usernamePlaceholder': 'e.g. podcaster',
+    'auth.passwordPlaceholder': 'At least 6 characters',
+    'auth.invalidCredentials': 'Incorrect credentials. Check your username and password.',
+    'auth.passwordTooShort': 'Password must be at least 6 characters long.',
+    'auth.usernameRequired': 'Username is required.',
+    'auth.connectingError': 'Could not connect to the local server to sign in.',
+    'auth.connecting': 'Connecting to local server...',
+    'auth.retry': 'Retry',
+    'auth.logout': 'Log out',
+    'auth.logoutAria': 'Log out and lock screen'
   }
 };
 
@@ -304,8 +346,8 @@ function t(key, params) {
 
 /**
  * Aplica todas las traducciones a elementos del DOM marcados con data-i18n,
- * data-i18n-aria-label o data-i18n-title, actualiza controles dinámicos y
- * refresca el botón de cambio de idioma.
+ * data-i18n-aria-label, data-i18n-title o data-i18n-placeholder, actualiza controles
+ * dinámicos y refresca el botón de cambio de idioma.
  */
 function applyTranslations() {
   const lang = getCurrentLanguage();
@@ -330,17 +372,25 @@ function applyTranslations() {
     el.setAttribute('title', t(key));
   });
 
-  // 4. Botón de alternancia de idioma (#btn-language-toggle)
-  const langToggleBtn = document.getElementById('btn-language-toggle');
-  if (langToggleBtn) {
-    const targetLang = lang === 'es' ? 'en' : 'es';
-    langToggleBtn.textContent = targetLang.toUpperCase();
-    const label = t('settings.languageToggleAria');
-    langToggleBtn.setAttribute('aria-label', label);
-    langToggleBtn.setAttribute('title', label);
-  }
+  // 4. Atributos placeholder en campos de entrada
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    el.setAttribute('placeholder', t(key));
+  });
 
-  // 5. Re-renderizado de componentes con estados dinámicos si las funciones existen
+  // 5. Botones de alternancia de idioma (#btn-language-toggle y #auth-language-toggle)
+  ['btn-language-toggle', 'auth-language-toggle'].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (btn) {
+      const targetLang = lang === 'es' ? 'en' : 'es';
+      btn.textContent = targetLang.toUpperCase();
+      const label = t('settings.languageToggleAria');
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('title', label);
+    }
+  });
+
+  // 6. Re-renderizado de componentes con estados dinámicos si las funciones existen
   if (typeof renderTopbar === 'function') {
     renderTopbar();
   }
@@ -358,6 +408,9 @@ function applyTranslations() {
   }
   if (typeof renderAiPanel === 'function') {
     renderAiPanel();
+  }
+  if (typeof renderAuthScreen === 'function') {
+    renderAuthScreen();
   }
   if (typeof renderIcons === 'function') {
     renderIcons();
