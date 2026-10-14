@@ -197,7 +197,6 @@ window.PodcastCraft = {
   setLanguage: (lang) => (typeof setLanguage === 'function' ? setLanguage(lang) : null),
   t: (key) => (typeof t === 'function' ? t(key) : key),
   applyTranslations: () => (typeof applyTranslations === 'function' ? applyTranslations() : null),
-  generateMockTranscript: (clip) => generateMockTranscript(clip),
   transcribeSelectedClip: () => transcribeSelectedClip(),
   toggleSegmentMark: (clipId, segId) => toggleSegmentMark(clipId, segId),
   confirmSegmentCleanup: (clipId) => confirmSegmentCleanup(clipId),
@@ -311,37 +310,8 @@ function pixelsToTime(pixels) {
 }
 
 /* ==========================================================================
-   4.1 SIMULACIÓN DE IA (Fase 15: Transcripción y Detección de Muletillas)
+   4.1 ASISTENTE DE IA (Fase 18: Transcripción real con Google Gemini)
    ========================================================================== */
-
-const FILLER_WORDS_ES = ['eh', 'o sea', 'este', 'mmm', 'tipo', 'bueno'];
-const FILLER_WORDS_EN = ['uh', 'like', 'um', 'you know', 'so', 'basically'];
-const SAMPLE_WORDS_ES = ['entonces', 'quiero', 'contarles', 'sobre', 'el', 'tema', 'de', 'hoy', 'que', 'es', 'realmente', 'interesante', 'para', 'todos', 'ustedes'];
-const SAMPLE_WORDS_EN = ['so', 'today', 'I', 'want', 'to', 'talk', 'about', 'something', 'really', 'interesting', 'for', 'all', 'of', 'you', 'listening'];
-
-/**
- * Genera una transcripción simulada con palabras normales y muletillas intercaladas (Fase 15).
- * Se genera en el idioma activo en el momento de transcribir.
- * @param {object} clip - Instancia del clip seleccionado en el timeline
- * @returns {Array<{ id: string, text: string, isFiller: boolean, markedForDeletion: boolean }>}
- */
-function generateMockTranscript(clip) {
-  if (!clip) return [];
-  const lang = typeof getCurrentLanguage === 'function' ? getCurrentLanguage() : 'es';
-  const fillers = lang === 'en' ? FILLER_WORDS_EN : FILLER_WORDS_ES;
-  const words = lang === 'en' ? SAMPLE_WORDS_EN : SAMPLE_WORDS_ES;
-  const clipDuration = typeof clip.duration === 'number' && clip.duration > 0 ? clip.duration : 20;
-  const wordCount = Math.max(8, Math.min(40, Math.round(clipDuration / 2)));
-  const segments = [];
-  for (let i = 0; i < wordCount; i++) {
-    const isFiller = Math.random() < 0.15;
-    const text = isFiller
-      ? fillers[Math.floor(Math.random() * fillers.length)]
-      : words[Math.floor(Math.random() * words.length)];
-    segments.push({ id: `seg-${clip.id}-${i}`, text, isFiller, markedForDeletion: false });
-  }
-  return segments;
-}
 
 /**
  * Muestra una notificación toast temporal y accesible (Fase 15).
@@ -363,9 +333,12 @@ function showToast(message, type = 'success') {
     ? 'bg-amber-600 text-white'
     : 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border border-slate-700/50 dark:border-slate-300';
 
+  const iconName = type === 'warning' ? 'alert-triangle' : 'check-circle';
+  const iconColor = type === 'warning' ? 'text-amber-200' : 'text-emerald-400 dark:text-emerald-600';
+
   toast.className = `px-3.5 py-2 rounded-lg text-xs font-semibold shadow-xl flex items-center gap-2 transform translate-y-2 opacity-0 transition-all duration-200 pointer-events-auto ${bgClass}`;
   toast.innerHTML = `
-    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 dark:text-emerald-600 shrink-0"></i>
+    <i data-lucide="${iconName}" class="w-4 h-4 ${iconColor} shrink-0"></i>
     <span>${escapeHtml(message)}</span>
   `;
 
@@ -381,13 +354,14 @@ function showToast(message, type = 'success') {
     setTimeout(() => {
       toast.remove();
     }, 250);
-  }, 3000);
+  }, 3500);
 }
 
 /**
- * Inicia la transcripción simulada del clip actualmente seleccionado en el timeline (Fase 15).
+ * Inicia la transcripción real con Google Gemini del clip actualmente seleccionado (Fase 18).
+ * Envía el libraryId, start y duration exactos al endpoint POST /api/ai/transcribe.
  */
-function transcribeSelectedClip() {
+async function transcribeSelectedClip() {
   const selectedClipId = state.selection.clipId;
   if (!selectedClipId) return;
 
@@ -401,7 +375,7 @@ function transcribeSelectedClip() {
   }
   if (!targetClip) return;
 
-  // Estado 'processing' inmediato
+  // 1. Estado 'processing' inmediato para mostrar feedback visual y animación pulsante
   const nextTranscriptByClip = {
     ...state.ai.transcriptByClip,
     [selectedClipId]: {
@@ -417,28 +391,97 @@ function transcribeSelectedClip() {
     }
   });
 
-  // Retraso simulado de 1.5s
-  setTimeout(() => {
-    // Verificar si el clip todavía existe en el proyecto
+  try {
+    const payload = {
+      libraryId: targetClip.libraryId || targetClip.id,
+      start: typeof targetClip.start === 'number' ? targetClip.start : 0,
+      duration: typeof targetClip.duration === 'number' ? targetClip.duration : 1
+    };
+
+    const res = await fetch(`${API_BASE_URL}/api/ai/transcribe`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    // Verificar si el clip sigue existiendo en el proyecto al volver de la petición
     const stillExists = state.tracks.some((t) => t.clips?.some((c) => c.id === selectedClipId));
     if (!stillExists) return;
 
-    const generated = generateMockTranscript(targetClip);
-    const updated = {
-      ...state.ai.transcriptByClip,
-      [selectedClipId]: {
-        status: 'done',
-        segments: generated
+    if (!res.ok) {
+      let errorMsg;
+      if (res.status === 503 && data.error && data.error.includes('GEMINI_API_KEY')) {
+        errorMsg = typeof t === 'function' ? t('aiPanel.notConfigured') : data.error;
+      } else if (res.status === 429) {
+        errorMsg = typeof t === 'function' ? t('aiPanel.rateLimited') : (data.error || 'Límite de solicitudes alcanzado.');
+      } else {
+        errorMsg = data.error || (typeof t === 'function' ? t('aiPanel.networkError') : 'Error al transcribir con IA.');
       }
-    };
+
+      showToast(errorMsg, 'warning');
+
+      // Restaurar estado a idle si falló la transcripción
+      setState({
+        ai: {
+          ...state.ai,
+          transcriptByClip: {
+            ...state.ai.transcriptByClip,
+            [selectedClipId]: {
+              status: 'idle',
+              segments: []
+            }
+          }
+        }
+      });
+      return;
+    }
+
+    // Respuesta exitosa: data.segments contiene { id, text, startTime, endTime, isFiller }
+    const rawSegments = Array.isArray(data.segments) ? data.segments : [];
+    const formattedSegments = rawSegments.map((s, idx) => ({
+      id: s.id || `seg-${selectedClipId}-${idx + 1}`,
+      text: s.text,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      isFiller: Boolean(s.isFiller),
+      markedForDeletion: false
+    }));
 
     setState({
       ai: {
         ...state.ai,
-        transcriptByClip: updated
+        transcriptByClip: {
+          ...state.ai.transcriptByClip,
+          [selectedClipId]: {
+            status: 'done',
+            segments: formattedSegments
+          }
+        }
       }
     });
-  }, 1500);
+
+  } catch (err) {
+    console.error('[PodcastCraft AI] Error de red al solicitar transcripción con Gemini:', err);
+    showToast(typeof t === 'function' ? t('aiPanel.networkError') : 'Error de conexión con el servidor.', 'warning');
+
+    setState({
+      ai: {
+        ...state.ai,
+        transcriptByClip: {
+          ...state.ai.transcriptByClip,
+          [selectedClipId]: {
+            status: 'idle',
+            segments: []
+          }
+        }
+      }
+    });
+  }
 }
 
 /**
@@ -1347,7 +1390,7 @@ function renderAiPanel() {
     if (status === 'processing') {
       btnTranscribe.disabled = true;
       btnTranscribe.setAttribute('aria-disabled', 'true');
-      if (btnTranscribeText) btnTranscribeText.textContent = typeof t === 'function' ? t('aiPanel.processing') : 'Transcribiendo...';
+      if (btnTranscribeText) btnTranscribeText.textContent = typeof t === 'function' ? (t('aiPanel.transcribingReal') || t('aiPanel.processing')) : 'Transcribiendo con IA...';
     } else {
       btnTranscribe.disabled = false;
       btnTranscribe.removeAttribute('aria-disabled');
@@ -1411,11 +1454,27 @@ function renderAiPanel() {
           <i data-lucide="sparkles" class="w-7 h-7"></i>
         </div>
         <h4 class="text-xs font-semibold theme-text-primary mb-1 animate-pulse">
-          ${typeof t === 'function' ? t('aiPanel.processing') : 'Transcribiendo audio y detectando muletillas...'}
+          ${typeof t === 'function' ? (t('aiPanel.transcribingReal') || t('aiPanel.processing')) : 'Transcribiendo con IA...'}
         </h4>
         <p class="text-[11px] theme-text-muted">
           ${escapeHtml(targetClip.name)} (${formatDuration(targetClip.duration)})
         </p>
+      </div>
+    `;
+  } else if (status === 'error') {
+    const errorMsg = clipData?.errorMessage ? (typeof t === 'function' ? t(clipData.errorMessage) : clipData.errorMessage) : (typeof t === 'function' ? t('aiPanel.networkError') : 'Error al transcribir');
+    transcriptContainer.innerHTML = `
+      <div class="flex-1 flex flex-col items-center justify-center p-6 text-center border-2 border-dashed border-red-500/20 rounded-xl theme-empty-box">
+        <div class="w-12 h-12 rounded-full border border-red-500/30 bg-red-500/10 flex items-center justify-center text-red-500 mb-3 shadow-sm">
+          <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-xs font-semibold text-red-500 mb-1">${typeof t === 'function' ? t('common.error') : 'Error'}</h3>
+        <p class="text-[11px] theme-text-secondary leading-relaxed max-w-[210px]">
+          ${escapeHtml(errorMsg)}
+        </p>
+        <span class="mt-3 text-[11px] font-medium text-violet-600 dark:text-violet-400 bg-violet-500/10 px-2.5 py-1 rounded-full text-center">
+          ${typeof t === 'function' ? t('aiPanel.selectedClipHint') : 'Haz clic en «Transcribir» para reintentar'}
+        </span>
       </div>
     `;
   } else if (status === 'done') {
