@@ -1,9 +1,10 @@
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
-const { readProject } = require('./storage');
+const { readProject, readAuth } = require('./storage');
 const projectRoutes = require('./routes/project');
 const audioRoutes = require('./routes/audio');
+const authRoutes = require('./routes/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -33,6 +34,7 @@ app.get('/health', (req, res) => {
 });
 
 // 6. Rutas de API
+app.use('/api/auth', authRoutes);
 app.use('/api/project', projectRoutes);
 app.use('/api/audio', audioRoutes);
 
@@ -56,6 +58,10 @@ async function startServer() {
     const tracksCount = Array.isArray(projectData.tracks) ? projectData.tracks.length : 0;
     const libraryCount = Array.isArray(projectData.library) ? projectData.library.length : 0;
     console.log(`Proyecto cargado desde storage/project.json (${tracksCount} carriles, ${libraryCount} ítems en biblioteca)`);
+
+    const authData = await readAuth();
+    const isConfigured = Boolean(authData && authData.username && authData.passwordHash && authData.salt);
+    console.log(`Estado de autenticación local: ${isConfigured ? `Configurado (usuario: "${authData.username}")` : 'Sin configurar (primer uso)'}`);
 
     app.listen(PORT, () => {
       console.log(`PodcastCraft AI backend escuchando en http://localhost:${PORT}`);

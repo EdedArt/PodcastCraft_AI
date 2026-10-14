@@ -4,11 +4,19 @@ const path = require('path');
 const STORAGE_DIR = path.join(__dirname, '..', 'storage');
 const PROJECT_FILE = path.join(STORAGE_DIR, 'project.json');
 const PROJECT_TMP_FILE = path.join(STORAGE_DIR, 'project.json.tmp');
+const AUTH_FILE = path.join(STORAGE_DIR, 'auth.json');
+const AUTH_TMP_FILE = path.join(STORAGE_DIR, 'auth.json.tmp');
 
 const INITIAL_PROJECT = {
   project: { title: 'Untitled Project', status: 'draft' },
   library: [],
   tracks: []
+};
+
+const INITIAL_AUTH = {
+  username: null,
+  passwordHash: null,
+  salt: null
 };
 
 async function ensureStorageDir() {
@@ -56,9 +64,50 @@ async function readProject() {
   }
 }
 
+/**
+ * Serializa y escribe las credenciales de autenticación de manera atómica.
+ * @param {object} data { username, passwordHash, salt }
+ */
+async function writeAuth(data) {
+  await ensureStorageDir();
+  const serialized = JSON.stringify(data, null, 2);
+  await fs.writeFile(AUTH_TMP_FILE, serialized, 'utf8');
+  await fs.rename(AUTH_TMP_FILE, AUTH_FILE);
+  return data;
+}
+
+/**
+ * Lee storage/auth.json, lo parsea y lo devuelve.
+ * Si el archivo no existe, lo crea con valores iniciales nulos y lo devuelve.
+ * @returns {Promise<object>}
+ */
+async function readAuth() {
+  await ensureStorageDir();
+  let content;
+  try {
+    content = await fs.readFile(AUTH_FILE, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      await writeAuth(INITIAL_AUTH);
+      return JSON.parse(JSON.stringify(INITIAL_AUTH));
+    }
+    throw err;
+  }
+
+  try {
+    return JSON.parse(content);
+  } catch (parseErr) {
+    throw new Error(`El archivo de autenticación en "${AUTH_FILE}" está corrupto o contiene JSON inválido: ${parseErr.message}`);
+  }
+}
+
 module.exports = {
   readProject,
   writeProject,
+  readAuth,
+  writeAuth,
   STORAGE_DIR,
-  PROJECT_FILE
+  PROJECT_FILE,
+  AUTH_FILE
 };
+

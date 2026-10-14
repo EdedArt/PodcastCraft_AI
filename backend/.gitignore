@@ -3,4 +3,6 @@ storage/audio-files/*
 !storage/audio-files/.gitkeep
 storage/project.json
 storage/project.json.tmp
+storage/auth.json
+storage/auth.json.tmp
 *.log
