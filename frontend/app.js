@@ -193,6 +193,7 @@ window.PodcastCraft = {
   scheduleAutoSave: () => scheduleAutoSave(),
   get globalAudio() { return globalAudio; },
   get activePlayingClipStart() { return activePlayingClipStart; },
+  get activePlayingClipSourceOffset() { return activePlayingClipSourceOffset; },
   getCurrentLanguage: () => (typeof getCurrentLanguage === 'function' ? getCurrentLanguage() : 'es'),
   setLanguage: (lang) => (typeof setLanguage === 'function' ? setLanguage(lang) : null),
   t: (key) => (typeof t === 'function' ? t(key) : key),
@@ -392,9 +393,12 @@ async function transcribeSelectedClip() {
   });
 
   try {
+    const sourceStart = typeof targetClip.sourceOffset === 'number'
+      ? targetClip.sourceOffset
+      : (typeof targetClip.start === 'number' ? targetClip.start : 0);
     const payload = {
       libraryId: targetClip.libraryId || targetClip.id,
-      start: typeof targetClip.start === 'number' ? targetClip.start : 0,
+      start: sourceStart,
       duration: typeof targetClip.duration === 'number' ? targetClip.duration : 1
     };
 
@@ -2042,7 +2046,8 @@ async function saveProjectToBackend() {
           libraryId: c.libraryId,
           name: c.name,
           start: c.start,
-          duration: c.duration
+          duration: c.duration,
+          sourceOffset: typeof c.sourceOffset === 'number' ? c.sourceOffset : 0
         }))
       }))
     };
@@ -2128,6 +2133,7 @@ async function loadProjectFromBackend() {
                 name: c.name || (libItem ? libItem.name : 'Clip'),
                 start: typeof c.start === 'number' ? c.start : 0,
                 duration: typeof c.duration === 'number' ? c.duration : 0,
+                sourceOffset: typeof c.sourceOffset === 'number' ? c.sourceOffset : 0,
                 objectUrl: libItem ? libItem.objectUrl : null
               };
             })
@@ -2182,6 +2188,11 @@ let activePlayingClipStart = 0;
 let activePlayingClipDuration = 0;
 
 /**
+ * Offset real (en segundos del archivo fuente original) donde inicia el clip activo (Fase 19).
+ */
+let activePlayingClipSourceOffset = 0;
+
+/**
  * Identificador activo de requestAnimationFrame para el bucle de sincronización del playhead.
  * EXCEPCIÓN AL STORE (3ª del proyecto, tras is-dragging y pointermove de recorte):
  * Actualiza el DOM directamente a 60 FPS leyendo globalAudio.currentTime sin pasar por
@@ -2191,7 +2202,8 @@ let playheadRafId = null;
 
 /**
  * Inicia el bucle de animación del playhead a 60 FPS si el audio está en reproducción.
- * Fase 9: Calcula la posición absoluta del playhead como (activePlayingClipStart + audioElapsed).
+ * Fase 9 & 19: Calcula la posición absoluta del playhead como (activePlayingClipStart + audioElapsed),
+ * donde audioElapsed toma en cuenta el sourceOffset del clip.
  */
 function startPlayheadLoop() {
   if (playheadRafId !== null) return; // ya corriendo, evita loops duplicados
@@ -2203,9 +2215,10 @@ function startPlayheadLoop() {
       playheadRafId = null;
       return; // detiene el loop solo, no necesita cancelAnimationFrame explícito aquí
     }
-    const audioElapsed = globalAudio.currentTime || 0;
+    const rawCurrentTime = globalAudio.currentTime || 0;
+    const audioElapsed = Math.max(0, rawCurrentTime - activePlayingClipSourceOffset);
 
-    // Respetar duración efectiva del clip si fue recortado o dividido (Fase 9)
+    // Respetar duración efectiva del clip si fue recortado o dividido (Fase 9 & 19)
     if (activePlayingClipDuration > 0 && audioElapsed >= activePlayingClipDuration) {
       globalAudio.pause();
       stopPlayheadLoop();
@@ -2281,18 +2294,20 @@ function seekTo(targetSeconds) {
   if (coveringClip && coveringClip.objectUrl) {
     activePlayingClipStart = coveringClip.start || 0;
     activePlayingClipDuration = coveringClip.duration || 0;
+    activePlayingClipSourceOffset = coveringClip.sourceOffset || 0;
     const clipOffset = Math.max(0, seconds - activePlayingClipStart);
+    const targetSourceTime = activePlayingClipSourceOffset + clipOffset;
 
     if (globalAudio.src !== coveringClip.objectUrl) {
       globalAudio.src = coveringClip.objectUrl;
-      globalAudio.currentTime = clipOffset;
+      globalAudio.currentTime = targetSourceTime;
       if (state.project.isPlaying) {
         syncGlobalAudioVolume();
         globalAudio.play().catch((err) => console.warn('[PodcastCraft AI] Seek play error:', err));
       }
     } else {
       try {
-        globalAudio.currentTime = clipOffset;
+        globalAudio.currentTime = targetSourceTime;
       } catch (_) {}
     }
 
@@ -2366,7 +2381,9 @@ function bindTransportEvents() {
       if (state.project.isPlaying) {
         globalAudio.pause();
         stopPlayheadLoop();
-        const currentAbsolute = activePlayingClipStart + (globalAudio.currentTime || 0);
+        const rawTime = globalAudio.currentTime || 0;
+        const audioElapsed = Math.max(0, rawTime - activePlayingClipSourceOffset);
+        const currentAbsolute = activePlayingClipStart + audioElapsed;
         setState({ project: { isPlaying: false, currentTime: currentAbsolute } });
       } else {
         // Encontrar clip a reproducir (seleccionado o el primero en la línea de tiempo)
@@ -2389,6 +2406,7 @@ function bindTransportEvents() {
         if (targetClip && targetClip.objectUrl) {
           activePlayingClipStart = targetClip.start || 0;
           activePlayingClipDuration = targetClip.duration || 0;
+          activePlayingClipSourceOffset = targetClip.sourceOffset || 0;
 
           // Determinar offset en segundos dentro del archivo de audio
           const currentTimelineTime = state.project.currentTime || 0;
@@ -2409,12 +2427,14 @@ function bindTransportEvents() {
             }
           }
 
+          const targetSourceTime = activePlayingClipSourceOffset + clipAudioOffset;
+
           if (globalAudio.src !== targetClip.objectUrl) {
             globalAudio.src = targetClip.objectUrl;
-            globalAudio.currentTime = clipAudioOffset;
-          } else if (Math.abs((globalAudio.currentTime || 0) - clipAudioOffset) > 0.05) {
+            globalAudio.currentTime = targetSourceTime;
+          } else if (Math.abs((globalAudio.currentTime || 0) - targetSourceTime) > 0.05) {
             try {
-              globalAudio.currentTime = clipAudioOffset;
+              globalAudio.currentTime = targetSourceTime;
             } catch (_) {}
           }
 
@@ -2855,13 +2875,15 @@ function bindTimelineEvents() {
 
         const clip1 = {
           ...clip,
-          duration: splitSec
+          duration: splitSec,
+          sourceOffset: clip.sourceOffset || 0
         };
         const clip2 = {
           ...clip,
           id: `clip-${crypto.randomUUID()}`,
           start: clip.start + splitSec,
-          duration: clip.duration - splitSec
+          duration: clip.duration - splitSec,
+          sourceOffset: (clip.sourceOffset || 0) + splitSec
         };
 
         const nextClips = [];
@@ -2953,6 +2975,7 @@ function bindTimelineEvents() {
       name: payload.name,
       duration: duration,
       start: start,
+      sourceOffset: 0,
       objectUrl: objectUrl
     };
 
@@ -3090,7 +3113,11 @@ function bindTimelineEvents() {
             ...t,
             clips: t.clips.map((c) => {
               if (c.id === cId) {
-                return { ...c, start: pendingStart, duration: pendingDuration };
+                const currentOffset = c.sourceOffset || 0;
+                const newSourceOffset = activeTrim.handleType === 'left'
+                  ? Math.max(0, currentOffset + (pendingStart - initialStart))
+                  : currentOffset;
+                return { ...c, start: pendingStart, duration: pendingDuration, sourceOffset: newSourceOffset };
               }
               return c;
             }).sort((a, b) => a.start - b.start)
