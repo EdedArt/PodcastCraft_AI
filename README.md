@@ -1,8 +1,8 @@
-# PodcastCraft AI — Sprint 5 de 7 (Playhead de Alta Fidelidad + Scrubbing)
+# PodcastCraft AI — Fase 17: Sistema de Login Local (Pantalla de Bloqueo)
 
 Estación de trabajo de audio digital (DAW) y editor de podcasts con asistencia de Inteligencia Artificial (estilo Descript / Adobe Audition), desarrollada como proyecto final para la asignatura **Diseño de Interfaces de Software** en la Universidad Cooperativa de Colombia.
 
-Este repositorio contiene el **Sprint 5 (Playhead de Alta Fidelidad a 60 FPS, Sincronización Continua vía requestAnimationFrame y Scrubbing Interactivo en Regla de Tiempo)**, conservando el 100% de la funcionalidad de carriles dinámicos, importación de MP3 reales y edición no destructiva construida en el Sprint 4.
+Este repositorio contiene la **Fase 17 (Sistema de autenticación y pantalla de bloqueo local para escritorio)**, conservando el 100% de la funcionalidad de carriles dinámicos, importación de MP3 reales, playhead sincronizado al píxel, panel de IA y edición no destructiva con persistencia.
 
 ---
 
@@ -678,6 +678,59 @@ function pushUndoSnapshot() {
    - Se verificó que `#btn-undo`, `#btn-play`, `#btn-transcribe-clip` y `#btn-ai-clean-all` alternan sincronizadamente tanto el atributo HTML `disabled` como `aria-disabled="true|false"` para lectores de pantalla.
 5. **Estrategia de Cache-Busting (`?v=`):**
    - Durante el desarrollo local contra servidor web estático, las etiquetas de versión (`?v=16.0`) garantizan la invalidación instantánea de caché en hojas de estilo y scripts. En la fase final de empaquetado como aplicación de escritorio nativa con Electron (Fase 17+), los archivos se resuelven directamente vía protocolo local `file://`, donde los query strings de caché resultan innecesarios y podrán removerse limpiamente.
+
+---
+
+## 🔐 10. Fase 17: Sistema de Login Local (Pantalla de Bloqueo)
+
+### 10.1 Contexto y Filosofía de Diseño
+Como requisito de la cátedra de Diseño de Interfaces de Software, la aplicación incorpora control de acceso. Al tratarse de una **estación de trabajo de audio digital de escritorio de un solo usuario** (no un servicio multiusuario ni SaaS en la nube), el sistema opera como una **pantalla de bloqueo local**:
+- **Primer arranque:** Si no existe ninguna cuenta previa configurada (`configured: false`), la aplicación solicita al usuario crear su nombre de usuario y contraseña iniciales.
+- **Usos posteriores:** Si ya existe un usuario registrado (`configured: true`), la app exige el ingreso de las credenciales antes de desbloquear y mostrar el workspace.
+- **Acceso visual y funcional:** Los elementos principales del editor (`#workspace`, `#topbar`, `#transport`) permanecen completamente ocultos (`hidden`) y bloqueados contra interacción o lectores de pantalla hasta que la autenticación sea exitosa.
+
+### 10.2 Criptografía Nativa con `crypto.scryptSync` (Cero Dependencias Nativas)
+Para evitar problemas de compilación de binarios C/C++ en plataformas destino (el mismo motivo por el cual se evitó SQLite pensando en el empaquetado futuro con Electron):
+- **Sin `bcrypt`:** Se utiliza exclusivamente el módulo estándar `crypto` incorporado en Node.js.
+- **Derivación de clave:** Se emplea `crypto.scryptSync(password, salt, 64).toString('hex')`, un algoritmo resistente a ataques por fuerza bruta y aceleración por GPU.
+- **Salt criptográfico:** Generado de forma impredecible con `crypto.randomBytes(16).toString('hex')`.
+- **Comparación segura:** En el inicio de sesión, los buffers del hash calculado y el hash persistido se comparan con `crypto.timingSafeEqual` para prevenir ataques de temporización (*timing attacks*).
+
+### 10.3 Almacenamiento Local y Atómico (`backend/storage/auth.json`)
+Las credenciales se gestionan en `backend/storage/auth.json` (ignorado en `.gitignore` para no versionar datos de usuario):
+```json
+{
+  "username": "mauricio",
+  "passwordHash": "f7da3dac7fa43aa5daefc539d4ee615b1f265d9e924bd192ece7dc3a91fa34caffc45befeb778017a115cbeb923e1fb7dd7ebd3c7cc6b3b8ead78913b8c4c40e",
+  "salt": "925c13ada9c41b072e67f46b1df04b51"
+}
+```
+Las escrituras son estrictamente atómicas (primero se escribe en `auth.json.tmp` y luego se ejecuta `fs.rename`), evitando corrupciones ante cierres inesperados de la aplicación.
+
+### 10.4 Rutas de la API de Autenticación
+Montadas bajo el prefijo `/api/auth`:
+- **`GET /api/auth/status`:** Devuelve `{ configured: boolean }`.
+- **`POST /api/auth/setup`:** Solo admitido si `configured === false`. Valida que el nombre de usuario no esté vacío y que la contraseña posea al menos 6 caracteres. Genera el salt, computa el hash con `scryptSync`, guarda en `auth.json` y responde `{ success: true, username }`.
+- **`POST /api/auth/login`:** Valida que las credenciales coincidan. Responde `{ success: true, username }` si son válidas o HTTP 401 si no coinciden.
+
+### 10.5 Política de Sesión en Memoria (*In-Memory Session*)
+- **Sin persistencia entre recargas:** Por diseño deliberado para una app de escritorio con pantalla de bloqueo, la sesión se mantiene únicamente en memoria de JavaScript (`PodcastCraftAuth.isAuthenticated`). Al recargar la página (F5) o cerrar y reabrir la aplicación, se solicita la contraseña nuevamente.
+- **Botón de Cerrar Sesión:** En la barra superior (`#btn-logout`, icono `log-out`), el usuario puede bloquear la estación de trabajo manualmente en cualquier momento. Esto pausa de inmediato cualquier audio en reproducción y oculta el espacio de trabajo sin reiniciar el backend ni perder el proyecto guardado.
+
+### 10.6 Manejo de Servidor Desconectado y Modo Degradado
+A diferencia de otras fases donde se permitía un modo de prueba degradado sin backend, **el login local requiere estrictamente la presencia del backend**:
+- Si el servidor local en el puerto 3001 está apagado o no responde, la pantalla de bloqueo muestra un banner de error: *"No se pudo conectar con el servidor local para iniciar sesión."* con un botón de **Reintentar**.
+- El usuario **no puede ingresar a la aplicación** hasta que el servidor local esté activo y responda con éxito.
+
+### 10.7 Recuperación y Reseteo de Cuenta (Si se Olvida la Contraseña)
+Al ser un software local sin servidor de correo ni nube:
+- No existe pantalla compleja de "¿Olvidaste tu contraseña?".
+- Para reiniciar la cuenta, el usuario solo debe **eliminar el archivo `backend/storage/auth.json`** (o vaciarlo a `{ "username": null, "passwordHash": null, "salt": null }`).
+- Al abrir PodcastCraft AI nuevamente, el backend reportará `configured: false` y la interfaz presentará inmediatamente la pantalla de **Configuración Inicial** para registrar una nueva cuenta, conservando intactos el proyecto en `project.json` y todos los audios importados.
+
+### 10.8 Accesibilidad e Internacionalización en Bloqueo
+- Tanto el conmutador de **Idioma (ES / EN)** como el de **Tema (Claro / Oscuro)** están ubicados en la barra superior de la pantalla de bloqueo (`#auth-language-toggle`, `#auth-theme-toggle`), permitiendo al usuario configurar sus preferencias visuales antes de iniciar sesión.
+- Todos los textos, etiquetas aria, placeholders y mensajes de validación están 100% traducidos en inglés y español bajo el espacio de nombres `auth.*`.
 
 
 
