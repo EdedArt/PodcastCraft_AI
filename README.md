@@ -1,4 +1,4 @@
-# PodcastCraft AI — Estación de Trabajo de Audio Digital (DAW) con Asistencia de IA
+# PodcastCraft AI
 
 Estación de trabajo de audio digital (DAW) y editor de podcasts con asistencia de Inteligencia Artificial (estilo Descript / Adobe Audition), desarrollada como proyecto final para la asignatura **Diseño de Interfaces de Software** en la Universidad Cooperativa de Colombia.
 
@@ -1008,7 +1008,7 @@ Genera el instalador ejecutable `.exe` con asistente de instalación paso a paso
 ```bash
 npm run build:win
 ```
-- **Salida:** `dist/PodcastCraft AI Setup 1.0.0.exe` (~105 MB).
+- **Salida:** `dist/PodcastCraft AI.exe` (~105 MB).
 - **Características del instalador:**
   - Asistente de instalación multilingüe NSIS con opción para seleccionar carpeta destino (`oneClick: false`).
   - Creación automática de accesos directos en el Escritorio y Menú Inicio de Windows.
@@ -1044,7 +1044,7 @@ Para poner los instaladores a disposición del público o evaluadores:
    ```
 2. En GitHub, navegar a **Releases** > **Draft a new release**.
 3. Seleccionar la etiqueta `v1.0.0`, titular la versión (*ej. PodcastCraft AI v1.0.0*) y adjuntar el archivo ejecutable generado:
-   - `dist/PodcastCraft AI Setup 1.0.0.exe`
+   - `dist/PodcastCraft AI.exe`
 4. Publicar la versión (*Publish release*) para que cualquier usuario pueda descargar el instalador directamente con un solo clic.
 
 ---
@@ -1059,7 +1059,7 @@ Todas las pruebas exigidas en la especificación fueron ejecutadas y verificadas
 2. **Arranque Autónomo del Backend:**
    - Verificado mediante logs de proceso (`[Electron Main] Backend listo`) y consultas HTTP directas a endpoints de API.
 3. **Generación del Instalador de Windows (`npm run build:win`):**
-   - Paquete NSIS generado con éxito: `dist\PodcastCraft AI Setup 1.0.0.exe` (105.6 MB).
+   - Paquete NSIS generado con éxito: `dist\PodcastCraft AI.exe` (105.6 MB).
 4. **Instalación Real del `.exe`:**
    - Instalación ejecutada en directorio de prueba (`/S /D=...`). Despliegue correcto de binarios, runtime de Electron y recursos de backend.
 5. **Ejecución de la Aplicación Instalada:**
