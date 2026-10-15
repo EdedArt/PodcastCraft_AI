@@ -116,6 +116,7 @@ function waitForBackend(url, timeoutMs = 15000) {
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
+    title: 'PodcastCraft AI',
     width: 1440,
     height: 900,
     minWidth: 1280,
@@ -128,6 +129,8 @@ async function createWindow() {
     autoHideMenuBar: true,
     show: false
   });
+
+  mainWindow.on('page-title-updated', (e) => e.preventDefault());
 
   const frontendPath = path.join(__dirname, '..', 'frontend', 'index.html');
 
@@ -142,7 +145,7 @@ async function createWindow() {
     console.error('[Electron Main] Fallo al inicializar el backend:', error.message);
     if (!isQuitting) {
       dialog.showErrorBox(
-        'Error de arranque — PodcastCraft AI',
+        'PodcastCraft AI',
         `No fue posible iniciar el servidor interno de PodcastCraft AI:\n${error.message}\n\nPor favor intenta reiniciar la aplicación.`
       );
       app.quit();

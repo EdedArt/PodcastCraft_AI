@@ -1,7 +1,7 @@
 {
   "name": "podcastcraft-ai",
   "version": "1.0.0",
-  "description": "PodcastCraft AI — Digital Audio Workstation con asistencia de Inteligencia Artificial",
+  "description": "PodcastCraft AI",
   "author": "PodcastCraft AI Team",
   "private": true,
   "main": "electron/main.js",
@@ -41,11 +41,13 @@
       "target": "nsis"
     },
     "nsis": {
+      "artifactName": "PodcastCraft AI.${ext}",
+      "shortcutName": "PodcastCraft AI",
+      "uninstallDisplayName": "PodcastCraft AI",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "PodcastCraft AI"
+      "createStartMenuShortcut": true
     },
     "mac": {
       "target": "dmg"

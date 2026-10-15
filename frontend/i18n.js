@@ -10,7 +10,7 @@
 const I18N = {
   es: {
     // Aplicación y Barra Superior (Topbar)
-    'app.title': 'PodcastCraft AI — Editor Profesional de Podcasts con IA',
+    'app.title': 'PodcastCraft AI',
     'app.badge.draft': 'Borrador',
     'app.badge.saved': 'Guardado',
     'topbar.ariaLabel': 'Barra superior de herramientas',
@@ -165,7 +165,7 @@ const I18N = {
   },
   en: {
     // Aplicación y Barra Superior (Topbar)
-    'app.title': 'PodcastCraft AI — Professional AI Podcast Editor',
+    'app.title': 'PodcastCraft AI',
     'app.badge.draft': 'Draft',
     'app.badge.saved': 'Saved',
     'topbar.ariaLabel': 'Top toolbar',
