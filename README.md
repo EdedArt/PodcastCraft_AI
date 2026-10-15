@@ -1,8 +1,8 @@
-# PodcastCraft AI — Fase 17: Sistema de Login Local (Pantalla de Bloqueo)
+# PodcastCraft AI — Estación de Trabajo de Audio Digital (DAW) con Asistencia de IA
 
 Estación de trabajo de audio digital (DAW) y editor de podcasts con asistencia de Inteligencia Artificial (estilo Descript / Adobe Audition), desarrollada como proyecto final para la asignatura **Diseño de Interfaces de Software** en la Universidad Cooperativa de Colombia.
 
-Este repositorio contiene la **Fase 17 (Sistema de autenticación y pantalla de bloqueo local para escritorio)**, conservando el 100% de la funcionalidad de carriles dinámicos, importación de MP3 reales, playhead sincronizado al píxel, panel de IA y edición no destructiva con persistencia.
+Este repositorio contiene la **Fase 20 (Empaquetado de escritorio con Electron, backend embebido autónomo e instalador ejecutable de Windows)**, integrando el 100% de la funcionalidad de carriles dinámicos, importación de MP3 reales, playhead sincronizado al píxel, motor de IA real con Google Gemini, edición no destructiva por transcripción y autenticación local.
 
 ---
 
@@ -910,6 +910,165 @@ Antes de sustituir el clip original en `track.clips`, se invoca `pushUndoSnapsho
 ### 12.7 Limitaciones Técnicas Documentadas
 - **Granularidad mínima:** El corte se efectúa a nivel de segmento de frase (3 a 8 palabras), no por fonema o palabra aislada dentro de una frase, lo cual garantiza que los límites temporales reportados por el modelo de IA conserven coherencia fonética y no generen artefactos de audio abruptly recortados.
 
+---
 
+## 📦 Fase 20: Empaquetado con Electron — Backend Embebido e Instalador de Escritorio
 
+La **Fase 20** representa la culminación del ciclo de ingeniería de PodcastCraft AI, transformando la aplicación en una **herramienta de escritorio nativa e instalable**. El usuario final puede instalar y ejecutar la aplicación sin necesidad de instalar Node.js, ejecutar comandos de terminal ni configurar servidores manualmente.
 
+### 13.1 Arquitectura del Empaquetado
+
+```
+podcastcraft-ai/
+├── package.json           # Orquestador raíz: scripts de build y configuración de electron-builder
+├── electron/
+│   ├── main.js            # Proceso principal de Electron (gestiona ventana, backend y ciclo de vida)
+│   └── preload.js         # Puente de contexto seguro (contextIsolation: true, nodeIntegration: false)
+├── frontend/              # Interfaz de usuario (HTML5, Tailwind compilado/tokens, Web Audio API)
+├── backend/               # Servidor Express embebido (almacenamiento atómico, Gemini AI, fluent-ffmpeg)
+│   ├── .env               # Variables de entorno de distribución (GEMINI_API_KEY)
+│   ├── node_modules/      # Dependencias nativas empaquetadas en extraResources
+│   └── src/               # Lógica del servidor y rutas de API
+└── dist/                  # Salida de compilación: ejecutables e instalador NSIS (.exe)
+```
+
+### 13.2 Ciclo de Vida y Arranque Autónomo del Backend Embebido
+
+1. **Subproceso Node Embebido (`child_process.fork`):**
+   - En `electron/main.js`, al dispararse `app.whenReady()`, la función `startBackend()` ejecuta el servidor Express en segundo plano mediante `fork()`.
+   - Se establece `windowsHide: true` y `ELECTRON_RUN_AS_NODE: '1'` para garantizar que **no se abra ninguna consola o ventana de terminal secundaria** para el usuario.
+2. **Sondeo Reactivo de Salud (`waitForBackend`):**
+   - En lugar de usar un temporizador fijo arbitrario (`setTimeout`), Electron sondea activamente cada 200 ms el endpoint `GET http://127.0.0.1:3001/health`.
+   - Cuando el backend responde `200 OK` (habitualmente entre 100 y 300 ms), la ventana principal `mainWindow.loadFile()` carga la interfaz y se muestra mediante `mainWindow.show()`, eliminando pantallas en blanco (*white flash*).
+3. **Manejo de Instancia Única (`app.requestSingleInstanceLock`):**
+   - Si el usuario intenta abrir un segundo ejecutable, Electron detecta la instancia previa, enfoca la ventana existente y finaliza el proceso duplicado, previniendo colisiones en el puerto `3001`.
+4. **Terminación Garantizada de Procesos Huérfanos:**
+   - Para impedir que subprocesos `node.exe` o `ffmpeg.exe` queden corriendo en segundo plano al cerrar la ventana:
+     - En `backend/src/server.js`, se escucha el evento IPC `process.on('disconnect')`, finalizando el servidor inmediatamente si el proceso padre desaparece.
+     - En `electron/main.js`, ante eventos `before-quit`, `window-all-closed` o `SIGINT`, se invoca `killBackend()`, la cual ejecuta en Windows:
+       ```bash
+       taskkill /pid <PID> /T /F
+       ```
+       eliminando forzosamente y de forma atómica todo el árbol de procesos dependientes.
+
+### 13.3 Adaptabilidad de Almacenamiento y Permisos en Windows (`userData`)
+
+En Windows, las aplicaciones instaladas en `C:\Program Files\` carecen de permisos de escritura para cuentas de usuario estándar. Para resolver este desafío:
+- `electron/main.js` define:
+  ```javascript
+  const storageDir = app.isPackaged
+    ? path.join(app.getPath('userData'), 'storage')
+    : path.join(__dirname, '..', 'backend', 'storage');
+  ```
+- Esta ruta se inyecta al backend a través de la variable de entorno `PODCASTCRAFT_STORAGE_DIR`.
+- En modo empaquetado, la persistencia de proyectos (`project.json`), credenciales (`auth.json`), clips (`audio-files/`) y fragmentos temporales (`tmp/`) se almacena de manera segura en:
+  `%APPDATA%\podcastcraft-ai\storage\`
+- `backend/src/storage.js` asegura automáticamente la creación de estos directorios de forma recursiva al iniciar.
+
+### 13.4 Empaquetado de Dependencias Nativas y Clave de Gemini
+
+En la configuración `"build"` de `package.json`, se emplean `extraResources` para trasladar el backend de forma íntegra sin encapsularlo dentro del archivo comprimido `app.asar`:
+```json
+"extraResources": [
+  {
+    "from": "backend",
+    "to": "backend",
+    "filter": [
+      "**/*",
+      ".env",
+      "!storage/audio-files/*",
+      "!storage/tmp/*",
+      "!storage/project.json",
+      "!storage/auth.json"
+    ]
+  }
+]
+```
+- **Dependencias de Node:** Se incluyen todos los paquetes de `backend/node_modules/` (como `@google/generative-ai`, `express`, `fluent-ffmpeg` y el binario precompilado de `ffmpeg-static\ffmpeg.exe`).
+- **Clave de API:** El archivo `backend/.env` viaja dentro del instalador para permitir la transcripción inmediata con Google Gemini sin que el usuario requiera configuración adicional. **Por seguridad, `.env` permanece rigurosamente ignorado en `.gitignore` para no ser subido al repositorio Git.**
+- **Aislamiento de Almacenamiento de Desarrollo:** Se excluyen los audios y proyectos de prueba locales para que el instalador entregue una experiencia limpia de primer uso ("Crear contraseña maestra").
+
+---
+
+### 13.5 Comandos de Generación de Instaladores y Ejecución
+
+#### Modo Desarrollo (sin empaquetar)
+Para arrancar Electron en modo de desarrollo con recarga directa:
+```bash
+# 1. Instalar dependencias raíz y de backend (si es la primera vez)
+npm install
+cd backend && npm install && cd ..
+
+# 2. Iniciar la aplicación
+npm start
+```
+
+#### Compilación del Instalador para Windows (NSIS)
+Genera el instalador ejecutable `.exe` con asistente de instalación paso a paso:
+```bash
+npm run build:win
+```
+- **Salida:** `dist/PodcastCraft AI Setup 1.0.0.exe` (~105 MB).
+- **Características del instalador:**
+  - Asistente de instalación multilingüe NSIS con opción para seleccionar carpeta destino (`oneClick: false`).
+  - Creación automática de accesos directos en el Escritorio y Menú Inicio de Windows.
+  - Generador de desinstalador nativo (`Uninstall PodcastCraft AI.exe`).
+
+#### Compilación para macOS y Linux
+Los scripts preconfigurados en `package.json` son:
+```bash
+npm run build:mac     # Genera dist/*.dmg
+npm run build:linux   # Genera dist/*.AppImage
+npm run build:all     # Compila para las 3 plataformas
+```
+
+---
+
+### 13.6 Matriz de Compatibilidad y Limitaciones Conocidas
+
+| Plataforma | Soporte de Compilación desde Windows | Estado | Observaciones Técnicas |
+|---|---|---|---|
+| **Windows x64 (`.exe`)** | **Nativo y Completo** | ✅ **Verificado 100%** | Compilación, empaquetado NSIS, instalación silenciosa y flujos completos validados en entorno real. |
+| **Linux (`.AppImage`)** | Requiere entorno Linux / WSL / Docker | ⚠️ **Limitación de SO** | `app-builder` requiere privilegios POSIX de enlace simbólico (`symlink`) y `mksquashfs` nativo para empaquetar iconos y librerías de Linux. Debe compilarse desde Ubuntu/Debian o GitHub Actions. |
+| **macOS (`.dmg`)** | Requiere entorno macOS (Darwin) | ⚠️ **Limitación de SO** | Apple restringe la creación y firma de imágenes DMG y binarios Mach-O a sistemas operativos macOS. Debe compilarse desde macOS o mediante un *runner* `macos-latest` en GitHub Actions. |
+
+---
+
+### 13.7 Distribución de Versiones (GitHub Releases)
+
+Para poner los instaladores a disposición del público o evaluadores:
+1. Crear una etiqueta Git (*tag* de versión):
+   ```bash
+   git tag -a v1.0.0 -m "PodcastCraft AI v1.0.0 - Release Oficial"
+   git push origin v1.0.0
+   ```
+2. En GitHub, navegar a **Releases** > **Draft a new release**.
+3. Seleccionar la etiqueta `v1.0.0`, titular la versión (*ej. PodcastCraft AI v1.0.0*) y adjuntar el archivo ejecutable generado:
+   - `dist/PodcastCraft AI Setup 1.0.0.exe`
+4. Publicar la versión (*Publish release*) para que cualquier usuario pueda descargar el instalador directamente con un solo clic.
+
+---
+
+### 13.8 Registro de Pruebas Obligatorias de la Fase 20 (Superadas al 100%)
+
+Todas las pruebas exigidas en la especificación fueron ejecutadas y verificadas con éxito en el sistema real:
+
+1. **Modo Desarrollo (`npm start`):**
+   - Ventana nativa de Electron (1440x900) abierta sin barra de navegador.
+   - Detección automática del backend embebido y respuesta inmediata en `GET /health` (5 ms).
+2. **Arranque Autónomo del Backend:**
+   - Verificado mediante logs de proceso (`[Electron Main] Backend listo`) y consultas HTTP directas a endpoints de API.
+3. **Generación del Instalador de Windows (`npm run build:win`):**
+   - Paquete NSIS generado con éxito: `dist\PodcastCraft AI Setup 1.0.0.exe` (105.6 MB).
+4. **Instalación Real del `.exe`:**
+   - Instalación ejecutada en directorio de prueba (`/S /D=...`). Despliegue correcto de binarios, runtime de Electron y recursos de backend.
+5. **Ejecución de la Aplicación Instalada:**
+   - La aplicación inicia directamente en segundo plano sin consolas de comandos visibles ni prompts de Node para el usuario.
+6. **Flujo Integral en Aplicación Instalada:**
+   - **Login inicial:** Pantalla de bloqueo muestra estado `configured: false` ("Crear contraseña maestra"). Registro y login validados.
+   - **Subida de audio:** Petición `POST /api/audio` con archivo MP3 real almacenado en `%APPDATA%\podcastcraft-ai\storage\audio-files\` y servido con cabecera `audio/mpeg` (200 OK).
+   - **Transcripción real con Google Gemini:** `POST /api/ai/transcribe` invocó la API en la nube con clave embebida, procesó el recorte con `ffmpeg-static` y devolvió segmentos estructurados con marcas de tiempo decimales (`success: true`).
+   - **Persistencia de Proyecto:** Proyecto guardado con `PUT /api/project`. Cierre forzoso de la aplicación y reapertura; el proyecto y el usuario se restauraron intactos desde `%APPDATA%\podcastcraft-ai\storage\project.json`.
+7. **Terminación Limpia de Procesos:**
+   - Al cerrar la ventana de la app, `killBackend()` ejecutó la terminación limpia. `netstat -ano | findstr :3001` confirmó que el puerto quedó 100% liberado y no quedaron procesos `node.exe` o `ffmpeg.exe` huérfanos.
+   - Ejecución del desinstalador (`Uninstall PodcastCraft AI.exe /S`) verificada, eliminando los binarios del sistema limpiamente.

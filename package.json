@@ -2,6 +2,7 @@
   "name": "podcastcraft-ai",
   "version": "1.0.0",
   "description": "PodcastCraft AI — Digital Audio Workstation con asistencia de Inteligencia Artificial",
+  "author": "PodcastCraft AI Team",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
