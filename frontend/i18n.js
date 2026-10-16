@@ -29,6 +29,9 @@ const I18N = {
     // Barra de Transporte y Reproducción (Transport)
     'transport.ariaLabel': 'Controles de transporte y reproducción',
     'transport.noClip': 'Ningún clip en la línea de tiempo',
+    'transport.mixOfClips': 'Mezcla de {count} clips',
+    'transport.preparingAudio': 'Preparando audio…',
+    'transport.audioDecodeError': 'Error al decodificar audio de la biblioteca',
     'transport.rewindAria': 'Retroceder 5 segundos',
     'transport.rewindTitle': 'Retroceder 5s (J)',
     'transport.playDisabledAria': 'Reproducir (sin audio cargado)',
@@ -184,6 +187,9 @@ const I18N = {
     // Barra de Transporte y Reproducción (Transport)
     'transport.ariaLabel': 'Transport and playback controls',
     'transport.noClip': 'No clip on timeline',
+    'transport.mixOfClips': 'Mix of {count} clips',
+    'transport.preparingAudio': 'Preparing audio…',
+    'transport.audioDecodeError': 'Error decoding library audio',
     'transport.rewindAria': 'Rewind 5 seconds',
     'transport.rewindTitle': 'Rewind 5s (J)',
     'transport.playDisabledAria': 'Play (no audio loaded)',

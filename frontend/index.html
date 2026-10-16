@@ -440,6 +440,9 @@
         <i data-lucide="play" class="w-4 h-4 fill-white ml-0.5"></i>
       </button>
 
+      <!-- Estado de preparación de buffers de audio (Web Audio API) -->
+      <span id="audio-loading-status" data-i18n="transport.preparingAudio" class="hidden text-[11px] font-medium text-violet-600 dark:text-violet-400 animate-pulse whitespace-nowrap">Preparando audio…</span>
+
       <!-- Botón Avanzar 5s -->
       <button id="btn-forward" type="button" data-i18n-aria-label="transport.forwardAria" data-i18n-title="transport.forwardTitle" aria-label="Avanzar 5 segundos" title="Avanzar 5s (L)" class="w-8 h-8 rounded-full flex items-center justify-center theme-text-secondary hover:theme-text-primary hover:bg-slate-200/60 dark:hover:bg-slate-800 active:scale-95 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none transition-colors duration-150">
         <i data-lucide="skip-forward" class="w-4 h-4"></i>

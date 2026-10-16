@@ -191,9 +191,13 @@ window.PodcastCraft = {
   saveProjectToBackend: () => saveProjectToBackend(),
   loadProjectFromBackend: () => loadProjectFromBackend(),
   scheduleAutoSave: () => scheduleAutoSave(),
-  get globalAudio() { return globalAudio; },
-  get activePlayingClipStart() { return activePlayingClipStart; },
-  get activePlayingClipSourceOffset() { return activePlayingClipSourceOffset; },
+  get audioContext() { return getAudioContext(); },
+  get audioBufferCache() { return audioBufferCache; },
+  get activeAudioSources() { return activeAudioSources; },
+  getTransportTime: () => getTransportTime(),
+  startPlayback: (fromTime) => startPlayback(fromTime),
+  pausePlayback: () => pausePlayback(),
+  togglePlay: () => togglePlay(),
   getCurrentLanguage: () => (typeof getCurrentLanguage === 'function' ? getCurrentLanguage() : 'es'),
   setLanguage: (lang) => (typeof setLanguage === 'function' ? setLanguage(lang) : null),
   t: (key) => (typeof t === 'function' ? t(key) : key),
@@ -620,6 +624,7 @@ function executeIntervalSubtraction(clipId, removedRanges) {
       start: pieceStart,
       duration: pieceDuration,
       sourceOffset: pieceSourceOffset,
+      volume: typeof targetClip.volume === 'number' ? targetClip.volume : 1,
       objectUrl: targetClip.objectUrl
     };
     newClips.push(newClip);
@@ -677,6 +682,10 @@ function executeIntervalSubtraction(clipId, removedRanges) {
       transcriptByClip: nextTranscriptByClip
     }
   });
+
+  if (typeof schedulePlaybackDebounce === 'function') {
+    schedulePlaybackDebounce(150);
+  }
 
   return { success: true, piecesCount: newClips.length };
 }
@@ -925,13 +934,12 @@ function undo() {
   const remainingClips = previousTracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
 
   if (remainingClips === 0) {
-    if (typeof globalAudio !== 'undefined' && globalAudio) {
-      globalAudio.pause();
-      globalAudio.src = '';
+    if (typeof stopAllAudioSources === 'function') {
+      stopAllAudioSources();
     }
     stopPlayheadLoop();
-    activePlayingClipStart = 0;
-    activePlayingClipDuration = 0;
+  } else if (state.project.isPlaying && typeof schedulePlaybackDebounce === 'function') {
+    schedulePlaybackDebounce(150);
   }
 
   setState({
@@ -959,6 +967,7 @@ function createTrack() {
   const newTrack = {
     id: `track-${crypto.randomUUID()}`,
     colorIndex: (nextColorIndex++) % TRACK_PALETTE.length,
+    volume: 1,
     clips: []
   };
 
@@ -1002,13 +1011,12 @@ function deleteTrack(trackId) {
   const remainingClips = nextTracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
 
   if (remainingClips === 0) {
-    if (typeof globalAudio !== 'undefined' && globalAudio) {
-      globalAudio.pause();
-      globalAudio.src = '';
+    if (typeof stopAllAudioSources === 'function') {
+      stopAllAudioSources();
     }
     stopPlayheadLoop();
-    activePlayingClipStart = 0;
-    activePlayingClipDuration = 0;
+  } else if (state.project.isPlaying && typeof schedulePlaybackDebounce === 'function') {
+    schedulePlaybackDebounce(150);
   }
 
   // Limpiar transcripciones de clips pertenecientes al carril eliminado (Fase 15)
@@ -1097,11 +1105,11 @@ function renderTransport() {
     durationLabel.textContent = formatTime(state.project.duration);
   }
 
-  // Sincronización del playhead con fuente única de verdad temporal (Fase 14)
+  // Sincronización del playhead con fuente única de verdad temporal (Web Audio API - Fase 22)
   const playheadEl = $('#timeline-playhead');
   if (playheadEl) {
-    const currentSec = (state.project.isPlaying && globalAudio && !globalAudio.paused)
-      ? (activePlayingClipStart + (globalAudio.currentTime || 0))
+    const currentSec = typeof getTransportTime === 'function'
+      ? getTransportTime()
       : (state.project.currentTime || 0);
     playheadEl.style.transform = `translateX(${timeToPixels(currentSec)}px)`;
   }
@@ -1163,17 +1171,9 @@ function renderTransport() {
     let activeClip = null;
     if (state.selection.clipId) {
       for (const t of state.tracks) {
-        const found = t.clips.find((c) => c.id === state.selection.clipId);
+        const found = (t.clips || []).find((c) => c.id === state.selection.clipId);
         if (found) {
           activeClip = found;
-          break;
-        }
-      }
-    }
-    if (!activeClip && hasClips) {
-      for (const t of state.tracks) {
-        if (t.clips && t.clips.length > 0) {
-          activeClip = t.clips[0];
           break;
         }
       }
@@ -1183,6 +1183,12 @@ function renderTransport() {
       nowPlayingName.textContent = activeClip.name;
       nowPlayingName.setAttribute('title', activeClip.name);
       nowPlayingMeta.textContent = `${formatDuration(activeClip.duration)} · MP3`;
+    } else if (hasClips) {
+      const mixTemplate = typeof t === 'function' ? t('transport.mixOfClips') : 'Mezcla de {count} clips';
+      const mixLabel = mixTemplate.replace('{count}', totalClips);
+      nowPlayingName.textContent = mixLabel;
+      nowPlayingName.setAttribute('title', mixLabel);
+      nowPlayingMeta.textContent = `${formatDuration(state.project.duration)} · Multitrack`;
     } else {
       const emptyLabel = typeof t === 'function' ? t('transport.noClip') : 'Ningún clip en la línea de tiempo';
       nowPlayingName.textContent = emptyLabel;
@@ -2084,13 +2090,17 @@ async function onAuthSuccess(username) {
  */
 function logout() {
   if (state.project.isPlaying) {
-    if (typeof globalAudio !== 'undefined' && globalAudio) {
-      globalAudio.pause();
+    if (typeof pausePlayback === 'function') {
+      pausePlayback();
+    } else {
+      if (typeof stopAllAudioSources === 'function') {
+        stopAllAudioSources();
+      }
+      if (typeof stopPlayheadLoop === 'function') {
+        stopPlayheadLoop();
+      }
+      setState({ project: { isPlaying: false } });
     }
-    if (typeof stopPlayheadLoop === 'function') {
-      stopPlayheadLoop();
-    }
-    setState({ project: { isPlaying: false } });
   }
 
   authState.isAuthenticated = false;
@@ -2211,13 +2221,15 @@ async function saveProjectToBackend() {
       tracks: state.tracks.map((t) => ({
         id: t.id,
         colorIndex: t.colorIndex,
+        volume: typeof t.volume === 'number' ? t.volume : 1,
         clips: (t.clips || []).map((c) => ({
           id: c.id,
           libraryId: c.libraryId,
           name: c.name,
           start: c.start,
           duration: c.duration,
-          sourceOffset: typeof c.sourceOffset === 'number' ? c.sourceOffset : 0
+          sourceOffset: typeof c.sourceOffset === 'number' ? c.sourceOffset : 0,
+          volume: typeof c.volume === 'number' ? c.volume : 1
         }))
       }))
     };
@@ -2294,6 +2306,7 @@ async function loadProjectFromBackend() {
       state.tracks = data.tracks.map((t) => ({
         id: t.id,
         colorIndex: typeof t.colorIndex === 'number' ? t.colorIndex : 0,
+        volume: typeof t.volume === 'number' ? t.volume : 1,
         clips: Array.isArray(t.clips)
           ? t.clips.map((c) => {
               const libItem = state.library.find((l) => l.id === c.libraryId);
@@ -2304,6 +2317,7 @@ async function loadProjectFromBackend() {
                 start: typeof c.start === 'number' ? c.start : 0,
                 duration: typeof c.duration === 'number' ? c.duration : 0,
                 sourceOffset: typeof c.sourceOffset === 'number' ? c.sourceOffset : 0,
+                volume: typeof c.volume === 'number' ? c.volume : 1,
                 objectUrl: libItem ? libItem.objectUrl : null
               };
             })
@@ -2317,6 +2331,11 @@ async function loadProjectFromBackend() {
       if (state.tracks.length > 0) {
         const maxColor = Math.max(...state.tracks.map((t) => t.colorIndex || 0));
         nextColorIndex = Math.max(maxColor + 1, nextColorIndex);
+      }
+
+      // Precarga en segundo plano de todos los buffers decodificados en memoria (Fase 22)
+      if (typeof preloadAllLibraryBuffers === 'function') {
+        preloadAllLibraryBuffers();
       }
     }
 
@@ -2337,80 +2356,297 @@ async function loadProjectFromBackend() {
 
 
 /* ==========================================================================
-   7. AUDIO ENGINE & TRANSPORT EVENTS
+   7. AUDIO ENGINE & TRANSPORT EVENTS (Web Audio API — Fase 22)
    ========================================================================== */
 
 /**
- * Instancia global y única de audio para reproducción real en la estación de trabajo.
- * Decisión Sprint 5 (0.2): Un solo audio activo a la vez (globalAudio).
+ * Instancia singleton de AudioContext para la estación de trabajo (Web Audio API).
  */
-const globalAudio = new Audio();
+let audioContext = null;
 
 /**
- * Marca temporal de inicio (en segundos absolutos de la línea de tiempo)
- * del clip actualmente cargado y reproduciéndose en globalAudio (Fase 9).
+ * Nodo maestro de ganancia conectado directamente a audioContext.destination.
  */
-let activePlayingClipStart = 0;
+let masterGain = null;
 
 /**
- * Duración contractual (en segundos) del clip activo en reproducción (Fase 9).
+ * Caché en memoria de AudioBuffer por libraryId: Map<string, AudioBuffer>.
  */
-let activePlayingClipDuration = 0;
+const audioBufferCache = new Map();
 
 /**
- * Offset real (en segundos del archivo fuente original) donde inicia el clip activo (Fase 19).
+ * Promesas en vuelo de carga/decodificación por libraryId para evitar solicitudes duplicadas.
  */
-let activePlayingClipSourceOffset = 0;
+const audioBufferLoadingPromises = new Map();
+
+/**
+ * Fuentes activas en reproducción: Array<{ source, clipGain, trackGain, clipId, trackId }>.
+ */
+let activeAudioSources = [];
+
+/**
+ * Nodos de ganancia por carril: Map<trackId, GainNode>.
+ */
+const trackGainNodes = new Map();
+
+/**
+ * Variables del reloj de transporte (Fase 22):
+ * - transportStartPos: segundos del timeline al dar Play o seek.
+ * - transportStartCtxTime: audioContext.currentTime al dar Play o seek.
+ * - LEAD_TIME: margen de anticipación de 50ms para programar hardware audio clock sin jitter.
+ */
+let transportStartPos = 0;
+let transportStartCtxTime = 0;
+const LEAD_TIME = 0.05;
 
 /**
  * Identificador activo de requestAnimationFrame para el bucle de sincronización del playhead.
- * EXCEPCIÓN AL STORE (3ª del proyecto, tras is-dragging y pointermove de recorte):
- * Actualiza el DOM directamente a 60 FPS leyendo globalAudio.currentTime sin pasar por
- * setState ni renderAll() en cada frame.
  */
 let playheadRafId = null;
 
 /**
- * Inicia el bucle de animación del playhead a 60 FPS si el audio está en reproducción.
- * Fase 9 & 19: Calcula la posición absoluta del playhead como (activePlayingClipStart + audioElapsed),
- * donde audioElapsed toma en cuenta el sourceOffset del clip.
+ * Timer de debounce para reprogramación fluida tras cambios estructurales en caliente.
+ */
+let rescheduleDebounceTimer = null;
+
+/**
+ * Obtiene o inicializa perezosamente el AudioContext y el nodo masterGain.
+ * @returns {AudioContext}
+ */
+function getAudioContext() {
+  if (!audioContext) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    audioContext = new AudioCtx();
+    masterGain = audioContext.createGain();
+    const initialVol = state.project.isMuted ? 0 : ((state.project.volume ?? 100) / 100);
+    masterGain.gain.setValueAtTime(initialVol, audioContext.currentTime);
+    masterGain.connect(audioContext.destination);
+  }
+  return audioContext;
+}
+
+/**
+ * Muestra u oculta el indicador de preparación de buffers en la barra de transporte.
+ * @param {boolean} show
+ */
+function showAudioPreparing(show) {
+  const el = $('#audio-loading-status');
+  if (el) {
+    if (show) {
+      el.textContent = typeof t === 'function' ? t('transport.preparingAudio') : 'Preparando audio…';
+      el.classList.remove('hidden');
+    } else {
+      el.classList.add('hidden');
+    }
+  }
+}
+
+/**
+ * Carga y decodifica un archivo de audio a AudioBuffer mediante caché por libraryId.
+ * @param {string} libraryId
+ * @returns {Promise<AudioBuffer>}
+ */
+async function loadAudioBuffer(libraryId) {
+  if (audioBufferCache.has(libraryId)) {
+    return audioBufferCache.get(libraryId);
+  }
+  if (audioBufferLoadingPromises.has(libraryId)) {
+    return audioBufferLoadingPromises.get(libraryId);
+  }
+
+  const libItem = state.library.find((item) => item.id === libraryId);
+  if (!libItem || !libItem.objectUrl) {
+    throw new Error(`Ítem de biblioteca no encontrado para ID: ${libraryId}`);
+  }
+
+  const promise = (async () => {
+    try {
+      const ctx = getAudioContext();
+      const res = await fetch(libItem.objectUrl);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} al descargar audio: ${libItem.objectUrl}`);
+      }
+      const arrayBuffer = await res.arrayBuffer();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      audioBufferCache.set(libraryId, audioBuffer);
+      return audioBuffer;
+    } catch (err) {
+      console.error(`[PodcastCraft AI] Error al decodificar audio de biblioteca (${libraryId}):`, err);
+      throw err;
+    } finally {
+      audioBufferLoadingPromises.delete(libraryId);
+    }
+  })();
+
+  audioBufferLoadingPromises.set(libraryId, promise);
+  return promise;
+}
+
+/**
+ * Precarga en segundo plano todos los audios de la biblioteca sin congelar la interfaz.
+ */
+function preloadAllLibraryBuffers() {
+  if (!state.library || state.library.length === 0) return;
+  for (const item of state.library) {
+    if (item.id && !audioBufferCache.has(item.id)) {
+      loadAudioBuffer(item.id).catch((err) => {
+        console.warn(`[PodcastCraft AI] Precarga en segundo plano omitida para ${item.id}:`, err.message);
+      });
+    }
+  }
+}
+
+/**
+ * Sincroniza el volumen maestro y estado de silencio en tiempo real con setTargetAtTime.
+ */
+function syncMasterVolume() {
+  if (!audioContext || !masterGain) return;
+  const targetVol = state.project.isMuted ? 0 : ((state.project.volume ?? 100) / 100);
+  masterGain.gain.setTargetAtTime(targetVol, audioContext.currentTime, 0.01);
+}
+
+/**
+ * Detiene y desconecta todas las fuentes de audio activas del AudioContext.
+ */
+function stopAllAudioSources() {
+  for (const item of activeAudioSources) {
+    try {
+      item.source.stop();
+      item.source.disconnect();
+    } catch (_) {}
+    try {
+      item.clipGain.disconnect();
+    } catch (_) {}
+  }
+  activeAudioSources = [];
+}
+
+/**
+ * Calcula la posición temporal actual del transporte en segundos absolutos de la línea de tiempo.
+ * getTransportTime() = transportStartPos + (ctx.currentTime - transportStartCtxTime - lead).
+ * @returns {number}
+ */
+function getTransportTime() {
+  if (!state.project.isPlaying || !audioContext) {
+    return state.project.currentTime || 0;
+  }
+  const elapsed = audioContext.currentTime - transportStartCtxTime - LEAD_TIME;
+  return transportStartPos + Math.max(0, elapsed);
+}
+
+/**
+ * Programa todos los clips de todos los carriles en el AudioContext desde fromTime.
+ * Cadena por clip: source -> clipGain (clip.volume ?? 1) -> trackGain (track.volume ?? 1) -> masterGain -> destination.
+ * Sin redondeo de start/duration/sourceOffset para garantizar empalme sin huecos.
+ * @param {number} fromTime
+ */
+function scheduleAudioClips(fromTime) {
+  const ctx = getAudioContext();
+  const lead = LEAD_TIME;
+
+  for (const track of state.tracks) {
+    if (!track.clips || track.clips.length === 0) continue;
+
+    // Obtener o crear nodo de ganancia para este carril
+    let trackGain = trackGainNodes.get(track.id);
+    if (!trackGain) {
+      trackGain = ctx.createGain();
+      trackGain.connect(masterGain);
+      trackGainNodes.set(track.id, trackGain);
+    }
+    const tVol = typeof track.volume === 'number' ? track.volume : 1;
+    trackGain.gain.setValueAtTime(tVol, ctx.currentTime);
+
+    for (const clip of track.clips) {
+      const clipStart = clip.start || 0;
+      const clipDuration = clip.duration || 0;
+      const clipSourceOffset = typeof clip.sourceOffset === 'number' ? clip.sourceOffset : 0;
+      const clipEnd = clipStart + clipDuration;
+
+      // Programar solo clips cuyo final sea mayor que fromTime
+      if (clipEnd <= fromTime) continue;
+
+      const buffer = audioBufferCache.get(clip.libraryId);
+      if (!buffer) continue;
+
+      const skip = Math.max(0, fromTime - clipStart);
+      const when = ctx.currentTime + lead + Math.max(0, clipStart - fromTime);
+      const offset = clipSourceOffset + skip;
+      const dur = clipDuration - skip;
+
+      if (dur <= 0) continue;
+
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+
+      const clipGain = ctx.createGain();
+      const cVol = typeof clip.volume === 'number' ? clip.volume : 1;
+      clipGain.gain.setValueAtTime(cVol, ctx.currentTime);
+
+      src.connect(clipGain);
+      clipGain.connect(trackGain);
+
+      try {
+        src.start(when, offset, dur);
+      } catch (err) {
+        console.warn(`[PodcastCraft AI] Error al programar reproducción de clip ${clip.id}:`, err);
+        continue;
+      }
+
+      const activeRecord = {
+        source: src,
+        clipGain: clipGain,
+        trackGain: trackGain,
+        clipId: clip.id,
+        trackId: track.id
+      };
+      activeAudioSources.push(activeRecord);
+
+      src.onended = () => {
+        const idx = activeAudioSources.indexOf(activeRecord);
+        if (idx !== -1) {
+          activeAudioSources.splice(idx, 1);
+        }
+      };
+    }
+  }
+}
+
+/**
+ * Inicia el bucle de animación del playhead a 60 FPS mediante rAF leyendo getTransportTime().
  */
 function startPlayheadLoop() {
-  if (playheadRafId !== null) return; // ya corriendo, evita loops duplicados
+  if (playheadRafId !== null) return;
   const playheadEl = $('#timeline-playhead');
   const currentTimeEl = $('#current-time');
 
   function tick() {
     if (!state.project.isPlaying) {
       playheadRafId = null;
-      return; // detiene el loop solo, no necesita cancelAnimationFrame explícito aquí
+      return;
     }
-    const rawCurrentTime = globalAudio.currentTime || 0;
-    const audioElapsed = Math.max(0, rawCurrentTime - activePlayingClipSourceOffset);
+    const currentSec = getTransportTime();
+    const duration = state.project.duration || 0;
 
-    // Respetar duración efectiva del clip si fue recortado o dividido (Fase 9 & 19)
-    if (activePlayingClipDuration > 0 && audioElapsed >= activePlayingClipDuration) {
-      globalAudio.pause();
+    // Al llegar a la duración total del proyecto: detener todo y dejar el playhead al final
+    if (duration > 0 && currentSec >= duration) {
+      stopAllAudioSources();
       stopPlayheadLoop();
-      setState({ project: { isPlaying: false, currentTime: activePlayingClipStart } });
-      const px = timeToPixels(activePlayingClipStart);
+      setState({ project: { isPlaying: false, currentTime: duration } });
       if (playheadEl) {
-        playheadEl.style.transform = `translateX(${px}px)`;
+        playheadEl.style.transform = `translateX(${timeToPixels(duration)}px)`;
       }
       if (currentTimeEl) {
-        currentTimeEl.textContent = formatTime(activePlayingClipStart);
+        currentTimeEl.textContent = formatTime(duration);
       }
       return;
     }
 
-    const absoluteSeconds = activePlayingClipStart + audioElapsed;
-    const px = timeToPixels(absoluteSeconds);
-
     if (playheadEl) {
-      playheadEl.style.transform = `translateX(${px}px)`;
+      playheadEl.style.transform = `translateX(${timeToPixels(currentSec)}px)`;
     }
     if (currentTimeEl) {
-      currentTimeEl.textContent = formatTime(absoluteSeconds);
+      currentTimeEl.textContent = formatTime(currentSec);
     }
 
     playheadRafId = requestAnimationFrame(tick);
@@ -2430,74 +2666,118 @@ function stopPlayheadLoop() {
 }
 
 /**
- * Reposiciona de forma unificada el audio real, el store y la representación visual en el DOM.
- * Utilizado por el scrubbing de la regla de tiempo, clics en clips y botones de salto temporal.
- * Fase 9:
- * 1. Identifica qué clip (con audio real) cubre ese punto absoluto del timeline:
- *    clip.start <= seconds < clip.start + clip.duration.
- * 2. Si encuentra un clip: sincroniza globalAudio.src, actualiza activePlayingClipStart = clip.start,
- *    y fija globalAudio.currentTime = seconds - clip.start.
- * 3. Si el punto de scrub cae sobre una zona vacía sin clips: detiene globalAudio (pausa)
- *    si estaba sonando, pero igual mueve el playhead visualmente a esa posición absoluta.
+ * Inicia la reproducción continua en Web Audio API desde fromTime o la posición actual del store.
+ * @param {number} [explicitFromTime]
+ */
+async function startPlayback(explicitFromTime) {
+  const totalClips = state.tracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
+  if (totalClips === 0) return;
+
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') {
+    try {
+      await ctx.resume();
+    } catch (err) {
+      console.warn('[PodcastCraft AI] Error al reanudar AudioContext:', err);
+    }
+  }
+
+  let fromTime = typeof explicitFromTime === 'number' ? explicitFromTime : (state.project.currentTime || 0);
+  const duration = state.project.duration || 0;
+  // Si el playhead está al final o muy cerca, reiniciar desde 0
+  if (duration > 0 && fromTime >= duration - 0.01) {
+    fromTime = 0;
+    setState({ project: { currentTime: 0 } });
+  }
+
+  // Verificar si faltan buffers por decodificar en memoria
+  const neededLibraryIds = new Set();
+  for (const t of state.tracks) {
+    for (const c of (t.clips || [])) {
+      if (c.libraryId) neededLibraryIds.add(c.libraryId);
+    }
+  }
+
+  const missingIds = Array.from(neededLibraryIds).filter((id) => !audioBufferCache.has(id));
+  if (missingIds.length > 0) {
+    showAudioPreparing(true);
+    try {
+      await Promise.all(missingIds.map((id) => loadAudioBuffer(id)));
+    } catch (err) {
+      console.error('[PodcastCraft AI] Error al decodificar buffers requeridos:', err);
+      showAudioPreparing(false);
+      const errMsg = typeof t === 'function' ? t('transport.audioDecodeError') : 'Error al decodificar audio de la biblioteca';
+      showToast(errMsg, 'error');
+      return;
+    } finally {
+      showAudioPreparing(false);
+    }
+  }
+
+  stopAllAudioSources();
+
+  transportStartPos = fromTime;
+  transportStartCtxTime = ctx.currentTime;
+
+  scheduleAudioClips(fromTime);
+
+  setState({ project: { isPlaying: true, currentTime: fromTime } });
+  startPlayheadLoop();
+}
+
+/**
+ * Pausa la reproducción de audio, congela el playhead y desconecta todas las fuentes activas.
+ */
+function pausePlayback() {
+  const currentPos = getTransportTime();
+  stopAllAudioSources();
+  stopPlayheadLoop();
+  setState({ project: { isPlaying: false, currentTime: currentPos } });
+  const playheadEl = $('#timeline-playhead');
+  if (playheadEl) {
+    playheadEl.style.transform = `translateX(${timeToPixels(currentPos)}px)`;
+  }
+  const currentTimeEl = $('#current-time');
+  if (currentTimeEl) {
+    currentTimeEl.textContent = formatTime(currentPos);
+  }
+}
+
+/**
+ * Alterna entre Play y Pausa según el estado actual.
+ */
+async function togglePlay() {
+  const totalClips = state.tracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
+  if (totalClips === 0) return;
+
+  if (state.project.isPlaying) {
+    pausePlayback();
+  } else {
+    await startPlayback();
+  }
+}
+
+/**
+ * Reposiciona la línea de tiempo (seek / scrub).
+ * Mientras suena: detiene fuentes y reprograma de inmediato desde la nueva posición.
+ * En pausa: desplaza el playhead y actualiza el contador.
  * @param {number} targetSeconds
  */
 function seekTo(targetSeconds) {
   const maxDuration = state.project.duration > 0 ? state.project.duration : Infinity;
   const seconds = clamp(targetSeconds, 0, maxDuration);
 
-  // 1. Identificar si algún clip cubre esta posición absoluta del timeline
-  let coveringClip = null;
-  for (const t of state.tracks) {
-    if (!t.clips) continue;
-    for (const c of t.clips) {
-      const cStart = c.start || 0;
-      const cEnd = cStart + (c.duration || 0);
-      if (seconds >= cStart && seconds < cEnd) {
-        coveringClip = c;
-        break;
-      }
-    }
-    if (coveringClip) break;
-  }
-
-  // 2. Sincronizar el audio real según si cae en un clip o en zona vacía
-  if (coveringClip && coveringClip.objectUrl) {
-    activePlayingClipStart = coveringClip.start || 0;
-    activePlayingClipDuration = coveringClip.duration || 0;
-    activePlayingClipSourceOffset = coveringClip.sourceOffset || 0;
-    const clipOffset = Math.max(0, seconds - activePlayingClipStart);
-    const targetSourceTime = activePlayingClipSourceOffset + clipOffset;
-
-    if (globalAudio.src !== coveringClip.objectUrl) {
-      globalAudio.src = coveringClip.objectUrl;
-      globalAudio.currentTime = targetSourceTime;
-      if (state.project.isPlaying) {
-        syncGlobalAudioVolume();
-        globalAudio.play().catch((err) => console.warn('[PodcastCraft AI] Seek play error:', err));
-      }
-    } else {
-      try {
-        globalAudio.currentTime = targetSourceTime;
-      } catch (_) {}
-    }
-
-    if (state.selection.clipId !== coveringClip.id) {
-      setState({ selection: { clipId: coveringClip.id } });
-    }
+  if (state.project.isPlaying) {
+    stopAllAudioSources();
+    const ctx = getAudioContext();
+    transportStartPos = seconds;
+    transportStartCtxTime = ctx.currentTime;
+    scheduleAudioClips(seconds);
+    setState({ project: { currentTime: seconds } });
   } else {
-    // Zona vacía del timeline: decisión contractual Fase 9 (3.3):
-    // Detener la reproducción de audio si estaba activa y mantener posición del playhead
-    if (state.project.isPlaying) {
-      globalAudio.pause();
-      stopPlayheadLoop();
-      setState({ project: { isPlaying: false } });
-    }
+    setState({ project: { currentTime: seconds } });
   }
 
-  // 3. Actualización puntual del store (evento discreto, nunca en bucle continuo)
-  setState({ project: { currentTime: seconds } });
-
-  // 4. Reposicionar el playhead de inmediato sin esperar al siguiente frame
   const playheadEl = $('#timeline-playhead');
   if (playheadEl) {
     playheadEl.style.transform = `translateX(${timeToPixels(seconds)}px)`;
@@ -2507,7 +2787,6 @@ function seekTo(targetSeconds) {
     currentTimeEl.textContent = formatTime(seconds);
   }
 
-  // 5. Sincronizar accesibilidad de la regla
   const rulerEl = $('#timeline-ruler');
   if (rulerEl) {
     rulerEl.setAttribute('aria-valuenow', Math.round(seconds).toString());
@@ -2515,27 +2794,22 @@ function seekTo(targetSeconds) {
   }
 }
 
-globalAudio.addEventListener('ended', () => {
-  stopPlayheadLoop();
-  setState({ project: { isPlaying: false, currentTime: activePlayingClipStart } });
-  const playheadEl = $('#timeline-playhead');
-  if (playheadEl) {
-    playheadEl.style.transform = `translateX(${timeToPixels(activePlayingClipStart)}px)`;
-  }
-  const currentTimeEl = $('#current-time');
-  if (currentTimeEl) {
-    currentTimeEl.textContent = formatTime(activePlayingClipStart);
-  }
-});
-
 /**
- * Sincroniza el volumen y estado de silencio en el elemento de audio global.
+ * Reprograma la reproducción en caliente con debounce (150ms) tras cambios estructurales en el timeline.
+ * @param {number} [delay=150]
  */
-function syncGlobalAudioVolume() {
-  if (globalAudio) {
-    globalAudio.volume = state.project.isMuted ? 0 : (state.project.volume / 100);
-    globalAudio.muted = state.project.isMuted;
-  }
+function schedulePlaybackDebounce(delay = 150) {
+  if (!state.project.isPlaying) return;
+  clearTimeout(rescheduleDebounceTimer);
+  rescheduleDebounceTimer = setTimeout(() => {
+    if (!state.project.isPlaying) return;
+    const currentPos = getTransportTime();
+    stopAllAudioSources();
+    const ctx = getAudioContext();
+    transportStartPos = currentPos;
+    transportStartCtxTime = ctx.currentTime;
+    scheduleAudioClips(currentPos);
+  }, delay);
 }
 
 /**
@@ -2544,93 +2818,15 @@ function syncGlobalAudioVolume() {
 function bindTransportEvents() {
   const btnPlay = $('#btn-play');
   if (btnPlay) {
-    btnPlay.addEventListener('click', () => {
-      const totalClips = state.tracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
-      if (totalClips === 0) return;
-
-      if (state.project.isPlaying) {
-        globalAudio.pause();
-        stopPlayheadLoop();
-        const rawTime = globalAudio.currentTime || 0;
-        const audioElapsed = Math.max(0, rawTime - activePlayingClipSourceOffset);
-        const currentAbsolute = activePlayingClipStart + audioElapsed;
-        setState({ project: { isPlaying: false, currentTime: currentAbsolute } });
-      } else {
-        // Encontrar clip a reproducir (seleccionado o el primero en la línea de tiempo)
-        let targetClip = null;
-        if (state.selection.clipId) {
-          for (const t of state.tracks) {
-            const found = t.clips.find((c) => c.id === state.selection.clipId);
-            if (found) { targetClip = found; break; }
-          }
-        }
-        if (!targetClip) {
-          for (const t of state.tracks) {
-            if (t.clips && t.clips.length > 0) {
-              targetClip = t.clips[0];
-              break;
-            }
-          }
-        }
-
-        if (targetClip && targetClip.objectUrl) {
-          activePlayingClipStart = targetClip.start || 0;
-          activePlayingClipDuration = targetClip.duration || 0;
-          activePlayingClipSourceOffset = targetClip.sourceOffset || 0;
-
-          // Determinar offset en segundos dentro del archivo de audio
-          const currentTimelineTime = state.project.currentTime || 0;
-          let clipAudioOffset = 0;
-          if (currentTimelineTime >= activePlayingClipStart && currentTimelineTime < (activePlayingClipStart + targetClip.duration)) {
-            clipAudioOffset = currentTimelineTime - activePlayingClipStart;
-          } else {
-            // El playhead estaba fuera de los límites de este clip; arrancar desde su inicio exacto
-            clipAudioOffset = 0;
-            setState({ project: { currentTime: activePlayingClipStart } });
-            const playheadEl = $('#timeline-playhead');
-            if (playheadEl) {
-              playheadEl.style.transform = `translateX(${timeToPixels(activePlayingClipStart)}px)`;
-            }
-            const currentTimeEl = $('#current-time');
-            if (currentTimeEl) {
-              currentTimeEl.textContent = formatTime(activePlayingClipStart);
-            }
-          }
-
-          const targetSourceTime = activePlayingClipSourceOffset + clipAudioOffset;
-
-          if (globalAudio.src !== targetClip.objectUrl) {
-            globalAudio.src = targetClip.objectUrl;
-            globalAudio.currentTime = targetSourceTime;
-          } else if (Math.abs((globalAudio.currentTime || 0) - targetSourceTime) > 0.05) {
-            try {
-              globalAudio.currentTime = targetSourceTime;
-            } catch (_) {}
-          }
-
-          syncGlobalAudioVolume();
-          const playPromise = globalAudio.play();
-          if (playPromise !== undefined) {
-            playPromise
-              .then(() => {
-                setState({ project: { isPlaying: true } });
-                startPlayheadLoop();
-              })
-              .catch((err) => {
-                console.warn('[PodcastCraft AI] Error en reproducción de audio real:', err);
-                stopPlayheadLoop();
-                setState({ project: { isPlaying: false } });
-              });
-          }
-        }
-      }
+    btnPlay.addEventListener('click', async () => {
+      await togglePlay();
     });
   }
 
   const btnRewind = $('#btn-rewind');
   if (btnRewind) {
     btnRewind.addEventListener('click', () => {
-      const nextTime = state.project.currentTime - 5;
+      const nextTime = getTransportTime() - 5;
       seekTo(nextTime);
     });
   }
@@ -2638,7 +2834,7 @@ function bindTransportEvents() {
   const btnForward = $('#btn-forward');
   if (btnForward) {
     btnForward.addEventListener('click', () => {
-      const nextTime = state.project.currentTime + 5;
+      const nextTime = getTransportTime() + 5;
       seekTo(nextTime);
     });
   }
@@ -2653,7 +2849,7 @@ function bindTransportEvents() {
           isMuted: newVol === 0
         }
       });
-      syncGlobalAudioVolume();
+      syncMasterVolume();
     };
     volumeSlider.addEventListener('input', updateVolumeFromInput);
     volumeSlider.addEventListener('change', updateVolumeFromInput);
@@ -2664,7 +2860,7 @@ function bindTransportEvents() {
     btnMute.addEventListener('click', () => {
       const nextMuted = !state.project.isMuted;
       setState({ project: { isMuted: nextMuted } });
-      syncGlobalAudioVolume();
+      syncMasterVolume();
     });
   }
 }
@@ -2863,6 +3059,12 @@ function bindImportAudioEvents() {
         setState({
           library: [...state.library, ...newItems]
         });
+        // Precarga en segundo plano de buffers de audio en memoria (Fase 22)
+        for (const item of newItems) {
+          if (typeof loadAudioBuffer === 'function') {
+            loadAudioBuffer(item.id).catch(() => {});
+          }
+        }
         console.info(`[PodcastCraft AI] ${newItems.length} archivo(s) MP3 subido(s) y procesado(s) exitosamente.`);
       }
 
@@ -3046,14 +3248,16 @@ function bindTimelineEvents() {
         const clip1 = {
           ...clip,
           duration: splitSec,
-          sourceOffset: clip.sourceOffset || 0
+          sourceOffset: clip.sourceOffset || 0,
+          volume: typeof clip.volume === 'number' ? clip.volume : 1
         };
         const clip2 = {
           ...clip,
           id: `clip-${crypto.randomUUID()}`,
           start: clip.start + splitSec,
           duration: clip.duration - splitSec,
-          sourceOffset: (clip.sourceOffset || 0) + splitSec
+          sourceOffset: (clip.sourceOffset || 0) + splitSec,
+          volume: typeof clip.volume === 'number' ? clip.volume : 1
         };
 
         const nextClips = [];
@@ -3081,6 +3285,10 @@ function bindTimelineEvents() {
             transcriptByClip: nextTranscriptByClip
           }
         });
+
+        if (typeof schedulePlaybackDebounce === 'function') {
+          schedulePlaybackDebounce(150);
+        }
 
         console.info(`[PodcastCraft AI] Clip dividido en dos mitades (${splitSec}s y ${clip2.duration}s).`);
       }
@@ -3146,6 +3354,7 @@ function bindTimelineEvents() {
       duration: duration,
       start: start,
       sourceOffset: 0,
+      volume: 1,
       objectUrl: objectUrl
     };
 
@@ -3167,6 +3376,10 @@ function bindTimelineEvents() {
       ui: { draggingLibraryId: null },
       selection: { clipId: newClip.id }
     });
+
+    if (typeof schedulePlaybackDebounce === 'function') {
+      schedulePlaybackDebounce(150);
+    }
 
     console.info(`[PodcastCraft AI] Clip añadido al carril ${track.id}:`, newClip);
   });
@@ -3268,7 +3481,7 @@ function bindTimelineEvents() {
 
       if (!activeTrim) return;
 
-      const { trackId: tId, clipId: cId, pendingStart, pendingDuration, initialStart, initialDuration } = activeTrim;
+      const { trackId: tId, clipId: cId, pendingStart, pendingDuration, initialStart, initialDuration, handleType } = activeTrim;
       activeTrim = null;
 
       // Solo si hubo cambio real en inicio o duración, guardar en historial de deshacer (Fase 16)
@@ -3284,7 +3497,7 @@ function bindTimelineEvents() {
             clips: t.clips.map((c) => {
               if (c.id === cId) {
                 const currentOffset = c.sourceOffset || 0;
-                const newSourceOffset = activeTrim.handleType === 'left'
+                const newSourceOffset = handleType === 'left'
                   ? Math.max(0, currentOffset + (pendingStart - initialStart))
                   : currentOffset;
                 return { ...c, start: pendingStart, duration: pendingDuration, sourceOffset: newSourceOffset };
@@ -3302,6 +3515,10 @@ function bindTimelineEvents() {
         tracks: nextTracks,
         project: { duration: nextDuration }
       });
+
+      if (typeof schedulePlaybackDebounce === 'function') {
+        schedulePlaybackDebounce(150);
+      }
 
       console.info(`[PodcastCraft AI] Recorte confirmado: start=${pendingStart}s, dur=${pendingDuration}s`);
     };
@@ -3381,13 +3598,12 @@ function bindTimelineEvents() {
         const remainingClips = nextTracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
 
         if (remainingClips === 0) {
-          if (typeof globalAudio !== 'undefined' && globalAudio) {
-            globalAudio.pause();
-            globalAudio.src = '';
+          if (typeof stopAllAudioSources === 'function') {
+            stopAllAudioSources();
           }
           stopPlayheadLoop();
-          activePlayingClipStart = 0;
-          activePlayingClipDuration = 0;
+        } else if (state.project.isPlaying && typeof schedulePlaybackDebounce === 'function') {
+          schedulePlaybackDebounce(150);
         }
 
         const nextTranscriptByClip = { ...(state.ai.transcriptByClip || {}) };

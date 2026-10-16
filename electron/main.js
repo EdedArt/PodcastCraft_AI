@@ -7,6 +7,9 @@ let backendProcess = null;
 let mainWindow = null;
 let isQuitting = false;
 
+// Permitir reproducción fluida de Web Audio API sin requerir gesto previo por documento
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
 const BACKEND_PORT = process.env.PORT || '3001';
 const HEALTH_URL = `http://127.0.0.1:${BACKEND_PORT}/health`;
 
