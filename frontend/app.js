@@ -2410,6 +2410,11 @@ let playheadRafId = null;
 let rescheduleDebounceTimer = null;
 
 /**
+ * Temporizador de respaldo para detección de fin de reproducción garantizado.
+ */
+let playbackEndTimer = null;
+
+/**
  * Obtiene o inicializa perezosamente el AudioContext y el nodo masterGain.
  * @returns {AudioContext}
  */
@@ -2519,6 +2524,10 @@ function stopAllAudioSources() {
     } catch (_) {}
   }
   activeAudioSources = [];
+  if (playbackEndTimer !== null) {
+    clearTimeout(playbackEndTimer);
+    playbackEndTimer = null;
+  }
 }
 
 /**
@@ -2723,6 +2732,26 @@ async function startPlayback(explicitFromTime) {
 
   setState({ project: { isPlaying: true, currentTime: fromTime } });
   startPlayheadLoop();
+
+  // Temporizador de respaldo para fin de reproducción
+  clearTimeout(playbackEndTimer);
+  const remainingSec = duration - fromTime;
+  if (duration > 0 && remainingSec > 0) {
+    playbackEndTimer = setTimeout(() => {
+      if (!state.project.isPlaying) return;
+      stopAllAudioSources();
+      stopPlayheadLoop();
+      setState({ project: { isPlaying: false, currentTime: duration } });
+      const playheadEl = $('#timeline-playhead');
+      if (playheadEl) {
+        playheadEl.style.transform = `translateX(${timeToPixels(duration)}px)`;
+      }
+      const currentTimeEl = $('#current-time');
+      if (currentTimeEl) {
+        currentTimeEl.textContent = formatTime(duration);
+      }
+    }, Math.max(10, Math.round((remainingSec + LEAD_TIME) * 1000)));
+  }
 }
 
 /**
@@ -2774,6 +2803,25 @@ function seekTo(targetSeconds) {
     transportStartCtxTime = ctx.currentTime;
     scheduleAudioClips(seconds);
     setState({ project: { currentTime: seconds } });
+
+    clearTimeout(playbackEndTimer);
+    const remainingSec = maxDuration - seconds;
+    if (maxDuration > 0 && isFinite(maxDuration) && remainingSec > 0) {
+      playbackEndTimer = setTimeout(() => {
+        if (!state.project.isPlaying) return;
+        stopAllAudioSources();
+        stopPlayheadLoop();
+        setState({ project: { isPlaying: false, currentTime: maxDuration } });
+        const playheadEl = $('#timeline-playhead');
+        if (playheadEl) {
+          playheadEl.style.transform = `translateX(${timeToPixels(maxDuration)}px)`;
+        }
+        const currentTimeEl = $('#current-time');
+        if (currentTimeEl) {
+          currentTimeEl.textContent = formatTime(maxDuration);
+        }
+      }, Math.max(10, Math.round((remainingSec + LEAD_TIME) * 1000)));
+    }
   } else {
     setState({ project: { currentTime: seconds } });
   }
@@ -2809,6 +2857,26 @@ function schedulePlaybackDebounce(delay = 150) {
     transportStartPos = currentPos;
     transportStartCtxTime = ctx.currentTime;
     scheduleAudioClips(currentPos);
+
+    clearTimeout(playbackEndTimer);
+    const dur = state.project.duration || 0;
+    const remainingSec = dur - currentPos;
+    if (dur > 0 && remainingSec > 0) {
+      playbackEndTimer = setTimeout(() => {
+        if (!state.project.isPlaying) return;
+        stopAllAudioSources();
+        stopPlayheadLoop();
+        setState({ project: { isPlaying: false, currentTime: dur } });
+        const playheadEl = $('#timeline-playhead');
+        if (playheadEl) {
+          playheadEl.style.transform = `translateX(${timeToPixels(dur)}px)`;
+        }
+        const currentTimeEl = $('#current-time');
+        if (currentTimeEl) {
+          currentTimeEl.textContent = formatTime(dur);
+        }
+      }, Math.max(10, Math.round((remainingSec + LEAD_TIME) * 1000)));
+    }
   }, delay);
 }
 
