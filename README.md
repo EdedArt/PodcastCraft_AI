@@ -6,6 +6,18 @@ Este repositorio contiene la **Fase 20 (Empaquetado de escritorio con Electron, 
 
 ---
 
+## 📦 Descarga e Instalación
+
+[![Descargar PodcastCraft AI](https://img.shields.io/badge/Descargar-PodcastCraft%20AI%20v1.0.0%20(Windows%20x64)-6366f1?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/EdedArt/PodcastCraft_AI/releases/download/v1.0.0/PodcastCraft.AI.exe)
+
+> **Release público:** [GitHub Releases — PodcastCraft AI v1.0.0](https://github.com/EdedArt/PodcastCraft_AI/releases/tag/v1.0.0)
+
+1. **Descarga:** Descarga el instalador ejecutable [`PodcastCraft.AI.exe`](https://github.com/EdedArt/PodcastCraft_AI/releases/download/v1.0.0/PodcastCraft.AI.exe) (105 MB).
+2. **Ejecución:** Haz doble clic sobre el archivo para instalar y abrir la aplicación en Windows 10/11 (64 bits).
+3. **SmartScreen:** Si Windows muestra *"Windows protegió su equipo"*, pulsa en **Más información** y luego en **Ejecutar de todas formas**.
+
+---
+
 ## 🖥️ Backend (Fases 1 a 7 completadas)
 El backend vive en `/backend`, ver [`backend/README.md`](backend/README.md) para instrucciones completas, arquitectura y guía de pruebas. Actualmente desarrollado y verificado de forma aislada; la conexión con el frontend está pendiente de aprobación del usuario.
 
