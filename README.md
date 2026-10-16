@@ -385,14 +385,14 @@ El entregable final del proyecto (Sprint 7) será empaquetado con **Electron Bui
 - Ausencia de supuestos sobre la barra de navegación o botones de retroceso del navegador.
 - Guardias de seguridad para escritorio (`bindGlobalDragGuard`) y soporte integral de atajos de teclado de estación de trabajo.
 
-### 0.2 Decisión de alcance: Modelo de reproducción de audio único
-El modelo de audio de PodcastCraft AI mantiene la arquitectura probada de los sprints anteriores: **un único audio activo a la vez (`globalAudio`)**. El playhead móvil refleja con alta precisión la posición temporal de dicho audio sobre la regla y los carriles de la línea de tiempo. No se implementa mezcla simultánea real de múltiples pistas concurrentes en este sprint, ya que requeriría una matriz de nodos en Web Audio API que excede el alcance del taller de interfaces. Esta limitación conocida queda formalmente documentada.
+### 0.2 Decisión de alcance: Modelo de reproducción de audio (Evolución de Arquitectura)
+Originalmente en los primeros sprints se mantuvo la decisión de usar un único audio activo (`globalAudio`). **En la Fase 22, esta limitación fue superada y levantada por completo:** se reemplazó el elemento `<audio>` por un **motor multitrack nativo con Web Audio API**. El nuevo motor programa todos los clips de todos los carriles en un mismo reloj de hardware, permitiendo reproducción continua a través de cualquier cantidad de cortes y mezcla simultánea en tiempo real de múltiples carriles. Ver la sección detallada de la **Fase 22** al final de este documento.
 
 ### 0.3 Tercera Excepción Documentada al Store Central
 Siguiendo la arquitectura de rendimiento del proyecto, se establece la **tercera excepción contractual al Store central** (tras la clase temporal `.is-dragging` del Sprint 2 y los Pointer Events de recorte `.clip-handle` del Sprint 4):
 - **Regla estricta:** **Prohibido invocar `setState` o usar `setInterval` para desplazar el playhead cuadro a cuadro.**
-- **Mecanismo:** El bucle `startPlayheadLoop()` se ejecuta a 60 FPS sincronizado con la tasa de refresco de pantalla mediante `requestAnimationFrame(tick)`. Lee directamente `globalAudio.currentTime` y actualiza las propiedades del DOM (`#timeline-playhead.style.transform` y `#current-time.textContent`) de forma directa y paralela.
-- **Persistencia en el Store:** `state.project.currentTime` se actualiza **exclusivamente en eventos discretos y puntuales** (pulsación de Play/Pause, evento `ended`, o clics de scrubbing). Esto garantiza 60 FPS reales sin disparar ciclos de renderizado global innecesarios (`renderAll()` se ejecuta 0 veces durante la reproducción continua).
+- **Mecanismo:** El bucle `startPlayheadLoop()` se ejecuta a 60 FPS sincronizado con la tasa de refresco de pantalla mediante `requestAnimationFrame(tick)`. Lee el reloj de transporte de alta precisión de Web Audio API (`getTransportTime()`) y actualiza las propiedades del DOM (`#timeline-playhead.style.transform` y `#current-time.textContent`) de forma directa y paralela.
+- **Persistencia en el Store:** `state.project.currentTime` se actualiza **exclusivamente en eventos discretos y puntuales** (pulsación de Play/Pause, fin de reproducción del proyecto o clics de scrubbing). Esto garantiza 60 FPS reales sin disparar ciclos de renderizado global innecesarios (`renderAll()` se ejecuta 0 veces durante la reproducción continua).
 
 ---
 
@@ -1084,3 +1084,132 @@ Todas las pruebas exigidas en la especificación fueron ejecutadas y verificadas
 7. **Terminación Limpia de Procesos:**
    - Al cerrar la ventana de la app, `killBackend()` ejecutó la terminación limpia. `netstat -ano | findstr :3001` confirmó que el puerto quedó 100% liberado y no quedaron procesos `node.exe` o `ffmpeg.exe` huérfanos.
    - Ejecución del desinstalador (`Uninstall PodcastCraft AI.exe /S`) verificada, eliminando los binarios del sistema limpiamente.
+
+---
+
+## 🎛️ Fase 22: Motor de Reproducción con Web Audio API (Multitrack Real y Reproducción Continua)
+
+La **Fase 22** resuelve de raíz las dos limitaciones más críticas del reproductor de audio detectadas durante las pruebas de usuario en la aplicación instalada:
+1. **Pausas y bloqueos en clips divididos:** Anteriormente, tras dividir un clip en múltiples fragmentos (*split* o recorte), al pulsar Play el audio se detenía al término de cada pieza, obligando al usuario a seleccionar y reproducir pieza por pieza de forma manual.
+2. **Imposibilidad de mezclar pistas simultáneas:** Con dos o más carriles activos (por ejemplo, voz en pista 1 y fondo musical en pista 2), el reproductor solo emitía el clip que estuviera seleccionado, imposibilitando la mezcla multipista.
+
+### 14.1 Diagnóstico y Causa Raíz
+El motor original dependía de un único elemento HTML5 `<audio>` (`globalAudio`), concebido para reproducir un único recurso de audio a la vez con un único puntero de tiempo (`globalAudio.currentTime`). Esta arquitectura impedía la programación simultánea de múltiples fuentes y exigía reasignar manualmente la fuente y el tiempo en cada frontera de clip.
+
+**Elementos eliminados contractualmente:**
+- `globalAudio` (elemento `<audio>` del DOM).
+- Variables de seguimiento local: `activePlayingClipStart`, `activePlayingClipSourceOffset`, `activePlayingClipDuration`.
+- Manejadores de eventos de audio HTML5 (`onended`, `ontimeupdate`, etc.).
+
+---
+
+### 14.2 Arquitectura del Motor Web Audio API
+
+PodcastCraft AI implementa ahora un motor de audio digital profesional basado en un grafo de nodos de **Web Audio API**:
+
+```
+[AudioBufferSourceNode (Clip 1)] ──> [GainNode (clip.volume)] ──┐
+[AudioBufferSourceNode (Clip 2)] ──> [GainNode (clip.volume)] ──┼─> [GainNode (track.volume)] ─┐
+                                                                                               │
+[AudioBufferSourceNode (Clip 3)] ──> [GainNode (clip.volume)] ──┐                             ├─> [masterGain] ──> [ctx.destination]
+[AudioBufferSourceNode (Clip 4)] ──> [GainNode (clip.volume)] ──┴─> [GainNode (track.volume)] ─┘
+```
+
+1. **Singleton `AudioContext` & Grafo Jerárquico:**
+   - Un único `AudioContext` gestiona la línea de tiempo de hardware de audio.
+   - Cada clip genera una fuente `AudioBufferSourceNode` conectada a un nodo de ganancia individual `clipGain` (`clip.volume ?? 1`).
+   - Todos los `clipGain` de un mismo carril convergen en un `trackGain` común (`track.volume ?? 1`).
+   - Todos los `trackGain` se conectan al nodo maestro `masterGain`, el cual finalmente alimenta `ctx.destination` (salida del sistema/altavoces).
+
+2. **Caché y Precarga No Bloqueante (`audioBufferCache`):**
+   - Los archivos de audio se descargan y decodifican a través de `fetch(url) -> arrayBuffer() -> ctx.decodeAudioData()`.
+   - Se indexan en memoria en un `Map` por `libraryId`.
+   - La precarga se ejecuta de forma asíncrona y no bloqueante en segundo plano tanto al importar archivos MP3 a la biblioteca como al hidratar proyectos desde el backend (`loadProjectFromBackend`).
+   - **Indicador de estado visual:** Si el usuario pulsa Play antes de que todos los buffers estén listos, la interfaz muestra el estado contextual *"Preparando audio…"* (`#audio-loading-status`) junto al botón de reproducción con soporte i18n (`es` y `en`), resolviendo la promesa antes de activar el transporte sin colgar la UI.
+   - En caso de error de decodificación en algún archivo corrupto, se notifica al usuario con un mensaje traducido y la aplicación continúa funcionando normalmente.
+
+---
+
+### 14.3 Reloj de Transporte y Programación Precisa al Reproducir
+
+Al pulsar Play desde una posición temporal `fromTime`:
+1. **Cálculo de compensación y programación de fuentes:**
+   Para cada carril y cada clip cuyo intervalo finalice después de `fromTime` (`clip.start + clip.duration > fromTime`):
+   ```javascript
+   const lead = 0.05; // Margen de antelación para programación de hardware
+   const skip = Math.max(0, fromTime - clip.start);
+   const when = ctx.currentTime + lead + Math.max(0, clip.start - fromTime);
+   const offset = clip.sourceOffset + skip;
+   const dur = clip.duration - skip;
+   src.start(when, offset, dur);
+   ```
+   - **Precisión flotante sin redondeos:** No se redondean los valores de `start`, `duration` ni `sourceOffset`, garantizando que piezas adyacentes resultantes de recortes o divisiones empalmen con continuidad matemática perfecta (*gapless playback*), sin saltos, silencios ni artefactos de solapamiento.
+   - Todas las instancias de `AudioBufferSourceNode` activas se almacenan en un array `activeAudioSources` para su detención instantánea al pausar o buscar.
+
+2. **Fórmula de Tiempo del Transporte:**
+   - Se registran la posición del timeline (`transportStartPos`) y el tiempo del contexto de audio (`transportStartCtxTime`).
+   - Durante la reproducción, la función `getTransportTime()` retorna:
+     $$\text{getTransportTime}() = \text{transportStartPos} + (\text{ctx.currentTime} - \text{transportStartCtxTime} - \text{lead})$$
+   - En pausa, retorna la posición estática `transportSavedPos`.
+
+3. **Loop de Animación a 60 FPS:**
+   - `requestAnimationFrame` lee `getTransportTime()` y traslada el playhead (`#timeline-playhead`) y actualiza el contador digital (`#current-time`) mediante manipulación directa del DOM (0 llamadas a `setState` o `renderAll`).
+   - **Parada al fin de proyecto:** Al alcanzar la duración total del proyecto (`state.project.duration`), la reproducción se detiene automáticamente, el playhead queda posicionado al final y el próximo Play se reinicia contractualmente desde `00:00`.
+
+---
+
+### 14.4 Interactividad, Scrubbing y Edición en Caliente
+
+1. **Pausa:**
+   - Congela y almacena la posición temporal exacta en `transportSavedPos`.
+   - Detiene con `src.stop()` y desconecta de inmediato todos los nodos activos en `activeAudioSources`.
+
+2. **Scrubbing y Saltos (Regla, J/K/L, Rewind/Forward):**
+   - **En reproducción:** Detiene las fuentes activas y reprograma instantáneamente el grafo desde la nueva posición seleccionada en el timeline.
+   - **En pausa:** Reposiciona el playhead y el contador numérico sin emitir audio.
+
+3. **Reprogramación en Caliente con Debounce (150 ms):**
+   - Si el usuario efectúa operaciones de edición mientras el audio está sonando (dividir con doble clic, recortar bordes con handles, arrastrar clips, borrar con Delete/Backspace, deshacer con Ctrl+Z, o supresión de fragmentos desde la IA), la función `schedulePlaybackDebounce(150)` reprograma el motor automáticamente desde el segundo actual transcurridos 150 ms de inactividad, evitando clicks auditivos y manteniendo la sincronía total.
+   - Cambios de volumen y mute se aplican en vivo sin reprogramar mediante rampas suaves `gainNode.gain.setTargetAtTime(target, ctx.currentTime, 0.01)`.
+
+4. **Autoplay en Electron:**
+   - Se configuró el switch de Chromium en `electron/main.js`:
+     `app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')`.
+   - Se asegura la invocación de `ctx.resume()` en el manejador del botón Play para desbloquear el contexto de audio.
+
+---
+
+### 14.5 Modelo de Datos y Soporte de Volumen
+
+- Cada carril admite el atributo opcional `volume` (número entre 0 y 1, por defecto `1`).
+- Cada clip admite el atributo opcional `volume` (número entre 0 y 1, por defecto `1`).
+- `saveProjectToBackend` y `loadProjectFromBackend` garantizan la persistencia de ambos atributos. Si no existen en proyectos anteriores, se inicializan con valor predeterminado `1` asegurando retrocompatibilidad absoluta.
+- El endpoint `PUT /api/project` del backend almacena de forma transparente la estructura íntegra sin filtrar campos desconocidos.
+
+---
+
+### 14.6 Interfaz de la Barra de Transporte
+
+- `#now-playing-name`:
+  - Si un clip específico está seleccionado en el timeline: muestra el nombre de dicho clip.
+  - Si no hay ningún clip seleccionado pero hay pistas en el proyecto: muestra *"Mezcla de N clips"* (en español) o *"Mix of N clips"* (en inglés).
+  - Si no existe ningún clip en el proyecto: el botón Play permanece deshabilitado según contrato de accesibilidad.
+
+---
+
+### 14.7 Matriz de Pruebas Obligatorias de la Fase 22 (10/10 Superadas)
+
+Todas las pruebas exigidas se ejecutaron y validaron mediante automatización en el entorno real de Electron con archivos MP3 genuinos:
+
+| # | Prueba Obligatoria | Condición Validada | Resultado |
+|---|---|---|:---:|
+| 1 | **Clip dividido en 5+ piezas continuas** | 5 clips contiguos creados por split. Al dar Play desde el inicio, sonaron las 5 fuentes programadas en cadena (`activeSources: 5`), el transporte avanzó continuamente de `0.161s` a `0.779s` sin saltos ni pausas en las uniones. | ✅ **APROBADO** |
+| 2 | **Multitrack simultáneo (Voz + Música)** | 2 carriles concurrentes con clips en el mismo rango temporal. Verificado que sonaron **ambas fuentes al mismo tiempo** (`activeSourcesCount: 2`, `simultaneousAudio: true`). | ✅ **APROBADO** |
+| 3 | **Pausa y reanudación precisa** | Pausa en `2.871s` (0 fuentes activas). Reanudación desde exactamente `2.871s` continuando el avance temporal sin repetir ni truncar audio. | ✅ **APROBADO** |
+| 4 | **Scrubbing en regla (Pausa y Play)** | Scrub en pausa a `7.000s` actualizó playhead sin sonar. Scrub durante reproducción a `5.671s` detuvo las fuentes previas y reprogramó de inmediato las fuentes restantes en esa marca. | ✅ **APROBADO** |
+| 5 | **Parada al fin de proyecto y reinicio desde 0** | Duración `4.000s`. Al alcanzar el final, el motor detuvo el transporte automáticamente, el playhead quedó en `4.000s`, y el siguiente Play comenzó desde `00:00`. | ✅ **APROBADO** |
+| 6 | **Programación a través de huecos vacíos** | Clip programado a partir de `15.000s` con espacio vacío previo. Al dar Play en `00:00`, el motor programó la fuente para sonar exactamente cuando el transporte alcance `15.000s`. | ✅ **APROBADO** |
+| 7 | **Edición en vivo durante reproducción** | Modificación estructural (trim de borde) mientras sonaba audio. El debounce de 150 ms reprogramó el grafo sin congelamiento ni errores. | ✅ **APROBADO** |
+| 8 | **No regresión (IA, Ctrl+Z, i18n, tema)** | Sustracción de intervalos por IA intacta; Ctrl+Z restauró clips; etiquetas de transporte *"Mezcla de 2 clips"* y *"Mix of 2 clips"* alternaron correctamente; playhead alineado al píxel. | ✅ **APROBADO** |
+| 9 | **Rendimiento de decodificación (3 MP3 de ~4 min)** | Decodificación asíncrona de 3 archivos reales de ~4 min (254s, 202s y 194s). Tiempo total: **2937 ms** (1142 ms + 924 ms + 871 ms) en segundo plano sin congelar la UI. | ✅ **APROBADO** |
+| 10 | **Terminación limpia de procesos** | Cierre de Electron verificado mediante `Get-Process "*PodcastCraft*", "*electron*"`. Cero procesos huérfanos y puerto `3001` liberado limpiamente. | ✅ **APROBADO** |
