@@ -3840,8 +3840,15 @@ function bindTimelineEvents() {
         activeClipDrag.clipEl.style.left = Math.round(timeToPixels(proposedStart)) + 'px';
 
         // Detectar carril bajo el puntero
-        const elements = document.elementsFromPoint(ev.clientX, ev.clientY);
-        const laneEl = elements.find((el) => el.classList && el.classList.contains('timeline-lane'));
+        const elements = document.elementsFromPoint(ev.clientX, ev.clientY) || [];
+        let laneEl = elements.find((el) => el.classList && el.classList.contains('timeline-lane'));
+        if (!laneEl) {
+          const allLanes = Array.from(document.querySelectorAll('.timeline-lane'));
+          laneEl = allLanes.find((l) => {
+            const rect = l.getBoundingClientRect();
+            return ev.clientY >= rect.top && ev.clientY <= rect.bottom;
+          });
+        }
         $$('.timeline-lane').forEach((l) => l.classList.remove('lane-dragover'));
         if (laneEl) {
           laneEl.classList.add('lane-dragover');
@@ -3876,6 +3883,20 @@ function bindTimelineEvents() {
         return;
       }
 
+      // Confirmar carril destino en el punto de soltar
+      const elements = document.elementsFromPoint(ev.clientX, ev.clientY) || [];
+      let dropLaneEl = elements.find((el) => el.classList && el.classList.contains('timeline-lane'));
+      if (!dropLaneEl) {
+        const allLanes = Array.from(document.querySelectorAll('.timeline-lane'));
+        dropLaneEl = allLanes.find((l) => {
+          const rect = l.getBoundingClientRect();
+          return ev.clientY >= rect.top && ev.clientY <= rect.bottom;
+        });
+      }
+      if (dropLaneEl && dropLaneEl.dataset.trackId) {
+        activeClipDrag.currentTargetTrackId = dropLaneEl.dataset.trackId;
+      }
+
       const deltaX = ev.clientX - activeClipDrag.startX;
       const deltaSec = pixelsToTime(deltaX);
       const proposedStart = Math.max(0, activeClipDrag.initialClipStart + deltaSec);
@@ -3896,7 +3917,9 @@ function bindTimelineEvents() {
       if (!didMove) {
         if (activeClipDrag.snapshotTaken) {
           undoStack.pop();
-          renderUndoButton();
+          if (typeof updateUndoButtonState === 'function') {
+            updateUndoButtonState();
+          }
         }
         activeClipDrag.clipEl.style.left = Math.round(timeToPixels(activeClipDrag.initialClipStart)) + 'px';
         renderTimelineTracks();
@@ -3966,7 +3989,9 @@ function bindTimelineEvents() {
       if (!activeClipDrag) return;
       if (activeClipDrag.snapshotTaken) {
         undoStack.pop();
-        renderUndoButton();
+        if (typeof updateUndoButtonState === 'function') {
+          updateUndoButtonState();
+        }
       }
       activeClipDrag.clipEl.style.left = Math.round(timeToPixels(activeClipDrag.initialClipStart)) + 'px';
       activeClipDrag = null;
@@ -4430,7 +4455,9 @@ function bindTimelineEvents() {
       $$('.timeline-lane').forEach((l) => l.classList.remove('lane-dragover'));
       if (activeClipDrag.snapshotTaken) {
         undoStack.pop();
-        renderUndoButton();
+        if (typeof updateUndoButtonState === 'function') {
+          updateUndoButtonState();
+        }
       }
       activeClipDrag = null;
       renderTimelineTracks();
