@@ -92,16 +92,22 @@ const I18N = {
     'timeline.emptyLane': 'Carril vacío — Arrastra un audio aquí',
     'timeline.clipFrom': 'de',
     'timeline.clipTo': 'a',
-    'timeline.doubleClickToSplit': 'Doble clic para dividir',
     'timeline.dragToTrimStart': 'Arrastra para recortar inicio',
     'timeline.dragToTrimEnd': 'Arrastra para recortar final',
 
-    // Barra contextual de clip (Fase 23)
+    // Barra contextual de clip (Fase 23 & 24)
     'clipToolbar.toolbarAria': 'Herramientas del clip seleccionado',
     'clipToolbar.noClipSelected': 'Selecciona un clip para ajustar su volumen',
     'clipToolbar.volumeLabel': 'Volumen del clip',
     'clipToolbar.volumeSliderAria': 'Volumen del clip',
     'clipToolbar.volumeSliderTitle': 'Volumen del clip',
+    'clipToolbar.splitBtn': 'Dividir',
+    'clipToolbar.splitAria': 'Dividir en la línea de tiempo (S)',
+    'clipToolbar.splitTitle': 'Dividir en la línea de tiempo (S)',
+    'clipToolbar.deleteBtn': 'Eliminar',
+    'clipToolbar.deleteAria': 'Eliminar (Supr) — Shift: sin cerrar hueco',
+    'clipToolbar.deleteTitle': 'Eliminar (Supr) — Shift: sin cerrar hueco',
+    'clipToolbar.splitOutsideNotice': 'Coloca la línea de tiempo dentro del clip',
 
     // Espacio de Trabajo y Ajustes
     'workspace.ariaLabel': 'Espacio de trabajo del editor',
@@ -259,16 +265,22 @@ const I18N = {
     'timeline.emptyLane': 'Empty track — Drag audio here',
     'timeline.clipFrom': 'from',
     'timeline.clipTo': 'to',
-    'timeline.doubleClickToSplit': 'Double-click to split',
     'timeline.dragToTrimStart': 'Drag to trim start',
     'timeline.dragToTrimEnd': 'Drag to trim end',
 
-    // Contextual clip toolbar (Phase 23)
+    // Contextual clip toolbar (Phase 23 & 24)
     'clipToolbar.toolbarAria': 'Selected clip tools',
     'clipToolbar.noClipSelected': 'Select a clip to adjust its volume',
     'clipToolbar.volumeLabel': 'Clip volume',
     'clipToolbar.volumeSliderAria': 'Clip volume',
     'clipToolbar.volumeSliderTitle': 'Clip volume',
+    'clipToolbar.splitBtn': 'Split',
+    'clipToolbar.splitAria': 'Split at playhead (S)',
+    'clipToolbar.splitTitle': 'Split at playhead (S)',
+    'clipToolbar.deleteBtn': 'Delete',
+    'clipToolbar.deleteAria': 'Delete (Del) — Shift: keep gap',
+    'clipToolbar.deleteTitle': 'Delete (Del) — Shift: keep gap',
+    'clipToolbar.splitOutsideNotice': 'Place the playhead inside the clip',
 
     // Espacio de Trabajo y Ajustes
     'workspace.ariaLabel': 'Editor workspace',

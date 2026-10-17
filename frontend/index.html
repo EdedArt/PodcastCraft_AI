@@ -361,8 +361,40 @@
           </div>
         </div>
 
-        <!-- Zona libre a la derecha reservada para Fase 24 (Dividir y Eliminar) -->
-        <div id="clip-toolbar-actions" class="flex items-center gap-1.5 shrink-0"></div>
+        <!-- Acciones contextuales de clip: Dividir y Eliminar (Fase 24) -->
+        <div id="clip-toolbar-actions" class="flex items-center gap-1.5 shrink-0">
+          <!-- Botón Dividir en Playhead (S) -->
+          <button
+            id="btn-split-clip"
+            type="button"
+            disabled
+            aria-disabled="true"
+            data-i18n-aria-label="clipToolbar.splitAria"
+            data-i18n-title="clipToolbar.splitTitle"
+            aria-label="Dividir en la línea de tiempo (S)"
+            title="Dividir en la línea de tiempo (S)"
+            class="theme-btn-secondary inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-medium border active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-all gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <i data-lucide="scissors" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline" data-i18n="clipToolbar.splitBtn">Dividir</span>
+          </button>
+
+          <!-- Botón Eliminar Clip (Supr) — Shift: sin cerrar hueco -->
+          <button
+            id="btn-delete-clip"
+            type="button"
+            disabled
+            aria-disabled="true"
+            data-i18n-aria-label="clipToolbar.deleteAria"
+            data-i18n-title="clipToolbar.deleteTitle"
+            aria-label="Eliminar (Supr) — Shift: sin cerrar hueco"
+            title="Eliminar (Supr) — Shift: sin cerrar hueco"
+            class="theme-btn-secondary inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-medium border active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-all gap-1.5 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline" data-i18n="clipToolbar.deleteBtn">Eliminar</span>
+          </button>
+        </div>
       </div>
 
       <!-- Regla de tiempo interactiva con scrubbing dinámico (Fase 14) -->

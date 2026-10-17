@@ -177,6 +177,8 @@ window.PodcastCraft = {
   calculateDropStart,
   resolveDropStart: (track, desiredStart, clipDuration) => resolveDropStart(track, desiredStart, clipDuration),
   getPlayheadTime: () => getPlayheadTime(),
+  splitClipAtPlayhead: () => splitClipAtPlayhead(),
+  deleteSelectedClip: (opts) => deleteSelectedClip(opts),
   recomputeProjectDuration: () => recomputeProjectDuration(),
   getPixelsPerSecond: () => getPixelsPerSecond(),
   timeToPixels: (sec) => timeToPixels(sec),
@@ -1416,6 +1418,9 @@ function renderClipToolbar() {
     }
   }
 
+  const btnSplit = $('#btn-split-clip');
+  const btnDelete = $('#btn-delete-clip');
+
   if (selectedClip) {
     if (titleEl) {
       titleEl.textContent = selectedClip.name;
@@ -1436,6 +1441,14 @@ function renderClipToolbar() {
     }
     if (valEl) {
       valEl.textContent = `${cPercent}%`;
+    }
+    if (btnSplit) {
+      btnSplit.disabled = false;
+      btnSplit.setAttribute('aria-disabled', 'false');
+    }
+    if (btnDelete) {
+      btnDelete.disabled = false;
+      btnDelete.setAttribute('aria-disabled', 'false');
     }
   } else {
     if (titleEl) {
@@ -1458,6 +1471,14 @@ function renderClipToolbar() {
     }
     if (valEl) {
       valEl.textContent = '100%';
+    }
+    if (btnSplit) {
+      btnSplit.disabled = true;
+      btnSplit.setAttribute('aria-disabled', 'true');
+    }
+    if (btnDelete) {
+      btnDelete.disabled = true;
+      btnDelete.setAttribute('aria-disabled', 'true');
     }
   }
 }
@@ -1546,7 +1567,6 @@ function renderTimelineTracks() {
 
   container.className = 'flex-1 min-h-0 py-3 overflow-y-auto space-y-3.5 flex flex-col';
 
-  const splitText = typeof t === 'function' ? t('timeline.doubleClickToSplit') : 'Doble clic para dividir';
   const trimStartText = typeof t === 'function' ? t('timeline.dragToTrimStart') : 'Arrastra para recortar inicio';
   const trimEndText = typeof t === 'function' ? t('timeline.dragToTrimEnd') : 'Arrastra para recortar final';
   const clipFromText = typeof t === 'function' ? t('timeline.clipFrom') : 'de';
@@ -1584,7 +1604,7 @@ function renderTimelineTracks() {
           role="button"
           tabindex="0"
           aria-label="${escapeHtml(fullAriaLabel)}"
-          title="${escapeHtml(clip.name)} (${formattedDuration}) — ${splitText}"
+          title="${escapeHtml(clip.name)} (${formattedDuration})"
           class="timeline-clip absolute top-1.5 bottom-1.5 rounded-md border flex items-center px-2 gap-1 cursor-pointer select-none transition-all duration-100 ${isSelected ? 'is-selected' : ''}"
           style="left: ${leftPx}px; width: ${widthPx}px;"
         >
@@ -3338,8 +3358,242 @@ function bindImportAudioEvents() {
 let activeTrim = null;
 
 /**
+ * Divide el clip actualmente seleccionado en la posición temporal exacta del playhead (Fase 24).
+ * Valida un margen mínimo de 0.3s a cada extremo del clip.
+ * Ambas piezas resultantes conservan el volumen, IDs nuevos, y reasignan segmentos de transcripción.
+ * Selecciona automáticamente la Pieza B tras la división.
+ * @returns {{ success: boolean, pieceAId?: string, pieceBId?: string, reason?: string }}
+ */
+function splitClipAtPlayhead() {
+  const clipId = state.selection?.clipId;
+  if (!clipId) return { success: false, reason: 'no_clip_selected' };
+
+  let targetTrack = null;
+  let targetClip = null;
+  for (const t of state.tracks) {
+    const found = (t.clips || []).find((c) => c.id === clipId);
+    if (found) {
+      targetTrack = t;
+      targetClip = found;
+      break;
+    }
+  }
+  if (!targetTrack || !targetClip) return { success: false, reason: 'clip_not_found' };
+
+  const tPlayhead = getPlayheadTime();
+  const clipStart = targetClip.start || 0;
+  const clipDuration = targetClip.duration || 0;
+  const clipEnd = clipStart + clipDuration;
+  const margin = 0.3;
+
+  if (tPlayhead < clipStart + margin || tPlayhead > clipEnd - margin) {
+    const notice = typeof t === 'function'
+      ? t('clipToolbar.splitOutsideNotice')
+      : 'Coloca la línea de tiempo dentro del clip';
+    showToast(notice, 'info');
+    return { success: false, reason: 'outside_margin' };
+  }
+
+  pushUndoSnapshot('Dividir clip');
+
+  const durA = Math.round((tPlayhead - clipStart) * 100) / 100;
+  const durB = Math.round((clipEnd - tPlayhead) * 100) / 100;
+  const originalOffset = targetClip.sourceOffset || 0;
+  const originalVolume = typeof targetClip.volume === 'number' ? targetClip.volume : 1;
+
+  const pieceAId = `clip-${crypto.randomUUID()}`;
+  const pieceBId = `clip-${crypto.randomUUID()}`;
+
+  const pieceA = {
+    ...targetClip,
+    id: pieceAId,
+    start: clipStart,
+    duration: durA,
+    sourceOffset: originalOffset,
+    volume: originalVolume
+  };
+
+  const pieceB = {
+    ...targetClip,
+    id: pieceBId,
+    start: Math.round(tPlayhead * 100) / 100,
+    duration: durB,
+    sourceOffset: Math.round((originalOffset + (tPlayhead - clipStart)) * 100) / 100,
+    volume: originalVolume
+  };
+
+  // Reasignar transcripción existente de targetClip entre pieza A y pieza B
+  const splitOffset = tPlayhead - clipStart;
+  const originalSegments = state.ai?.transcriptByClip?.[clipId]?.segments || [];
+  const nextTranscriptByClip = { ...(state.ai?.transcriptByClip || {}) };
+  delete nextTranscriptByClip[clipId];
+
+  if (originalSegments.length > 0) {
+    const segmentsA = [];
+    const segmentsB = [];
+
+    for (const seg of originalSegments) {
+      const segMid = (seg.startTime + seg.endTime) / 2;
+      if (segMid < splitOffset) {
+        segmentsA.push({
+          id: `seg-${pieceAId}-${segmentsA.length + 1}`,
+          text: seg.text,
+          startTime: Math.max(0, Math.round(seg.startTime * 100) / 100),
+          endTime: Math.min(durA, Math.round(seg.endTime * 100) / 100),
+          isFiller: Boolean(seg.isFiller),
+          markedForDeletion: false
+        });
+      } else {
+        segmentsB.push({
+          id: `seg-${pieceBId}-${segmentsB.length + 1}`,
+          text: seg.text,
+          startTime: Math.max(0, Math.round((seg.startTime - splitOffset) * 100) / 100),
+          endTime: Math.min(durB, Math.round((seg.endTime - splitOffset) * 100) / 100),
+          isFiller: Boolean(seg.isFiller),
+          markedForDeletion: false
+        });
+      }
+    }
+
+    if (segmentsA.length > 0) {
+      nextTranscriptByClip[pieceAId] = { segments: segmentsA };
+    }
+    if (segmentsB.length > 0) {
+      nextTranscriptByClip[pieceBId] = { segments: segmentsB };
+    }
+  }
+
+  const nextTracks = state.tracks.map((track) => {
+    if (track.id === targetTrack.id) {
+      const nextClips = [];
+      for (const c of track.clips || []) {
+        if (c.id === clipId) {
+          nextClips.push(pieceA, pieceB);
+        } else {
+          nextClips.push(c);
+        }
+      }
+      return {
+        ...track,
+        clips: nextClips.sort((a, b) => a.start - b.start)
+      };
+    }
+    return track;
+  });
+
+  const nextDuration = recomputeProjectDuration(nextTracks);
+
+  setState({
+    tracks: nextTracks,
+    project: { duration: nextDuration },
+    selection: { ...state.selection, clipId: pieceBId },
+    ai: {
+      ...state.ai,
+      transcriptByClip: nextTranscriptByClip
+    }
+  });
+
+  if (state.project?.isPlaying && typeof schedulePlaybackDebounce === 'function') {
+    schedulePlaybackDebounce(150);
+  }
+
+  console.info(`[PodcastCraft AI] Clip dividido en el playhead: ${pieceAId} y ${pieceBId} (B seleccionado)`);
+  return { success: true, pieceAId, pieceBId };
+}
+
+/**
+ * Elimina el clip actualmente seleccionado (Fase 24).
+ * Si ripple es true (por defecto), desplaza los clips posteriores del mismo carril hacia la izquierda
+ * exactamente la duración del clip eliminado para cerrar el hueco.
+ * Si ripple es false (Shift presionado), conserva el hueco.
+ * @param {{ ripple?: boolean }} [options]
+ * @returns {boolean} True si se eliminó el clip
+ */
+function deleteSelectedClip(options = { ripple: true }) {
+  const clipIdToDelete = state.selection?.clipId;
+  if (!clipIdToDelete) return false;
+
+  let targetTrack = null;
+  let targetClip = null;
+  for (const t of state.tracks) {
+    const found = (t.clips || []).find((c) => c.id === clipIdToDelete);
+    if (found) {
+      targetTrack = t;
+      targetClip = found;
+      break;
+    }
+  }
+  if (!targetTrack || !targetClip) return false;
+
+  pushUndoSnapshot('Eliminar clip');
+
+  const deletedDuration = targetClip.duration || 0;
+  const deletedStart = targetClip.start || 0;
+  const shouldRipple = options && options.ripple !== false;
+
+  const nextTracks = state.tracks.map((t) => {
+    if (t.id === targetTrack.id) {
+      const remaining = (t.clips || [])
+        .filter((c) => c.id !== clipIdToDelete)
+        .map((c) => {
+          if (shouldRipple && c.start > deletedStart) {
+            return {
+              ...c,
+              start: Math.max(0, Math.round((c.start - deletedDuration) * 100) / 100)
+            };
+          }
+          return c;
+        })
+        .sort((a, b) => a.start - b.start);
+
+      return { ...t, clips: remaining };
+    }
+    return t;
+  });
+
+  const nextDuration = recomputeProjectDuration(nextTracks);
+  const remainingClips = nextTracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
+
+  if (remainingClips === 0) {
+    if (typeof stopAllAudioSources === 'function') {
+      stopAllAudioSources();
+    }
+    stopPlayheadLoop();
+  } else if (state.project?.isPlaying && typeof schedulePlaybackDebounce === 'function') {
+    schedulePlaybackDebounce(150);
+  }
+
+  const nextTranscriptByClip = { ...(state.ai?.transcriptByClip || {}) };
+  delete nextTranscriptByClip[clipIdToDelete];
+
+  setState({
+    tracks: nextTracks,
+    selection: { ...state.selection, clipId: null },
+    ai: {
+      ...state.ai,
+      transcriptByClip: nextTranscriptByClip
+    },
+    project: {
+      duration: nextDuration,
+      isPlaying: remainingClips === 0 ? false : state.project.isPlaying,
+      currentTime: remainingClips === 0 ? 0 : Math.min(state.project.currentTime, nextDuration)
+    }
+  });
+
+  if (remainingClips === 0) {
+    const playheadEl = $('#timeline-playhead');
+    if (playheadEl) {
+      playheadEl.style.transform = 'translateX(0px)';
+    }
+  }
+
+  console.info(`[PodcastCraft AI] Clip ${clipIdToDelete} eliminado del timeline (ripple: ${shouldRipple}).`);
+  return true;
+}
+
+/**
  * Conecta todos los eventos del Timeline: creación de carriles, drag & drop genérico,
- * recorte por asas, división por doble clic, renombrado in situ y borrado.
+ * recorte por asas, renombrado in situ y borrado.
  */
 function bindTimelineEvents() {
   // 0. Scrubbing en regla de tiempo (#timeline-ruler) — Sprint 5
@@ -3379,6 +3633,21 @@ function bindTimelineEvents() {
   if (btnUndo) {
     btnUndo.addEventListener('click', () => {
       undo();
+    });
+  }
+
+  // Botones de acciones contextuales en #clip-toolbar (Fase 24)
+  const btnSplitClip = $('#btn-split-clip');
+  if (btnSplitClip) {
+    btnSplitClip.addEventListener('click', () => {
+      splitClipAtPlayhead();
+    });
+  }
+
+  const btnDeleteClip = $('#btn-delete-clip');
+  if (btnDeleteClip) {
+    btnDeleteClip.addEventListener('click', (e) => {
+      deleteSelectedClip({ ripple: !e.shiftKey });
     });
   }
 
@@ -3503,7 +3772,7 @@ function bindTimelineEvents() {
     }
   });
 
-  // 2. División (Split) de clip por doble clic (Sprint 4 — 7.2) y reseteo de volumen a 100% (Fase 23)
+  // 2. Reseteo de volumen de carril a 100% por doble clic (Fase 23)
   timelineContainer.addEventListener('dblclick', (e) => {
     // Doble clic en slider de carril: restablece 100%
     const trackVolSlider = e.target.closest('[data-track-volume]');
@@ -3521,73 +3790,6 @@ function bindTimelineEvents() {
 
       const nextTracks = state.tracks.map((t) => (t.id === trackId ? { ...t, volume: 1 } : t));
       setState({ tracks: nextTracks });
-      return;
-    }
-    const clipEl = e.target.closest('[data-clip-id]');
-    if (clipEl && !e.target.closest('[data-handle]')) {
-      const clipId = clipEl.dataset.clipId;
-      const trackId = clipEl.dataset.trackId;
-
-      const track = state.tracks.find((t) => t.id === trackId);
-      if (!track) return;
-      const clip = track.clips.find((c) => c.id === clipId);
-      if (!clip) return;
-
-      const rect = clipEl.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const splitSec = Math.round(pixelsToTime(clickX));
-
-      // Restricción: ambas mitades resultantes deben tener al menos 1 segundo
-      if (splitSec >= 1 && (clip.duration - splitSec) >= 1) {
-        pushUndoSnapshot();
-
-        const clip1 = {
-          ...clip,
-          duration: splitSec,
-          sourceOffset: clip.sourceOffset || 0,
-          volume: typeof clip.volume === 'number' ? clip.volume : 1
-        };
-        const clip2 = {
-          ...clip,
-          id: `clip-${crypto.randomUUID()}`,
-          start: clip.start + splitSec,
-          duration: clip.duration - splitSec,
-          sourceOffset: (clip.sourceOffset || 0) + splitSec,
-          volume: typeof clip.volume === 'number' ? clip.volume : 1
-        };
-
-        const nextClips = [];
-        for (const c of track.clips) {
-          if (c.id === clipId) {
-            nextClips.push(clip1, clip2);
-          } else {
-            nextClips.push(c);
-          }
-        }
-
-        const nextTracks = state.tracks.map((t) => (t.id === trackId ? { ...t, clips: nextClips } : t));
-        const nextDuration = recomputeProjectDuration(nextTracks);
-
-        // Limpiar entrada de transcripción del clip original dividido (Fase 15)
-        const nextTranscriptByClip = { ...(state.ai.transcriptByClip || {}) };
-        delete nextTranscriptByClip[clipId];
-
-        setState({
-          tracks: nextTracks,
-          selection: { clipId: clip2.id },
-          project: { duration: nextDuration },
-          ai: {
-            ...state.ai,
-            transcriptByClip: nextTranscriptByClip
-          }
-        });
-
-        if (typeof schedulePlaybackDebounce === 'function') {
-          schedulePlaybackDebounce(150);
-        }
-
-        console.info(`[PodcastCraft AI] Clip dividido en dos mitades (${splitSec}s y ${clip2.duration}s).`);
-      }
     }
   });
 
@@ -3966,62 +4168,18 @@ function bindTimelineEvents() {
       }
     }
 
-    // Atajo: Delete / Backspace para eliminar clip seleccionado del timeline
-    if ((e.key === 'Delete' || e.key === 'Backspace') && state.selection.clipId) {
+    // Atajo: S para dividir clip en el playhead (Fase 24)
+    if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey && !e.altKey && state.selection?.clipId) {
       e.preventDefault();
-      const clipIdToDelete = state.selection.clipId;
+      splitClipAtPlayhead();
+      return;
+    }
 
-      let found = false;
-      const nextTracks = state.tracks.map((t) => {
-        const filtered = t.clips.filter((c) => c.id !== clipIdToDelete);
-        if (filtered.length !== t.clips.length) {
-          found = true;
-          return { ...t, clips: filtered };
-        }
-        return t;
-      });
-
-      if (found) {
-        pushUndoSnapshot();
-
-        const nextDuration = recomputeProjectDuration(nextTracks);
-        const remainingClips = nextTracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
-
-        if (remainingClips === 0) {
-          if (typeof stopAllAudioSources === 'function') {
-            stopAllAudioSources();
-          }
-          stopPlayheadLoop();
-        } else if (state.project.isPlaying && typeof schedulePlaybackDebounce === 'function') {
-          schedulePlaybackDebounce(150);
-        }
-
-        const nextTranscriptByClip = { ...(state.ai.transcriptByClip || {}) };
-        delete nextTranscriptByClip[clipIdToDelete];
-
-        setState({
-          tracks: nextTracks,
-          selection: { ...state.selection, clipId: null },
-          ai: {
-            ...state.ai,
-            transcriptByClip: nextTranscriptByClip
-          },
-          project: {
-            duration: nextDuration,
-            isPlaying: remainingClips === 0 ? false : state.project.isPlaying,
-            currentTime: remainingClips === 0 ? 0 : Math.min(state.project.currentTime, nextDuration)
-          }
-        });
-
-        if (remainingClips === 0) {
-          const playheadEl = $('#timeline-playhead');
-          if (playheadEl) {
-            playheadEl.style.transform = 'translateX(0px)';
-          }
-        }
-
-        console.info(`[PodcastCraft AI] Clip ${clipIdToDelete} eliminado del timeline.`);
-      }
+    // Atajo: Delete / Backspace para eliminar clip seleccionado del timeline (Fase 24: ripple por defecto, Shift: sin cerrar hueco)
+    if ((e.key === 'Delete' || e.key === 'Backspace') && state.selection?.clipId) {
+      e.preventDefault();
+      deleteSelectedClip({ ripple: !e.shiftKey });
+      return;
     }
 
     // Atajo de teclado: Espacio para reproducir / pausar (Sprint 5)
