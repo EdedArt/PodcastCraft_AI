@@ -8,6 +8,9 @@ let backendProcess = null;
 let mainWindow = null;
 let isQuitting = false;
 
+// Deshabilitar aceleración por hardware para prevenir caídas del proceso GPU en Windows (código -1073741819)
+app.disableHardwareAcceleration();
+
 // Permitir reproducción fluida de Web Audio API sin requerir gesto previo por documento
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
