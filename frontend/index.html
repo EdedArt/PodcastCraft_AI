@@ -12,8 +12,22 @@
       var saved = localStorage.getItem('podcastcraft-theme');
       var theme = saved === 'dark' ? 'dark' : 'light';
       document.documentElement.setAttribute('data-theme', theme);
+
+      try {
+        var s = localStorage.getItem('podcastcraft-auth-session');
+        if (s) {
+          var parsed = JSON.parse(s);
+          if (parsed && parsed.token) {
+            document.documentElement.classList.add('has-saved-session');
+          }
+        }
+      } catch (_) {}
     })();
   </script>
+  <style>
+    html.has-saved-session #auth-login-form { display: none !important; }
+    html.has-saved-session #auth-loading-banner { display: flex !important; }
+  </style>
 
   <!-- Orden estricto de carga de scripts y estilos -->
   <script src="./vendor/tailwind.js"></script>

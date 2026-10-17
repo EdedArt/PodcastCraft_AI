@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, screen, shell, session } = require('electron');
 const path = require('path');
 const http = require('http');
 const fsPromises = require('fs').promises;
@@ -235,7 +235,94 @@ async function createWindow() {
   });
 }
 
-// Manejo de diálogo nativo de Windows para guardar la exportación MP3 (Fase 25)
+// Manejo de diálogo nativo de guardado PREVIO a la mezcla (Fase 26d)
+ipcMain.handle('show-save-export-dialog', async (event, options) => {
+  const { defaultName } = options || {};
+  const parentWindow = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+  let defaultDir;
+  try {
+    defaultDir = app.getPath('music') || app.getPath('documents');
+  } catch (_) {
+    defaultDir = app.getPath('documents');
+  }
+  const defaultPath = path.join(defaultDir, defaultName || 'Mi_Podcast.mp3');
+
+  const result = await dialog.showSaveDialog(parentWindow, {
+    title: 'Exportar MP3',
+    defaultPath,
+    filters: [
+      { name: 'Audio MP3 (*.mp3)', extensions: ['mp3'] },
+      { name: 'Todos los archivos (*.*)', extensions: ['*'] }
+    ]
+  });
+
+  if (result.canceled || !result.filePath) {
+    return { canceled: true };
+  }
+  return { canceled: false, filePath: result.filePath };
+});
+
+// Mostrar archivo exportado en el Explorador de Windows (Fase 26d)
+ipcMain.handle('show-item-in-folder', async (event, filePath) => {
+  if (filePath && typeof filePath === 'string') {
+    try {
+      shell.showItemInFolder(filePath);
+      return { success: true };
+    } catch (err) {
+      console.error('[Electron Main] Error al abrir carpeta contenedora:', err.message);
+      return { success: false, error: err.message };
+    }
+  }
+  return { success: false, error: 'Ruta no válida.' };
+});
+
+// Persistencia durable de sesión "Recordarme" (Fase 26d)
+function getAuthSessionFilePath() {
+  const userDataDir = app.getPath('userData');
+  return path.join(userDataDir, 'auth_session.json');
+}
+
+ipcMain.handle('save-auth-session', async (event, sessionData) => {
+  try {
+    const sessionFile = getAuthSessionFilePath();
+    const tmpFile = sessionFile + '.tmp';
+    const jsonStr = JSON.stringify(sessionData || {}, null, 2);
+    await fsPromises.writeFile(tmpFile, jsonStr, 'utf8');
+    await fsPromises.rename(tmpFile, sessionFile);
+    if (session.defaultSession) {
+      await session.defaultSession.flushStorageData().catch(() => {});
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('[Electron Main] Error guardando auth_session durable:', err.message);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('load-auth-session', async () => {
+  try {
+    const sessionFile = getAuthSessionFilePath();
+    const data = await fsPromises.readFile(sessionFile, 'utf8');
+    return JSON.parse(data);
+  } catch (_) {
+    return null;
+  }
+});
+
+ipcMain.handle('clear-auth-session', async () => {
+  try {
+    const sessionFile = getAuthSessionFilePath();
+    await fsPromises.unlink(sessionFile).catch(() => {});
+    if (session.defaultSession) {
+      await session.defaultSession.flushStorageData().catch(() => {});
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Manejo de diálogo nativo de Windows para guardar la exportación MP3 (compatibilidad hacia atrás)
 ipcMain.handle('save-exported-file', async (event, payload) => {
   const { defaultName, buffer } = payload || {};
   const parentWindow = BrowserWindow.fromWebContents(event.sender) || mainWindow;
@@ -289,11 +376,17 @@ if (!gotTheLock) {
 app.on('before-quit', () => {
   isQuitting = true;
   killBackend();
+  if (session.defaultSession) {
+    session.defaultSession.flushStorageData().catch(() => {});
+  }
 });
 
 app.on('window-all-closed', () => {
   isQuitting = true;
   killBackend();
+  if (session.defaultSession) {
+    session.defaultSession.flushStorageData().catch(() => {});
+  }
   if (process.platform !== 'darwin') {
     app.quit();
   }

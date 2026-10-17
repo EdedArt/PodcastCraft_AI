@@ -372,10 +372,14 @@ function pixelsToTime(pixels) {
 
 /**
  * Muestra una notificación toast temporal y accesible (Fase 15).
+/**
+ * Muestra una notificación emergente no intrusiva (toast).
+ * Soporta estados: 'success', 'info', 'warning', 'error', y botón de acción opcional.
  * @param {string} message - Texto del mensaje
- * @param {'success' | 'info' | 'warning'} [type='success']
+ * @param {'success' | 'info' | 'warning' | 'error'} [type='success']
+ * @param {{ label: string, onClick: Function }} [action=null] - Acción interactiva opcional
  */
-function showToast(message, type = 'success') {
+function showToast(message, type = 'success', action = null) {
   let container = $('#toast-container');
   if (!container) {
     container = document.createElement('div');
@@ -386,18 +390,52 @@ function showToast(message, type = 'success') {
   }
 
   const toast = document.createElement('div');
-  const bgClass = type === 'warning'
-    ? 'bg-amber-600 text-white'
-    : 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border border-slate-700/50 dark:border-slate-300';
+  let bgClass;
+  let iconName;
+  let iconColor;
 
-  const iconName = type === 'warning' ? 'alert-triangle' : 'check-circle';
-  const iconColor = type === 'warning' ? 'text-amber-200' : 'text-emerald-400 dark:text-emerald-600';
+  if (type === 'error') {
+    bgClass = 'bg-rose-700 text-white border border-rose-600 shadow-rose-900/40';
+    iconName = 'alert-circle';
+    iconColor = 'text-rose-200';
+  } else if (type === 'warning') {
+    bgClass = 'bg-amber-600 text-white border border-amber-500 shadow-amber-900/40';
+    iconName = 'alert-triangle';
+    iconColor = 'text-amber-200';
+  } else if (type === 'info') {
+    bgClass = 'bg-sky-700 text-white border border-sky-600 shadow-sky-900/40';
+    iconName = 'info';
+    iconColor = 'text-sky-200';
+  } else {
+    bgClass = 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border border-slate-700/50 dark:border-slate-300';
+    iconName = 'check-circle';
+    iconColor = 'text-emerald-400 dark:text-emerald-600';
+  }
 
-  toast.className = `px-3.5 py-2 rounded-lg text-xs font-semibold shadow-xl flex items-center gap-2 transform translate-y-2 opacity-0 transition-all duration-200 pointer-events-auto ${bgClass}`;
-  toast.innerHTML = `
-    <i data-lucide="${iconName}" class="w-4 h-4 ${iconColor} shrink-0"></i>
-    <span>${escapeHtml(message)}</span>
-  `;
+  toast.className = `px-3.5 py-2.5 rounded-lg text-xs font-semibold shadow-xl flex items-center gap-2 transform translate-y-2 opacity-0 transition-all duration-200 pointer-events-auto ${bgClass}`;
+
+  const iconEl = document.createElement('i');
+  iconEl.setAttribute('data-lucide', iconName);
+  iconEl.className = `w-4 h-4 ${iconColor} shrink-0`;
+
+  const msgSpan = document.createElement('span');
+  msgSpan.className = 'flex-1 leading-snug';
+  msgSpan.textContent = message;
+
+  toast.appendChild(iconEl);
+  toast.appendChild(msgSpan);
+
+  if (action && typeof action.onClick === 'function') {
+    const actionBtn = document.createElement('button');
+    actionBtn.type = 'button';
+    actionBtn.className = 'ml-2 px-2.5 py-1 rounded bg-white/20 hover:bg-white/30 active:scale-95 text-white text-[11px] font-bold transition-all shrink-0 cursor-pointer';
+    actionBtn.textContent = action.label || 'Ver';
+    actionBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      action.onClick();
+    });
+    toast.appendChild(actionBtn);
+  }
 
   container.appendChild(toast);
   renderIcons();
@@ -406,12 +444,13 @@ function showToast(message, type = 'success') {
     toast.classList.remove('translate-y-2', 'opacity-0');
   });
 
+  const displayTime = action ? 7000 : 3500;
   setTimeout(() => {
     toast.classList.add('translate-y-2', 'opacity-0');
     setTimeout(() => {
       toast.remove();
     }, 250);
-  }, 3500);
+  }, displayTime);
 }
 
 /**
@@ -2312,58 +2351,78 @@ async function checkAuthStatus() {
  * Si existe un token "Recordarme", valida con /api/auth/resume sin parpadeo de pantalla.
  */
 async function initAuth() {
-  const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-  if (stored) {
-    let parsed = null;
+  // Primero intentar cargar sesión durable de Electron (resistente a salidas abruptas)
+  let sessionData = null;
+  if (window.electronAPI && typeof window.electronAPI.loadAuthSession === 'function') {
     try {
-      parsed = JSON.parse(stored);
-    } catch (_) {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-    }
+      sessionData = await window.electronAPI.loadAuthSession();
+    } catch (_) {}
+  }
 
-    if (parsed && typeof parsed.username === 'string' && typeof parsed.token === 'string') {
-      const loadingBanner = $('#auth-loading-banner');
-      const loginForm = $('#auth-login-form');
-      const regForm = $('#auth-register-form');
-      const recForm = $('#auth-recover-form');
-
-      if (loadingBanner) loadingBanner.classList.remove('hidden');
-      if (loginForm) loginForm.classList.add('hidden');
-      if (regForm) regForm.classList.add('hidden');
-      if (recForm) recForm.classList.add('hidden');
-      renderIcons();
-
+  // Fallback a localStorage si no está en Electron o si aún no se sincronizó
+  if (!sessionData) {
+    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (stored) {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/auth/resume`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify({ username: parsed.username, token: parsed.token })
-        });
-
-        if (loadingBanner) loadingBanner.classList.add('hidden');
-
-        if (res.ok) {
-          const data = await res.json();
-          authState.isConfigured = true;
-          await onAuthSuccess(data.username || parsed.username);
-          return;
-        } else {
-          // Token inválido, expirado o revocado: limpiar y mostrar login
-          localStorage.removeItem(AUTH_STORAGE_KEY);
-        }
-      } catch (err) {
-        console.warn('[PodcastCraft AI] Backend no disponible en resume:', err);
-        if (loadingBanner) loadingBanner.classList.add('hidden');
-        authState.offline = true;
-        renderAuthScreen();
-        return;
+        sessionData = JSON.parse(stored);
+      } catch (_) {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
       }
     }
   }
 
+  if (sessionData && typeof sessionData.username === 'string' && typeof sessionData.token === 'string') {
+    // Sincronizar localStorage para consistencia y anti-flicker
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sessionData));
+    } catch (_) {}
+
+    const loadingBanner = $('#auth-loading-banner');
+    const loginForm = $('#auth-login-form');
+    const regForm = $('#auth-register-form');
+    const recForm = $('#auth-recover-form');
+
+    if (loadingBanner) loadingBanner.classList.remove('hidden');
+    if (loginForm) loginForm.classList.add('hidden');
+    if (regForm) regForm.classList.add('hidden');
+    if (recForm) recForm.classList.add('hidden');
+    renderIcons();
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/resume`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ username: sessionData.username, token: sessionData.token })
+      });
+
+      if (loadingBanner) loadingBanner.classList.add('hidden');
+
+      if (res.ok) {
+        const data = await res.json();
+        authState.isConfigured = true;
+        await onAuthSuccess(data.username || sessionData.username);
+        return;
+      } else {
+        // Token inválido, expirado o revocado: limpiar durable y localStorage
+        document.documentElement.classList.remove('has-saved-session');
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        if (window.electronAPI && typeof window.electronAPI.clearAuthSession === 'function') {
+          await window.electronAPI.clearAuthSession().catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn('[PodcastCraft AI] Backend no disponible en resume:', err);
+      if (loadingBanner) loadingBanner.classList.add('hidden');
+      authState.offline = true;
+      renderAuthScreen();
+      return;
+    }
+  }
+
+  document.documentElement.classList.remove('has-saved-session');
   await checkAuthStatus();
 }
 
@@ -2519,12 +2578,21 @@ async function handleLoginSubmit(e) {
 
     // Éxito en login
     if (data.token) {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
+      const sessionObj = {
         username: data.username || username,
         token: data.token
-      }));
+      };
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sessionObj));
+      document.documentElement.classList.add('has-saved-session');
+      if (window.electronAPI && typeof window.electronAPI.saveAuthSession === 'function') {
+        await window.electronAPI.saveAuthSession(sessionObj).catch(() => {});
+      }
     } else {
+      document.documentElement.classList.remove('has-saved-session');
       localStorage.removeItem(AUTH_STORAGE_KEY);
+      if (window.electronAPI && typeof window.electronAPI.clearAuthSession === 'function') {
+        await window.electronAPI.clearAuthSession().catch(() => {});
+      }
     }
 
     // Si devuelve recoveryCode (cuenta migrada sin código previo), mostrar modal obligatorio
@@ -2729,6 +2797,10 @@ async function handleRecoverSubmit(e) {
         const parsed = JSON.parse(stored);
         if (parsed.username && parsed.username.toLowerCase() === username.toLowerCase()) {
           localStorage.removeItem(AUTH_STORAGE_KEY);
+          document.documentElement.classList.remove('has-saved-session');
+          if (window.electronAPI && typeof window.electronAPI.clearAuthSession === 'function') {
+            window.electronAPI.clearAuthSession().catch(() => {});
+          }
         }
       } catch (_) {}
     }
@@ -2820,6 +2892,10 @@ async function logout() {
       }).catch(() => {});
     } catch (_) {}
     localStorage.removeItem(AUTH_STORAGE_KEY);
+  }
+  document.documentElement.classList.remove('has-saved-session');
+  if (window.electronAPI && typeof window.electronAPI.clearAuthSession === 'function') {
+    await window.electronAPI.clearAuthSession().catch(() => {});
   }
 
   authState.isAuthenticated = false;
@@ -3199,8 +3275,9 @@ async function loadProjectFromBackend() {
 }
 
 /**
- * Exporta la mezcla multitrack actual como un archivo MP3 estéreo llamando al backend POST /api/export (Fase 25).
- * El archivo se guarda mediante el diálogo nativo de Windows si está en Electron, o descarga común en navegador.
+ * Exporta la mezcla multitrack actual como un archivo MP3 estéreo llamando al backend POST /api/export (Fases 25 y 26d).
+ * Regla de diseño (Fase 26d): El diálogo nativo de Windows se abre PRIMERO y la mezcla se realiza DESPUÉS
+ * para garantizar que el usuario elija su ruta sin riesgo de timeouts o peticiones abortadas.
  */
 async function exportProjectMp3() {
   const totalClips = state.tracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
@@ -3213,12 +3290,43 @@ async function exportProjectMp3() {
   }
 
   if (isExporting) return;
+
+  const rawTitle = state.project.title || 'Mi Podcast';
+  const cleanTitle = rawTitle.replace(/[\\/:*?"<>|\r\n\t]/g, '_').trim() || 'Mi_Podcast';
+  const suggestedFilename = `${cleanTitle}.mp3`;
+
+  let chosenDestinationPath = null;
+
+  // PASO 1 (DIÁLOGO PRIMERO): Si corre bajo Electron, abrir el diálogo de guardado ANTES de iniciar la mezcla
+  if (window.electronAPI && typeof window.electronAPI.showSaveExportDialog === 'function') {
+    try {
+      const dialogRes = await window.electronAPI.showSaveExportDialog({
+        defaultName: suggestedFilename
+      });
+
+      if (!dialogRes || dialogRes.canceled || !dialogRes.filePath) {
+        console.info('[PodcastCraft AI] Exportación cancelada por el usuario en diálogo de guardado.');
+        const cancelMsg = typeof t === 'function' ? t('topbar.exportCanceled') : 'Exportación cancelada';
+        showToast(cancelMsg, 'info');
+        return;
+      }
+      chosenDestinationPath = dialogRes.filePath;
+    } catch (dialogErr) {
+      console.error('[PodcastCraft AI] Error al abrir diálogo de guardado:', dialogErr);
+      const errMsg = typeof t === 'function' ? t('topbar.exportError') : 'Error al abrir el diálogo de guardado.';
+      showToast(errMsg, 'error');
+      return;
+    }
+  }
+
+  // PASO 2 (MEZCLA DESPUÉS): Iniciar mezcla multitrack con indicador de progreso
   isExporting = true;
   renderTopbar();
 
   try {
     const payload = {
       title: state.project.title || 'Mi Podcast',
+      destinationPath: chosenDestinationPath,
       tracks: state.tracks.map((t) => ({
         volume: typeof t.volume === 'number' ? t.volume : 1,
         clips: (t.clips || []).map((c) => ({
@@ -3244,62 +3352,42 @@ async function exportProjectMp3() {
       throw new Error(errJson.error || `Error HTTP ${res.status}`);
     }
 
-    // Obtener nombre de archivo sugerido del header o sanitized title
-    const contentDisp = res.headers.get('Content-Disposition') || '';
-    let exportFilename = '';
-    const fnMatch = contentDisp.match(/filename\*?=['"]?(?:UTF-\d['"]*)?([^;\r\n"']*)['"]?/i);
-    if (fnMatch && fnMatch[1]) {
-      try {
-        exportFilename = decodeURIComponent(fnMatch[1]);
-      } catch (_) {
-        exportFilename = fnMatch[1];
-      }
-    }
-    if (!exportFilename) {
-      const rawTitle = state.project.title || 'Mi Podcast';
-      const cleanTitle = rawTitle.replace(/[\\/:*?"<>|\r\n\t]/g, '_').trim() || 'Mi_Podcast';
-      exportFilename = `${cleanTitle}.mp3`;
-    }
+    // PASO 3 (ÉXITO): Notificar al usuario y permitir abrir en explorador
+    if (chosenDestinationPath) {
+      const resultData = await res.json().catch(() => ({}));
+      const finalPath = resultData.filePath || chosenDestinationPath;
+      const successMsg = typeof t === 'function'
+        ? t('topbar.exportSavedAt', { path: finalPath })
+        : `Guardado en: ${finalPath}`;
 
-    const arrayBuffer = await res.arrayBuffer();
+      const actionLabel = typeof t === 'function'
+        ? t('topbar.exportShowInFolder')
+        : 'Mostrar en carpeta';
 
-    // Guardado nativo mediante diálogo de Windows si corre bajo Electron
-    if (window.electronAPI && typeof window.electronAPI.saveExportedFile === 'function') {
-      const uint8 = new Uint8Array(arrayBuffer);
-      const saveRes = await window.electronAPI.saveExportedFile({
-        defaultName: exportFilename,
-        buffer: uint8
+      showToast(successMsg, 'success', {
+        label: actionLabel,
+        onClick: () => {
+          if (window.electronAPI && typeof window.electronAPI.showItemInFolder === 'function') {
+            window.electronAPI.showItemInFolder(finalPath);
+          }
+        }
       });
-
-      if (saveRes && saveRes.canceled) {
-        console.info('[PodcastCraft AI] Exportación cancelada por el usuario en diálogo de guardado.');
-        return;
-      }
-
-      if (saveRes && saveRes.success) {
-        const savedName = saveRes.filePath ? saveRes.filePath.split(/[\\/]/).pop() : exportFilename;
-        const msg = typeof t === 'function'
-          ? t('topbar.exportSuccess', { filename: savedName })
-          : `Mezcla exportada exitosamente: ${savedName}`;
-        showToast(msg, 'success');
-      } else {
-        throw new Error(saveRes?.error || 'No se pudo guardar el archivo en la ruta seleccionada.');
-      }
     } else {
-      // Descarga estándar en navegador web
+      // Descarga estándar en navegador web (sin Electron)
+      const arrayBuffer = await res.arrayBuffer();
       const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = blobUrl;
-      a.download = exportFilename;
+      a.download = suggestedFilename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 
       const msg = typeof t === 'function'
-        ? t('topbar.exportSuccess', { filename: exportFilename })
-        : `Mezcla exportada exitosamente: ${exportFilename}`;
+        ? t('topbar.exportSuccess', { filename: suggestedFilename })
+        : `Mezcla exportada exitosamente: ${suggestedFilename}`;
       showToast(msg, 'success');
     }
   } catch (err) {
@@ -3307,6 +3395,8 @@ async function exportProjectMp3() {
     let errMsg = err.message;
     if (err.message && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))) {
       errMsg = typeof t === 'function' ? t('library.backendUnreachable') : 'No se pudo conectar con el servidor local.';
+    } else if (!errMsg) {
+      errMsg = typeof t === 'function' ? t('topbar.exportGenericError') : 'Error al exportar la mezcla.';
     }
     showToast(errMsg, 'error');
   } finally {
