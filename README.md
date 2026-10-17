@@ -2,7 +2,7 @@
 
 Estación de trabajo de audio digital (DAW) y editor de podcasts con asistencia de Inteligencia Artificial (estilo Descript / Adobe Audition), desarrollada como proyecto final para la asignatura **Diseño de Interfaces de Software** en la Universidad Cooperativa de Colombia.
 
-Este repositorio contiene la **Fase 23 (Controles de volumen por clip y por carril, unificación cromática del timeline y motor de mezcla Web Audio en vivo)**, integrando el 100% de la funcionalidad de carriles dinámicos, importación de MP3 reales, playhead sincronizado al píxel, motor de IA real con Google Gemini, edición no destructiva por transcripción y autenticación local.
+Este repositorio contiene la **Fase 24 (Edición tipo editor — colocación en el playhead, movimiento de clips en horizontal y entre carriles, división manual en el playhead con atajo S y eliminación con cierre automático de huecos / ripple delete)**, integrando el 100% de la funcionalidad de carriles dinámicos, importación de MP3 reales, playhead sincronizado al píxel, motor de IA real con Google Gemini, edición no destructiva por transcripción y autenticación local.
 
 ---
 
@@ -1302,4 +1302,100 @@ Validada mediante suite automatizada sobre Electron con archivos de audio MP3 re
 | 8 | **Alineación geométrica a 0 px en ambos temas y lenguajes** | `light_es`: Diff = **0.00 px** (Playhead: 410px, Regla: 410px, Carril: 410px)<br>`light_en`: Diff = **0.00 px** (Playhead: 410px, Regla: 410px, Carril: 410px)<br>`dark_es`: Diff = **0.00 px** (Playhead: 410px, Regla: 410px, Carril: 410px)<br>`dark_en`: Diff = **0.00 px** (Playhead: 410px, Regla: 410px, Carril: 410px) | ✅ **APROBADO** |
 | 9 | **Franja ensanchada (140 px) sin recorte de textos en ES/EN** | `offsetWidth = 140.00 px`, `scrollWidth = 140.00 px` en español e inglés. Cero desbordamiento y lectura completa de porcentajes. | ✅ **APROBADO** |
 | 10 | **No regresión (Corte IA, continuidad y playhead)** | Corte por transcripción dividió en piezas continuas con herencia de volumen (**0.85**). Playhead y transporte sincronizados. | ✅ **APROBADO** |
+
+---
+
+## ✂️ 16. Fase 24: Edición Tipo Editor — Colocación en el Playhead, Mover Clips, Dividir en el Playhead y Borrado con Cierre de Huecos (Ripple Delete)
+
+Esta fase implementa capacidades completas de edición de clips en la línea de tiempo atendiendo al flujo de trabajo demandado por los usuarios:
+1. **Colocación de audio al soltar alineada exactamente al playhead:** Al arrastrar un audio desde la biblioteca a cualquier carril, el nuevo clip se ubica exactamente donde se encuentra el cabezal de reproducción (`getPlayheadTime()`), con precisión a centésimas de segundo.
+2. **Arrastre interactivo de clips (horizontal y entre carriles):** Se permite arrastrar clips existentes para reubicarlos antes o después en la línea de tiempo, o transferirlos a otro carril distinto. Detección visual del carril destino con resaltado neutro `.lane-dragover`, evitación automática de solapamiento mediante el algoritmo de posición libre más cercana, cancelación con la tecla `Escape` y un único paso de deshacer (`Ctrl+Z`) por arrastre.
+3. **División manual en el playhead (sin consumo de IA):** Botón `#btn-split-clip` con icono de tijeras en `#clip-toolbar` y atajo de teclado accesible `S` (con guardia estricta de inputs). Divide el clip seleccionado en dos piezas continuas (A y B) con volúmenes heredados y desfases de fuente (`sourceOffset`) precisos, seleccionando inmediatamente la pieza B para facilitar cortes sucesivos sin fricción.
+4. **Eliminación con cierre automático de huecos (Ripple Delete):** Al eliminar un clip (mediante `#btn-delete-clip` o teclas `Delete`/`Backspace`), los clips posteriores en el mismo carril se desplazan hacia la izquierda cerrando el hueco de forma continua. Para conservar el espacio vacío, el usuario puede usar `Shift + Delete` o `Shift + clic`.
+5. **Retiro de la división por doble clic (Fase 4):** Se eliminó la división por doble clic para evitar cortes accidentales durante el arrastre y manipulación táctil/puntero de los clips.
+
+---
+
+### 16.1 Colocación de Audio al Soltar: Alineación al Playhead (`getPlayheadTime`)
+
+- **Fuente única de verdad temporal:** La función `getPlayheadTime()` reporta `getTransportTime()` durante la reproducción activa o `state.project.currentTime` en estado pausado.
+- **Posicionamiento:** En el evento `drop`, se calcula `start = getPlayheadTime()` redondeado a dos decimales (centésimas de segundo). Se eliminó la regla histórica de la Fase 9 ("carril vacío siempre 0s"): si el playhead está en `12.50s`, el clip se posiciona exactamente en `12.50s`.
+- **Resolución de colisiones:** Si en el carril de destino el nuevo clip colisiona o se solapa con un clip preexistente, se desplaza automáticamente para iniciar inmediatamente al término del clip con el que choca, garantizando que nunca se superpongan audios en el mismo carril.
+- **Reprogramación y Deshacer:** Si el proyecto se encuentra en reproducción, se dispara una reprogramación con debounce de 150 ms. Se genera un snapshot atómico en la pila de `Ctrl+Z`.
+
+---
+
+### 16.2 Arrastre Interactivo de Clips y Posición Libre Más Cercana
+
+- **Detección de gestos (`pointerdown` / `pointermove` / `pointerup`):**
+  - Se vinculan eventos sobre el contenedor del clip con captura de puntero (`setPointerCapture`).
+  - Las asas de recorte (`[data-handle]`) tienen prioridad absoluta y detienen la propagación de eventos (`stopPropagation`).
+  - **Umbral de 4 px:** Si el movimiento es menor a 4 px, se interpreta como un clic estándar (selección o posicionamiento). Al superar los 4 px, se inicia el modo arrastre (`isDragging = true`, cursor `grabbing`, clase `is-dragging-clip`).
+- **Renderizado directo en DOM:** Durante el movimiento, el clip se desplaza actualizando su propiedad `style.left` mediante `timeToPixels` y `pixelsToTime`, sin ejecutar `setState()` continuo para garantizar 60 FPS fluidos.
+- **Detección del carril destino (horizontal y vertical):** Con `elementsFromPoint` y respaldo por coordenadas verticales $Y$ sobre las cajas delimitadoras de los carriles, se detecta el carril sobre el que flota el puntero y se resalta mediante la clase neutra `.lane-dragover` (sin violeta).
+- **Algoritmo de evitación de colisiones (`findNearestFreePosition`):**
+  - Si la posición deseada colisiona con otros clips del carril, el algoritmo evalúa todos los intervalos vacíos donde quepa la duración del clip (antes del primer clip, en los espacios intermedios y después del último clip) y selecciona la posición libre con la menor distancia euclidiana a la propuesta.
+- **Cancelación con `Escape`:** Presionar `Escape` durante el arrastre cancela la operación de inmediato, revierte el elemento en el DOM a su posición original y descarta el snapshot de undo sin dejar rastros.
+- **Deshacer atómico:** Un arrastre completo genera exactamente **un solo paso de `Ctrl+Z`**. Si el clip se soltó en la misma posición y carril original, no se encola nada en el historial.
+
+---
+
+### 16.3 División Manual en el Playhead (`S` y `#btn-split-clip`)
+
+- **Controles e integración:** Botón `#btn-split-clip` en la sección derecha de `#clip-toolbar` y atajo de teclado global `S` (inactivo dentro de campos de texto editables o modales).
+- **Margen de seguridad:** Se requiere que el playhead se encuentre dentro de los límites del clip seleccionado con un margen de al menos `0.30s` respecto al inicio y al final. Si está fuera o muy cerca de los extremos, se emite una notificación toast traducida ("Coloca la línea de tiempo dentro del clip" / "Place the timeline inside the clip") sin alterar el estado.
+- **Matemática del corte:**
+  - **Pieza A:** `start = clip.start`, `duration = t - clip.start`, `sourceOffset = clip.sourceOffset`.
+  - **Pieza B:** `start = t`, `duration = (clip.start + clip.duration) - t`, `sourceOffset = clip.sourceOffset + (t - clip.start)`.
+  - Ambas piezas heredan el volumen exacto del clip original.
+- **Selección de la pieza B:** Al finalizar la división, la pieza B queda automáticamente seleccionada en el estado (`selection.clipId = pieceB.id`). Esto permite al usuario mover el playhead más adelante y volver a presionar `S` para realizar cortes consecutivos instantáneos.
+- **Preservación de transcripción:** Si el clip poseía transcripción previa generada por IA, los segmentos se reasignan matemáticamente a cada pieza en función de su punto medio y con tiempos relativos acotados, conservando el texto sin necesidad de re-transcribir.
+
+---
+
+### 16.4 Eliminación con Cierre de Huecos (Ripple Delete)
+
+> [!NOTE]
+> **Comportamiento por Defecto:**
+> Al pulsar la tecla `Delete` / `Backspace` o hacer clic en el botón `#btn-delete-clip`, la eliminación aplica **cierre de hueco automático (Ripple Delete)**: todos los clips subsecuentes en el **mismo carril** se desplazan hacia la izquierda una distancia exactamente igual a la duración del clip eliminado, uniendo los audios de forma contigua sin silencios intermedios. Los demás carriles permanecen intactos.
+
+- **Modificador Shift (Conservar Hueco):**
+  - Si el usuario desea eliminar el clip dejando el espacio vacío original, puede realizar la acción manteniendo presionada la tecla `Shift`:
+    - Teclado: `Shift + Delete` o `Shift + Backspace`.
+    - Ratón: `Shift + clic en el botón Eliminar (#btn-delete-clip)`.
+- **Limpieza de estado y Undo:** Se eliminan los segmentos de transcripción del clip en `state.ai.transcriptByClip`, se recalcula la duración total del proyecto y se sincroniza la reproducción. Un solo `Ctrl+Z` restaura el clip eliminado y la posición original de todos los clips desplazados.
+
+---
+
+### 16.5 Barra Contextual de Clip (`#clip-toolbar`) y Accesibilidad
+
+- **Layout fijo y balanceado:** `#clip-toolbar` aloja el nombre del clip y el control de volumen a la izquierda, y los botones de acción rápida (**Dividir** y **Eliminar**) a la derecha en `#clip-toolbar-actions`.
+- **Accesibilidad:**
+  - En ausencia de selección de clip, ambos botones quedan en estado deshabilitado accesible (`disabled`, `aria-disabled="true"`).
+  - Al seleccionar un clip, se activan con tooltips localizados en español e inglés:
+    - Dividir: *"Dividir en la línea de tiempo (S)"* / *"Split at playhead (S)"*.
+    - Eliminar: *"Eliminar (Supr) — Shift: sin cerrar hueco"* / *"Delete (Del) — Shift: keep gap"*.
+  - Anillos de foco visibles conformes a WCAG, sin colores violeta fuera del módulo de IA.
+
+---
+
+### 16.6 Matriz de Pruebas Obligatorias de la Fase 24 (12/12 Superadas)
+
+Validada mediante suite automatizada ejecutada en el entorno nativo de Electron con archivos MP3 reales (`tests/test_phase24.js`):
+
+| # | Prueba Obligatoria | Condición y Valores Reales Medidos | Resultado |
+|---|---|---|:---:|
+| 1 | **Colocar en playhead (carril vacío)** | Playhead en `12.50s`. Audio soltado desde biblioteca en carril vacío: se ubicó en `start = 12.50s` (redondeo a centésimas, regla de 0s eliminada). | ✅ **APROBADO** |
+| 2 | **Colisión al soltar sobre clip existente** | Clip previo en `[10.00s, 15.00s]`, playhead en `12.00s`. Audio soltado: se ubicó inmediatamente al final en `start = 15.00s` sin solapamiento. | ✅ **APROBADO** |
+| 3 | **Mover clip (+5s), umbral de clic y Ctrl+Z** | - Clic sin movimiento ($< 4\text{ px}$): cero pasos de undo (`undoStack.length` inalterado).<br>- Arrastre de $+5\text{s}$: `start` cambió de `10.00s` a `15.00s` ($\pm 0.00$).<br>- Un solo `Ctrl+Z`: revirtió el clip a `start = 10.00s` exactamente. | ✅ **APROBADO** |
+| 4 | **Mover clip sobre obstáculo (posición libre más cercana)** | Clip obstáculo en `[20.00s, 25.00s]`. Clip movido con propuesta en `22.00s`: reubicado automáticamente en `start = 25.00s` (posición libre más cercana). | ✅ **APROBADO** |
+| 5 | **Mover clip a otro carril** | Clip arrastrado verticalmente desde `trk-source` hacia `trk-dest`: transferido exitosamente (`trk-dest` = 1 clip, `trk-source` = 0 clips). | ✅ **APROBADO** |
+| 6 | **Escape durante arrastre** | Clip en `start = 8.00s` arrastrado $+200\text{ px}$. Presionando `Escape`: arrastre cancelado, restaurando `start = 8.00s` sin registrar undo. | ✅ **APROBADO** |
+| 7 | **Dividir en playhead (A/B, volúmenes, offset y B seleccionada)** | Clip original en `[10.00s, 18.00s]`, `volume = 0.65`, `sourceOffset = 1.50s`. Playhead en `13.00s`:<br>- **Pieza A:** `start = 10.00s`, `duration = 3.00s`, `sourceOffset = 1.50s`, `volume = 0.65`.<br>- **Pieza B:** `start = 13.00s`, `duration = 5.00s`, `sourceOffset = 4.50s`, `volume = 0.65`.<br>- **Pieza B seleccionada automáticamente** (`selection.clipId = pieceB.id`).<br>- **Segunda división inmediata** ejecutada con éxito. | ✅ **APROBADO** |
+| 8 | **Flujo completo: Dividir A, dividir B, borrar centro y reproducción contigua** | Clip dividido en 3 piezas continuas. Borrado de pieza intermedia con ripple delete: Pieza 3 arrancó exactamente en `start = 2.00s` (`gap = 0.00s`, unida a Pieza 1). Al dar Play a través de la unión, ambas fuentes sonaron de forma continua (`continuousSources: 2`) sin pausas. | ✅ **APROBADO** |
+| 9 | **Shift + Delete conserva el hueco** | Dos clips consecutivos (`[0s, 2s]` y `[4s, 8s]`). Eliminación con `Shift + Delete`: clip 2 se mantuvo en `start = 4.00s` conservando el espacio vacío intacto. | ✅ **APROBADO** |
+| 10 | **Dividir con playhead fuera del clip** | Clip en `[10.00s, 18.00s]`, playhead en `25.00s`. Intento de división emitió toast de aviso y conservó el proyecto inalterado. | ✅ **APROBADO** |
+| 11 | **Preservación de transcripción sintética** | Clip con palabras "Hola" `[1.0s, 2.0s]` y "mundo" `[2.0s, 3.5s]`. Tras dividir en `t = 2.5s`: Pieza A retuvo "Hola" y Pieza B retuvo "mundo" con tiempos locales relativos correctos. | ✅ **APROBADO** |
+| 12 | **Regresión completa (Alineación 0 px, multitrack y persistencia)** | - **Alineación geométrica:** $\Delta(\text{Playhead}_{t=0}, \text{Regla}, \text{Carriles}) = \mathbf{0.00 \text{ px}}$ (`diff = 0 px`).<br>- **Multitrack real:** 2 carriles concurrentes reproduciendo simultáneamente (`activeSources = 2`).<br>- **Persistencia:** Guardado y recarga en backend verificados sin pérdida de volumen ni de estructura. | ✅ **APROBADO** |
+
 
