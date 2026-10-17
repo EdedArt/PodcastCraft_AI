@@ -1938,39 +1938,7 @@ function renderAll(currentState = state, prevState) {
       scheduleAutoSave();
     }
   }
-
-  // Medición diagnóstica obligatoria Fase 14
-  if (typeof window.__diagMeasure === 'function') {
-    window.__diagMeasure();
-  }
 }
-
-window.__diagMeasure = function() {
-  const lane = document.querySelector('.timeline-lane')?.getBoundingClientRect();
-  const playhead = document.querySelector('#timeline-playhead')?.getBoundingClientRect();
-  const rulerScale = document.querySelector('#timeline-ruler-scale')?.getBoundingClientRect();
-  const ruler = document.querySelector('#timeline-ruler')?.getBoundingClientRect();
-  const gutter = document.querySelector('.timeline-ruler-gutter')?.getBoundingClientRect();
-  const strip = document.querySelector('.timeline-control-strip')?.getBoundingClientRect();
-  const col = document.querySelector('#col-timeline')?.getBoundingClientRect();
-  const res = {
-    colLeft: col ? Number(col.left.toFixed(2)) : null,
-    laneLeft: lane ? Number(lane.left.toFixed(2)) : null,
-    playheadLeft: playhead ? Number(playhead.left.toFixed(2)) : null,
-    rulerScaleLeft: rulerScale ? Number(rulerScale.left.toFixed(2)) : null,
-    rulerLeft: ruler ? Number(ruler.left.toFixed(2)) : null,
-    gutterRight: gutter ? Number(gutter.right.toFixed(2)) : null,
-    gutterWidth: gutter ? Number(gutter.width.toFixed(2)) : null,
-    stripWidth: strip ? Number(strip.width.toFixed(2)) : null,
-    stripRight: strip ? Number(strip.right.toFixed(2)) : null,
-    diff_lane_vs_playhead: lane && playhead ? Number((lane.left - playhead.left).toFixed(2)) : null,
-    diff_rulerScale_vs_playhead: rulerScale && playhead ? Number((rulerScale.left - playhead.left).toFixed(2)) : null,
-    diff_rulerScale_vs_lane: rulerScale && lane ? Number((rulerScale.left - lane.left).toFixed(2)) : null
-  };
-  console.log('[DIAGNOSTICO_FASE14]', JSON.stringify(res));
-  return res;
-};
-
 
 /* ==========================================================================
    5.1 THEME MANAGEMENT (Fase A: Claro por Defecto / Oscuro)

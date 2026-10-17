@@ -28,3 +28,12 @@ yarn-debug.log*
 yarn-error.log*
 .DS_Store
 Thumbs.db
+
+# Salidas de pruebas
+*_output.json
+test_*_output.json
+tests/*_output.json
+*.error.txt
+test_*_error.txt
+tests/*_error.txt
+

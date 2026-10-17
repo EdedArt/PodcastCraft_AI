@@ -1,8 +1,9 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
-const electronPath = path.join(__dirname, 'node_modules', 'electron', 'dist', 'electron.exe');
-const testScript = path.join(__dirname, 'test_phase23.js');
+const electronPath = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+const targetScript = process.argv[2] || 'test_phase24.js';
+const testScript = path.isAbsolute(targetScript) ? targetScript : path.join(__dirname, targetScript);
 
 console.log('[Runner] Lanzando Electron:', electronPath, testScript);
 

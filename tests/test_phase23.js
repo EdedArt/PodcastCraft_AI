@@ -21,14 +21,15 @@ function startBackend() {
     });
     req.on('error', () => {
       console.log('[Test Runner] Iniciando backend...');
-      const backendEntry = path.join(__dirname, 'backend', 'src', 'server.js');
+      const rootDir = path.join(__dirname, '..');
+      const backendEntry = path.join(rootDir, 'backend', 'src', 'server.js');
       backendProcess = fork(backendEntry, [], {
-        cwd: path.join(__dirname, 'backend'),
+        cwd: path.join(rootDir, 'backend'),
         silent: true,
         env: {
           ...process.env,
           PORT: BACKEND_PORT,
-          PODCASTCRAFT_STORAGE_DIR: path.join(__dirname, 'backend', 'storage'),
+          PODCASTCRAFT_STORAGE_DIR: path.join(rootDir, 'backend', 'storage'),
           ELECTRON_RUN_AS_NODE: '1'
         }
       });
@@ -70,7 +71,7 @@ app.whenReady().then(async () => {
       }
     });
 
-    win.loadFile(path.join(__dirname, 'frontend', 'index.html'));
+    win.loadFile(path.join(__dirname, '..', 'frontend', 'index.html'));
 
     await new Promise((resolve) => {
       win.webContents.once('did-finish-load', resolve);
