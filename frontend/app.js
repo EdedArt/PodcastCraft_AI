@@ -175,6 +175,8 @@ window.PodcastCraft = {
   createTrack,
   deleteTrack,
   calculateDropStart,
+  resolveDropStart: (track, desiredStart, clipDuration) => resolveDropStart(track, desiredStart, clipDuration),
+  getPlayheadTime: () => getPlayheadTime(),
   recomputeProjectDuration: () => recomputeProjectDuration(),
   getPixelsPerSecond: () => getPixelsPerSecond(),
   timeToPixels: (sec) => timeToPixels(sec),
@@ -247,37 +249,57 @@ window.renderAiPanel = renderAiPanel;
  * Calcula la posición de inicio (en segundos) de un clip al soltarlo en un carril (Fase 9).
  * - Si el carril está vacío: SIEMPRE se ancla a 0 (00:00), sin importar dónde se soltó.
  * - Si el carril ya tiene clips: calcula la posición aproximada desde dropX y aplica
- *   el acomodo automático post-colisión para no pisar clips existentes.
- * @param {object} track - Carril destino
- * @param {number} dropX - Posición X del puntero en píxeles dentro del carril
- * @param {number} pixelsPerSecond - Escala actual de píxeles por segundo
- * @param {number} clipDuration - Duración del clip que se está soltando
- * @returns {number} Posición de inicio en segundos
+/**
+ * Retorna la posición temporal exacta del playhead en segundos (fuente única de verdad — Fase 24).
+ * Si la reproducción está activa, devuelve getTransportTime(); en pausa, state.project.currentTime.
+ * @returns {number}
  */
-function calculateDropStart(track, dropX, pixelsPerSecondOrDuration, maybeClipDuration) {
-  const sortedClips = [...(track.clips || [])].sort((a, b) => a.start - b.start);
-
-  if (sortedClips.length === 0) {
-    // Carril vacío: SIEMPRE se ancla a 0, sin importar dónde se soltó
-    return 0;
+function getPlayheadTime() {
+  if (state.project && state.project.isPlaying) {
+    return typeof getTransportTime === 'function' ? getTransportTime() : (state.project.currentTime || 0);
   }
+  return (state.project && typeof state.project.currentTime === 'number') ? state.project.currentTime : 0;
+}
 
-  // Carril con clips existentes: conversión mediante fuente única de verdad (Fase 14)
-  const duration = Math.round((typeof maybeClipDuration === 'number' ? maybeClipDuration : pixelsPerSecondOrDuration) || 0);
-  let start = Math.max(0, Math.round(pixelsToTime(dropX)));
+/**
+ * Calcula la posición de inicio para un clip en un carril a partir de un tiempo deseado,
+ * resolviendo colisiones secuencialmente de modo que nunca se solape con clips existentes (Fase 24).
+ * Si choca con un clip existente, se coloca justo después del final del clip con el que choca.
+ * Redondeado a centésimas (dos decimales).
+ * @param {object} track - Carril destino
+ * @param {number} desiredStart - Tiempo de inicio propuesto (en segundos)
+ * @param {number} clipDuration - Duración del clip (en segundos)
+ * @returns {number} Posición de inicio final en segundos (redondeada a centésimas)
+ */
+function resolveDropStart(track, desiredStart, clipDuration) {
+  let start = Math.max(0, Math.round(desiredStart * 100) / 100);
+  const duration = typeof clipDuration === 'number' ? clipDuration : 0;
   let end = start + duration;
 
-  // Acomodo automático sin pisar clips existentes
+  const sortedClips = [...(track.clips || [])].sort((a, b) => a.start - b.start);
   for (const c of sortedClips) {
     const cStart = c.start || 0;
     const cEnd = cStart + (c.duration || 0);
-    if (start < cEnd && end > cStart) {
-      start = cEnd;
+    // Hay colisión si start < cEnd y end > cStart (con tolerancia a centésimas)
+    if (start < cEnd - 0.001 && end > cStart + 0.001) {
+      start = Math.round(cEnd * 100) / 100;
       end = start + duration;
     }
   }
+  return Math.round(start * 100) / 100;
+}
 
-  return start;
+/**
+ * Función heredada para cálculo de caída de clips, delegada a resolveDropStart (Fase 24).
+ */
+function calculateDropStart(track, dropXOrTime, pixelsPerSecondOrDuration, maybeClipDuration) {
+  const duration = typeof maybeClipDuration === 'number'
+    ? maybeClipDuration
+    : (typeof pixelsPerSecondOrDuration === 'number' ? pixelsPerSecondOrDuration : 0);
+  const desired = typeof dropXOrTime === 'number' && dropXOrTime > 200
+    ? pixelsToTime(dropXOrTime)
+    : (typeof dropXOrTime === 'number' ? dropXOrTime : getPlayheadTime());
+  return resolveDropStart(track, desired, duration);
 }
 
 /**
@@ -3609,17 +3631,15 @@ function bindTimelineEvents() {
     const track = state.tracks.find((t) => t.id === trackId);
     if (!track) return;
 
-    // Calcular posición X convertida a segundos con anclaje a 00:00 en carriles vacíos (Fase 9)
-    const rect = lane.getBoundingClientRect();
-    const dropX = e.clientX - rect.left + lane.scrollLeft;
-    const duration = Math.round(payload.duration || 0);
-
-    const start = calculateDropStart(track, dropX, duration);
+    // Fase 24: Colocar al soltar en la posición del playhead (getPlayheadTime) con resolución de colisiones
+    const playheadTime = getPlayheadTime();
+    const duration = typeof payload.duration === 'number' ? payload.duration : 0;
+    const start = resolveDropStart(track, playheadTime, duration);
 
     const libItem = getLibraryItem(payload.libraryId);
     const objectUrl = libItem ? (libItem.objectUrl ?? null) : null;
 
-    pushUndoSnapshot();
+    pushUndoSnapshot('Añadir clip');
 
     const newClip = {
       id: `clip-${crypto.randomUUID()}`,
