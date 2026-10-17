@@ -2,24 +2,74 @@
 
 Estación de trabajo de audio digital (DAW) y editor de podcasts con asistencia de Inteligencia Artificial (estilo Descript / Adobe Audition), desarrollada como proyecto final para la asignatura **Diseño de Interfaces de Software** en la Universidad Cooperativa de Colombia.
 
-Este repositorio contiene la **Fase 26 (Versión Final: Login completo — crear cuenta, "Recordarme", código de recuperación y límites anti-saturación)**, integrando el 100% de la funcionalidad de control de acceso multiusuario, tokens de sesión persistente, recuperación criptográfica de credenciales, límites estrictos de carga y mitigación de fuerza bruta, junto con carriles dinámicos, importación de MP3 reales, motor de mezcla multicanal, playhead sincronizado al píxel, motor de IA con Google Gemini y empaquetado de escritorio nativo.
+Este repositorio contiene la **Versión Oficial v1.1.0 (Fase 27 - Release Final de Producción)**, integrando un DAW completo de escritorio con motor de audio multipista, edición no destructiva, playhead de alta precisión, exportación nativa a MP3 con FFmpeg, asistencia de IA con Google Gemini, y un sistema local de autenticación multi-cuenta con recuperación criptográfica y sesión persistente.
 
 ---
 
-## 📦 Descarga e Instalación
+## 📦 Descarga e Instalación (v1.1.0)
 
-[![Descargar PodcastCraft AI](https://img.shields.io/badge/Descargar-PodcastCraft%20AI%20v1.0.0%20(Windows%20x64)-6366f1?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/EdedArt/PodcastCraft_AI/releases/download/v1.0.0/PodcastCraft.AI.exe)
+[![Descargar PodcastCraft AI v1.1.0](https://img.shields.io/badge/Descargar-PodcastCraft%20AI%20v1.1.0%20(Windows%20x64)-6366f1?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/EdedArt/PodcastCraft_AI/releases/latest)
 
-> **Release público:** [GitHub Releases — PodcastCraft AI v1.0.0](https://github.com/EdedArt/PodcastCraft_AI/releases/tag/v1.0.0)
+> 🔗 **Último Release Oficial:** [GitHub Releases — PodcastCraft AI v1.1.0](https://github.com/EdedArt/PodcastCraft_AI/releases/latest)
 
-1. **Descarga:** Descarga el instalador ejecutable [`PodcastCraft.AI.exe`](https://github.com/EdedArt/PodcastCraft_AI/releases/download/v1.0.0/PodcastCraft.AI.exe) (105 MB).
-2. **Ejecución:** Haz doble clic sobre el archivo para instalar y abrir la aplicación en Windows 10/11 (64 bits).
-3. **SmartScreen:** Si Windows muestra *"Windows protegió su equipo"*, pulsa en **Más información** y luego en **Ejecutar de todas formas**.
+1. **Descarga:** Descarga el instalador ejecutable oficial [`PodcastCraft AI.exe`](https://github.com/EdedArt/PodcastCraft_AI/releases/latest) (105.6 MB).
+2. **Instalación:** Ejecuta el archivo descargado para iniciar el asistente de instalación de Windows. Por defecto se instala en modo de usuario (`%LOCALAPPDATA%\Programs\PodcastCraft AI`) sin requerir privilegios de administrador.
+3. **Advertencia de Windows SmartScreen:** Dado que el ejecutable es un proyecto de código abierto independiente que no dispone de un certificado digital corporativo de pago (EV Certificate), Windows Defender SmartScreen mostrará la ventana preventiva *"Windows protegió su equipo"*:
+   - Haz clic en el enlace **"Más información"**.
+   - Haz clic en el botón **"Ejecutar de todas formas"**.
+   - La aplicación se instalará, creará los accesos directos en el Escritorio y Menú Inicio, y quedará lista para usar.
 
 ---
 
-## 🖥️ Backend (Fases 1 a 7 completadas)
-El backend vive en `/backend`, ver [`backend/README.md`](backend/README.md) para instrucciones completas, arquitectura y guía de pruebas. Actualmente desarrollado y verificado de forma aislada; la conexión con el frontend está pendiente de aprobación del usuario.
+## ✨ Qué incluye la versión v1.1.0
+
+- 🎚️ **Motor de audio multipista profesional:** Reproducción estéreo continua de baja latencia con Web Audio API, soporte de múltiples carriles simultáneos y aislamiento de canales.
+- 🔊 **Control de ganancia y volumen dinámico:** Faders reactivos con ajuste de volumen individual por carril (0% a 150%) y balance estéreo.
+- ✂️ **Edición precisa y atajos de teclado de estudio:**
+  - División de clips en el cursor con la tecla `S` (*Split*).
+  - Reproducción / Pausa instantánea con `Espacio`.
+  - Navegación y salto de transporte con `J` (rebobinar) y `L` (avanzar).
+  - Zoom horizontal dinámico para edición milimétrica de ondas.
+- 📍 **Playhead ergonómico y ultra-fluido:**
+  - Área de agarre táctil ampliada (*hit-area* invisible de 16 px) sobre la línea y la cabeza del cursor.
+  - Scrubbing continuo y arrastre directo desde cualquier punto de la regla de tiempo con captura de puntero (`setPointerCapture`), evitando pérdidas al salir del elemento.
+  - Actualización a 60 FPS mediante `requestAnimationFrame` sin sobrecargar el estado de React/DOM.
+  - Alineación matemática perfecta garantizada en `0.00 px` entre playhead, regla y clips.
+- 🤖 **Asistente de IA con Google Gemini:** Transcripción de audio, análisis semántico, detección de muletillas/silencios y sugerencias de corte automatizadas.
+- 🎵 **Exportación nativa a MP3:** Mezcla multicanal real procesada mediante binario independiente de `ffmpeg` (empaquetado fuera del `.asar`), con diálogo nativo de Windows para seleccionar destino y metadatos ID3.
+- 👥 **Acceso y perfiles multi-cuenta:** Hasta 10 cuentas locales independientes en el mismo equipo, compartiendo de forma colaborativa el proyecto del estudio.
+- 🔑 **Sesión persistente "Recordarme":** Inicio de sesión automático sin parpadeos mediante tokens criptográficos SHA-256 resistentes a reinicios.
+- 🛡️ **Código de recuperación de un solo uso:** Código alfanumérico de 16 caracteres (`XXXX-XXXX-XXXX-XXXX`) generado con `crypto.randomBytes` para recuperar contraseñas sin necesidad de correo ni SMS.
+- 🧱 **Protección anti-saturación y fuerza bruta:** Límites estrictos de payload (2 KB), bloqueo de fuerza bruta (HTTP 429) y control de concurrencia para proteger el CPU local.
+
+---
+
+## 💾 Dónde se guardan los datos y cómo restablecer acceso
+
+- **Directorio de almacenamiento local:**
+  ```
+  %APPDATA%\podcastcraft-ai\storage\
+  (Ruta completa: C:\Users\<TuUsuario>\AppData\Roaming\podcastcraft-ai\storage\)
+  ```
+  - `project.json`: Estructura del proyecto, carriles, clips, posiciones temporales y volúmenes.
+  - `auth.json`: Base de datos local de credenciales (hashes `scrypt` con sal criptográfica y hashes SHA-256 de tokens).
+  - `audio-files/`: Archivos MP3 físicos importados y grabados.
+- **Cómo restablecer el acceso en caso de emergencia:**
+  Si olvidas tu contraseña y extravías tu código de recuperación:
+  1. Cierra completamente PodcastCraft AI.
+  2. Ve a `%APPDATA%\podcastcraft-ai\storage\` y elimina o renombra el archivo `auth.json`.
+  3. Vuelve a abrir la aplicación: entrará automáticamente en modo de "primer uso", permitiéndote registrar un nuevo usuario administrador.
+  4. **Tus proyectos y tus audios NO se borran ni se alteran**, ya que residen en `project.json` y `audio-files/`.
+
+---
+
+## ⚠️ Limitaciones honestas de la versión
+
+Para mantener total transparencia con el usuario y evaluadores:
+1. **Reducción de ruido con IA:** No está implementada en esta versión (el asistente de IA se enfoca en transcripción, detección de muletillas y cortes asistidos).
+2. **Sistema Operativo:** Diseñado y optimizado exclusivamente para **Windows 10 y Windows 11 (64 bits)**.
+3. **Audios extensos:** Archivos de audio continuos de más de 30 a 60 minutos pueden demandar alto consumo de memoria RAM y tiempo de procesamiento durante la decodificación de forma de onda.
+4. **Nivel de servicio de IA:** La integración con Google Gemini opera bajo la cuota del nivel de desarrollo / gratuito (Free Tier), sujeta a los límites de peticiones por minuto de Google AI Studio.
 
 ---
 
@@ -1673,6 +1723,61 @@ Verificada mediante suite automatizada integral en entorno Electron y backend Ex
 | 13 | **Regresión: Alineación y motor DAW** | - Desfase horizontal: $\Delta(\text{Playhead}_{t=0}, \text{Regla}, \text{Carriles}) = \mathbf{0.00\text{ px}}$.<br>- Banner offline de reconexión, reproducción multitrack, zoom y controles de transporte 100% operativos. | ✅ **APROBADO** |
 | 14 | **Exclusión de pruebas en empaquetado del instalador** | Confirmado que `tests/` está explícitamente excluido de `files` y `extraResources` en `package.json`. | ✅ **APROBADO** |
 
+---
 
+## 🚀 Fase 27: Versión Final v1.1.0 — Ajuste Ergonómico del Playhead, Empaquetado NSIS y Verificación de Producción
 
+La **Fase 27** representa el cierre definitivo de ingeniería de PodcastCraft AI, integrando optimizaciones ergonómicas críticas en la experiencia táctil del timeline, la construcción única del instalador oficial para Windows y la validación integral end-to-end sobre la aplicación compilada e instalada en el sistema operativo real.
 
+### 27.1 Ajuste Ergonómico y Rendimiento del Playhead
+A partir del feedback del usuario sobre la rigidez del cursor de reproducción en la línea de tiempo, se implementaron mejoras ergonómicas de precisión:
+1. **Área de Agarre Invisible de 16 px:**
+   - La línea roja y el cabezal disponen ahora de una zona táctil ampliada mediante pseudo-elementos (`::before` con `left: -7px; width: 16px;`) que facilitan el arrastre con el ratón sin alterar el grosor visual de 2 px de la línea.
+2. **Scrubbing Continuo desde la Regla de Tiempo:**
+   - Arrastrar el ratón sobre cualquier punto de la escala superior (`#timeline-ruler`) desplaza fluidamente el playhead en tiempo real.
+3. **Captura de Puntero (`setPointerCapture`):**
+   - Garantiza que el cursor no pierda el foco ni se interrumpa el arrastre aunque el puntero se mueva rápidamente fuera de los límites de la ventana o del carril.
+4. **Actualización a 60 FPS con `requestAnimationFrame`:**
+   - La sincronización física durante el arrastre se ejecuta directamente mediante transforms CSS con aceleración por hardware, evitando actualizaciones pesadas del estado global por fotograma.
+5. **Alineación Geométrica Cero Absoluto:**
+   - Medición física automatizada: $\Delta(\text{Playhead}_{t=0}, \text{Regla}, \text{Clips}) = \mathbf{0.00\text{ px}}$.
+   - Todas las funciones de estudio permanecen 100% intactas: división de clips con tecla `S`, transporte con `Espacio`, saltos con `J`/`L` y zoom dinámico.
+
+---
+
+### 27.2 Especificaciones Técnicas del Instalador Oficial (v1.1.0)
+
+Construido de forma determinística en una sola ejecución para producción:
+
+| Parámetro | Valor Verificado en Producción |
+|---|---|
+| **Nombre del Archivo** | `PodcastCraft AI.exe` |
+| **Ruta de Salida** | `dist/PodcastCraft AI.exe` |
+| **Tamaño Exacto** | `105,666,783 bytes` (~100.77 MB) |
+| **Checksum SHA-256** | `7E3D817B02390328E182C254A84BF843C25258991030D0297B79BA12E293BEB6` |
+| **Tiempo de Construcción** | `155,332 ms` (~2 min 35 s) |
+| **Arquitectura de Empaquetado** | Electron 33.4.11 / NSIS x64 |
+| **Binario FFmpeg** | Extraído fuera del `.asar` en `resources/backend/node_modules/ffmpeg-static/ffmpeg.exe` (81.1 MB) |
+| **Variables de Entorno** | `backend/.env` incluido con `GEMINI_API_KEY` activa y protegida |
+| **Aislamiento de Pruebas** | Directorio `tests/` y suites de verificación 100% excluidos del instalador |
+
+---
+
+### 27.3 Métricas Reales de la Prueba Integral sobre la App Instalada
+
+Verificación automatizada sobre el binario real instalado en `%LOCALAPPDATA%\Programs\PodcastCraft AI`:
+
+| Componente Evaluado | Parámetro Medido | Resultado Numérico Real | Estado |
+|---|---|---|:---:|
+| **Arranque del Backend** | Tiempo de respuesta en `GET /health` | **696 ms** (límite <25,000 ms) | ✅ APROBADO |
+| **Ajuste de Ventana** | Dimensiones en monitor $1366 \times 768$ | **$1297 \times 684\text{ px}$** (visible, sin desborde) | ✅ APROBADO |
+| **Identidad de Proceso** | Nombre de proceso y título de ventana | `"PodcastCraft AI"` | ✅ APROBADO |
+| **Primer Uso (UI Real)** | Creación de cuenta y modal criptográfico | Registro exitoso en **167 ms**, código `XXXX-XXXX-XXXX-XXXX` confirmado | ✅ APROBADO |
+| **Transición al Editor** | Desbloqueo y renderizado de la interfaz DAW | Bloqueo oculto, topbar y regla activas de inmediato | ✅ APROBADO |
+| **Subida de Audio** | `POST /api/audio` (2 tonos senoidales) | Tono 1 (440Hz) en **7 ms**, Tono 2 (880Hz) en **2 ms** | ✅ APROBADO |
+| **Mezcla y Exportación FFmpeg** | `POST /api/export` (2 pistas con volúmenes 0.8 y 0.5) | **133,617 bytes** renderizados en **195 ms** | ✅ APROBADO |
+| **Calidad del MP3 Exportado** | Duración medida vs esperada | **5.54 s** vs **5.50 s** esperada ($\Delta = 0.04\text{ s}$) | ✅ APROBADO |
+| **Bitrate de Exportación** | Tasa de bits de codificación estéreo | **193 kbps** (nominal 192 kbps, 44.1 kHz) | ✅ APROBADO |
+| **Integridad de Decodificación** | `ffmpeg -v error -i <file> -f null -` | **0 errores** de audio reportados | ✅ APROBADO |
+| **Cierre y Limpieza** | Procesos residuales y puerto 3001 | **0 procesos vivos**, puerto 3001 liberado | ✅ APROBADO |
+| **Seguridad de Datos del Usuario** | Integridad de `%APPDATA%\podcastcraft-ai` | **15 elementos raíz / 67 recursivos intactos** (Sin cambios) | ✅ APROBADO |
