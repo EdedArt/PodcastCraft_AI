@@ -205,9 +205,34 @@ window.PodcastCraft = {
   renderAiPanel: () => renderAiPanel(),
   showToast: (msg, type) => showToast(msg, type),
   renderClipToolbar: () => renderClipToolbar(),
-  undo: () => undo(),
-  pushUndoSnapshot: () => pushUndoSnapshot(),
-  get undoStack() { return undoStack; }
+  get undoStack() { return undoStack; },
+  get trackGainNodes() { return trackGainNodes; },
+  getTrackGain: (trackId) => trackGainNodes.get(trackId),
+  getActiveClipGains: (clipId) => activeAudioSources.filter((s) => s.clipId === clipId).map((s) => s.clipGain),
+  setTrackVolume: (trackId, vol) => {
+    const v = clamp(vol, 0, 2);
+    if (audioContext) {
+      const tg = trackGainNodes.get(trackId);
+      if (tg) tg.gain.setTargetAtTime(v, audioContext.currentTime, 0.01);
+    }
+    const nextTracks = state.tracks.map((t) => (t.id === trackId ? { ...t, volume: v } : t));
+    setState({ tracks: nextTracks });
+  },
+  setClipVolume: (clipId, vol) => {
+    const v = clamp(vol, 0, 2);
+    if (audioContext) {
+      for (const item of activeAudioSources) {
+        if (item.clipId === clipId && item.clipGain) {
+          item.clipGain.gain.setTargetAtTime(v, audioContext.currentTime, 0.01);
+        }
+      }
+    }
+    const nextTracks = state.tracks.map((t) => ({
+      ...t,
+      clips: (t.clips || []).map((c) => (c.id === clipId ? { ...c, volume: v } : c))
+    }));
+    setState({ tracks: nextTracks });
+  }
 };
 window.renderAiPanel = renderAiPanel;
 
@@ -947,6 +972,25 @@ function undo() {
     }
   });
 
+  // Sincronizar ganancias en vivo con Web Audio API tras deshacer (Fase 23)
+  if (audioContext) {
+    for (const t of previousTracks) {
+      const tg = trackGainNodes.get(t.id);
+      if (tg) {
+        const tVol = typeof t.volume === 'number' ? t.volume : 1;
+        tg.gain.setTargetAtTime(tVol, audioContext.currentTime, 0.01);
+      }
+    }
+    for (const item of activeAudioSources) {
+      const trk = previousTracks.find((t) => t.id === item.trackId);
+      const clp = trk?.clips?.find((c) => c.id === item.clipId);
+      if (clp && item.clipGain) {
+        const cVol = typeof clp.volume === 'number' ? clp.volume : 1;
+        item.clipGain.gain.setTargetAtTime(cVol, audioContext.currentTime, 0.01);
+      }
+    }
+  }
+
   const toastMsg = typeof t === 'function' ? t('timeline.undoToast') : 'Acción deshecha (Ctrl+Z)';
   showToast(toastMsg, 'info');
   console.info(`[PodcastCraft AI] Deshacer ejecutado. Pasos restantes en pila: ${undoStack.length}`);
@@ -994,6 +1038,15 @@ function deleteTrack(trackId) {
   pushUndoSnapshot();
 
   const nextTracks = state.tracks.filter((t) => t.id !== trackId);
+
+  // Limpiar y desconectar nodo de ganancia Web Audio del carril eliminado (Fase 23)
+  const tg = trackGainNodes.get(trackId);
+  if (tg) {
+    try {
+      tg.disconnect();
+    } catch (_) {}
+    trackGainNodes.delete(trackId);
+  }
 
   // Limpiar selección de clip si pertenecía al carril eliminado
   let nextClipId = state.selection.clipId;
@@ -3378,16 +3431,106 @@ function bindTimelineEvents() {
       return;
     }
 
-    // Clic en área vacía del timeline deselecciona
-    if (!e.target.closest('[data-clip-id]')) {
+    // Clic en área vacía del timeline deselecciona (evitando deseleccionar al interactuar con la franja de control)
+    if (!e.target.closest('[data-clip-id]') && !e.target.closest('.timeline-control-strip')) {
       if (state.selection.clipId !== null) {
         setState({ selection: { clipId: null } });
       }
     }
   });
 
-  // 2. División (Split) de clip por doble clic (Sprint 4 — 7.2)
+  // Estado de gestos continuos de volumen para un solo snapshot de deshacer (Fase 23)
+  const activeTrackVolumeGestures = new Set();
+  let isClipVolumeGesturing = false;
+
+  // Escuchar inicio de gesto de volumen en carriles para tomar snapshot previo
+  timelineContainer.addEventListener('pointerdown', (e) => {
+    const slider = e.target.closest('[data-track-volume]');
+    if (slider) {
+      const trackId = slider.dataset.trackVolume;
+      if (!activeTrackVolumeGestures.has(trackId)) {
+        pushUndoSnapshot();
+        activeTrackVolumeGestures.add(trackId);
+      }
+    }
+  });
+
+  timelineContainer.addEventListener('keydown', (e) => {
+    const slider = e.target.closest('[data-track-volume]');
+    if (slider && (e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End' || e.key === 'PageUp' || e.key === 'PageDown')) {
+      const trackId = slider.dataset.trackVolume;
+      if (!activeTrackVolumeGestures.has(trackId)) {
+        pushUndoSnapshot();
+        activeTrackVolumeGestures.add(trackId);
+      }
+    }
+  });
+
+  // Modificación continua de volumen de carril en vivo sin setState
+  timelineContainer.addEventListener('input', (e) => {
+    const slider = e.target.closest('[data-track-volume]');
+    if (slider) {
+      const trackId = slider.dataset.trackVolume;
+      if (!activeTrackVolumeGestures.has(trackId)) {
+        pushUndoSnapshot();
+        activeTrackVolumeGestures.add(trackId);
+      }
+      const rawVal = parseInt(slider.value, 10) || 0;
+      const v = clamp(rawVal / 100, 0, 2);
+
+      const valEl = $(`#track-volume-val-${trackId}`);
+      if (valEl) {
+        valEl.textContent = `${Math.round(v * 100)}%`;
+      }
+
+      const trk = state.tracks.find((t) => t.id === trackId);
+      if (trk) {
+        trk.volume = v;
+      }
+
+      if (audioContext) {
+        const tgNode = trackGainNodes.get(trackId);
+        if (tgNode) {
+          tgNode.gain.setTargetAtTime(v, audioContext.currentTime, 0.01);
+        }
+      }
+    }
+  });
+
+  // Confirmación al soltar el slider de carril: un único setState
+  timelineContainer.addEventListener('change', (e) => {
+    const slider = e.target.closest('[data-track-volume]');
+    if (slider) {
+      const trackId = slider.dataset.trackVolume;
+      activeTrackVolumeGestures.delete(trackId);
+      const rawVal = parseInt(slider.value, 10) || 0;
+      const v = clamp(rawVal / 100, 0, 2);
+
+      const nextTracks = state.tracks.map((t) => (t.id === trackId ? { ...t, volume: v } : t));
+      setState({ tracks: nextTracks });
+    }
+  });
+
+  // 2. División (Split) de clip por doble clic (Sprint 4 — 7.2) y reseteo de volumen a 100% (Fase 23)
   timelineContainer.addEventListener('dblclick', (e) => {
+    // Doble clic en slider de carril: restablece 100%
+    const trackVolSlider = e.target.closest('[data-track-volume]');
+    if (trackVolSlider) {
+      const trackId = trackVolSlider.dataset.trackVolume;
+      pushUndoSnapshot();
+      activeTrackVolumeGestures.delete(trackId);
+
+      if (audioContext) {
+        const tgNode = trackGainNodes.get(trackId);
+        if (tgNode) {
+          tgNode.gain.setTargetAtTime(1, audioContext.currentTime, 0.01);
+        }
+      }
+
+      const nextTracks = state.tracks.map((t) => (t.id === trackId ? { ...t, volume: 1 } : t));
+      setState({ tracks: nextTracks });
+      return;
+    }
     const clipEl = e.target.closest('[data-clip-id]');
     if (clipEl && !e.target.closest('[data-handle]')) {
       const clipId = clipEl.dataset.clipId;
@@ -3702,6 +3845,102 @@ function bindTimelineEvents() {
     handleEl.addEventListener('pointermove', onPointerMove);
     handleEl.addEventListener('pointerup', onPointerUp);
     handleEl.addEventListener('pointercancel', onPointerCancel);
+  });
+
+  // 6. Controles de volumen de clip (#clip-toolbar) — Fase 23
+  const clipSlider = $('#clip-volume-slider');
+  if (clipSlider) {
+    clipSlider.addEventListener('pointerdown', () => {
+      if (state.selection.clipId && !isClipVolumeGesturing) {
+        pushUndoSnapshot();
+        isClipVolumeGesturing = true;
+      }
+    });
+
+    clipSlider.addEventListener('keydown', (e) => {
+      if (e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End' || e.key === 'PageUp' || e.key === 'PageDown') {
+        if (state.selection.clipId && !isClipVolumeGesturing) {
+          pushUndoSnapshot();
+          isClipVolumeGesturing = true;
+        }
+      }
+    });
+
+    clipSlider.addEventListener('input', (e) => {
+      const clipId = state.selection.clipId;
+      if (!clipId) return;
+
+      if (!isClipVolumeGesturing) {
+        pushUndoSnapshot();
+        isClipVolumeGesturing = true;
+      }
+
+      const rawVal = parseInt(e.target.value, 10) || 0;
+      const v = clamp(rawVal / 100, 0, 2);
+
+      const valEl = $('#clip-volume-value');
+      if (valEl) {
+        valEl.textContent = `${Math.round(v * 100)}%`;
+      }
+
+      for (const track of state.tracks) {
+        const found = (track.clips || []).find((c) => c.id === clipId);
+        if (found) {
+          found.volume = v;
+          break;
+        }
+      }
+
+      if (audioContext) {
+        for (const item of activeAudioSources) {
+          if (item.clipId === clipId && item.clipGain) {
+            item.clipGain.gain.setTargetAtTime(v, audioContext.currentTime, 0.01);
+          }
+        }
+      }
+    });
+
+    clipSlider.addEventListener('change', (e) => {
+      const clipId = state.selection.clipId;
+      if (!clipId) return;
+      isClipVolumeGesturing = false;
+
+      const rawVal = parseInt(e.target.value, 10) || 0;
+      const v = clamp(rawVal / 100, 0, 2);
+
+      const nextTracks = state.tracks.map((t) => ({
+        ...t,
+        clips: (t.clips || []).map((c) => (c.id === clipId ? { ...c, volume: v } : c))
+      }));
+      setState({ tracks: nextTracks });
+    });
+
+    clipSlider.addEventListener('dblclick', () => {
+      const clipId = state.selection.clipId;
+      if (!clipId) return;
+      pushUndoSnapshot();
+      isClipVolumeGesturing = false;
+
+      if (audioContext) {
+        for (const item of activeAudioSources) {
+          if (item.clipId === clipId && item.clipGain) {
+            item.clipGain.gain.setTargetAtTime(1, audioContext.currentTime, 0.01);
+          }
+        }
+      }
+
+      const nextTracks = state.tracks.map((t) => ({
+        ...t,
+        clips: (t.clips || []).map((c) => (c.id === clipId ? { ...c, volume: 1 } : c))
+      }));
+      setState({ tracks: nextTracks });
+    });
+  }
+
+  // Limpiar banderas de gesto al soltar puntero globalmente
+  window.addEventListener('pointerup', () => {
+    isClipVolumeGesturing = false;
+    activeTrackVolumeGestures.clear();
   });
 
   // 6. Atajos de teclado globales (Sprint 4 — 6, Fase 15, Fase 16)
