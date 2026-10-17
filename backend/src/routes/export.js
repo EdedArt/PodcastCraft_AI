@@ -1,11 +1,12 @@
 const express = require('express');
+const fs = require('fs');
 const { mixProjectToMp3, sanitizeFilename } = require('../utils/audioMixer');
 
 const router = express.Router();
 
 // Aumentar límite de express.json exclusivamente para la ruta de exportación a 2 MB
 router.post('/', express.json({ limit: '2mb' }), async (req, res) => {
-  const { title, tracks } = req.body || {};
+  const { title, tracks, destinationPath } = req.body || {};
 
   if (!tracks || !Array.isArray(tracks) || tracks.length === 0) {
     return res.status(400).json({ error: 'El proyecto no contiene carriles para exportar.' });
@@ -17,8 +18,8 @@ router.post('/', express.json({ limit: '2mb' }), async (req, res) => {
   }
 
   const abortController = new AbortController();
-  req.on('close', () => {
-    // Si el cliente cierra la conexión antes de que la respuesta termine
+  // Corregido: escuchar en res.on('close'), ya que req.on('close') dispara en Node al consumirse el body
+  res.on('close', () => {
     if (!res.writableEnded) {
       abortController.abort();
     }
@@ -28,8 +29,20 @@ router.post('/', express.json({ limit: '2mb' }), async (req, res) => {
     const { outputPath, filename, cleanup } = await mixProjectToMp3({
       title,
       tracks,
+      destinationPath,
       cancelSignal: abortController.signal
     });
+
+    if (destinationPath) {
+      // Exportación directa al archivo destino del usuario (Electron)
+      const stats = await fs.promises.stat(outputPath).catch(() => ({ size: 0 }));
+      return res.json({
+        success: true,
+        filePath: outputPath,
+        filename,
+        size: stats.size
+      });
+    }
 
     const safeFilename = sanitizeFilename(title) + '.mp3';
 

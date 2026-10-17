@@ -101,7 +101,7 @@ let isExportInProgress = false;
  * @param {object} [options.cancelSignal] Señal para abortar ffmpeg si el cliente desconecta
  * @returns {Promise<{ outputPath: string, filename: string, cleanup: Function }>}
  */
-async function mixProjectToMp3({ title, tracks, cancelSignal }) {
+async function mixProjectToMp3({ title, tracks, cancelSignal, destinationPath }) {
   if (isExportInProgress) {
     const err = new Error('Ya hay una exportación en curso. Por favor espera a que finalice.');
     err.statusCode = 429;
@@ -148,7 +148,8 @@ async function mixProjectToMp3({ title, tracks, cancelSignal }) {
   ensureTmpDir();
   const safeTitle = sanitizeFilename(title);
   const outputFilename = `${safeTitle}.mp3`;
-  const outputPath = path.join(TMP_DIR, `export-${crypto.randomUUID()}.mp3`);
+  const isCustomPath = !!destinationPath;
+  const outputPath = destinationPath || path.join(TMP_DIR, `export-${crypto.randomUUID()}.mp3`);
 
   isExportInProgress = true;
 
@@ -221,7 +222,8 @@ async function mixProjectToMp3({ title, tracks, cancelSignal }) {
         resolve({
           outputPath,
           filename: outputFilename,
-          cleanup: () => cleanupTmpFile(outputPath)
+          isCustomDestination: isCustomPath,
+          cleanup: isCustomPath ? () => Promise.resolve() : () => cleanupTmpFile(outputPath)
         });
       })
       .on('error', (err) => {
