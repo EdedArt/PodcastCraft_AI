@@ -179,6 +179,7 @@ window.PodcastCraft = {
   getPlayheadTime: () => getPlayheadTime(),
   splitClipAtPlayhead: () => splitClipAtPlayhead(),
   deleteSelectedClip: (opts) => deleteSelectedClip(opts),
+  findNearestFreePosition: (track, clipId, proposedStart, clipDuration) => findNearestFreePosition(track, clipId, proposedStart, clipDuration),
   recomputeProjectDuration: () => recomputeProjectDuration(),
   getPixelsPerSecond: () => getPixelsPerSecond(),
   timeToPixels: (sec) => timeToPixels(sec),
@@ -3354,8 +3355,89 @@ function bindImportAudioEvents() {
    9. TIMELINE & CLIP INTERACTIONS (Sprint 4 — 2, 4, 5, 6, 7)
    ========================================================================== */
 
+/**
+ * Encuentra la posición libre más cercana en el carril destino para ubicar un clip
+ * sin colisionar con otros clips existentes (Fase 24).
+ * @param {object} targetTrack - Carril destino
+ * @param {string} movingClipId - ID del clip que se está moviendo
+ * @param {number} proposedStart - Tiempo de inicio deseado (en segundos)
+ * @param {number} clipDuration - Duración del clip (en segundos)
+ * @returns {number} Posición libre válida más cercana (redondeada a centésimas)
+ */
+function findNearestFreePosition(targetTrack, movingClipId, proposedStart, clipDuration) {
+  const D = typeof clipDuration === 'number' ? clipDuration : 0;
+  let p = Math.max(0, Math.round(proposedStart * 100) / 100);
+
+  const otherClips = (targetTrack.clips || [])
+    .filter((c) => c.id !== movingClipId)
+    .sort((a, b) => a.start - b.start);
+
+  if (otherClips.length === 0) {
+    return p;
+  }
+
+  // Verificar si proposedStart no colisiona con ningún clip
+  let overlaps = false;
+  for (const c of otherClips) {
+    const cStart = c.start || 0;
+    const cEnd = cStart + (c.duration || 0);
+    if (p < cEnd - 0.001 && p + D > cStart + 0.001) {
+      overlaps = true;
+      break;
+    }
+  }
+  if (!overlaps) {
+    return p;
+  }
+
+  // Buscar todos los intervalos válidos donde quepa un clip de duración D
+  const candidatePositions = [];
+
+  // 1. Antes del primer clip [0, otherClips[0].start]
+  if (otherClips[0].start >= D - 0.001) {
+    const maxStart = Math.max(0, otherClips[0].start - D);
+    const bestInGap = Math.min(Math.max(0, p), maxStart);
+    candidatePositions.push(Math.round(bestInGap * 100) / 100);
+  }
+
+  // 2. Entre clips consecutivos
+  for (let i = 0; i < otherClips.length - 1; i++) {
+    const gapStart = (otherClips[i].start || 0) + (otherClips[i].duration || 0);
+    const gapEnd = otherClips[i + 1].start || 0;
+    if (gapEnd - gapStart >= D - 0.001) {
+      const maxStart = gapEnd - D;
+      const bestInGap = Math.min(Math.max(gapStart, p), maxStart);
+      candidatePositions.push(Math.round(bestInGap * 100) / 100);
+    }
+  }
+
+  // 3. Después del último clip
+  const lastClip = otherClips[otherClips.length - 1];
+  const lastEnd = (lastClip.start || 0) + (lastClip.duration || 0);
+  candidatePositions.push(Math.round(Math.max(lastEnd, p) * 100) / 100);
+
+  // Encontrar la posición candidata con menor distancia a proposedStart
+  let bestPos = candidatePositions[0];
+  let minDiff = Math.abs(bestPos - p);
+
+  for (let i = 1; i < candidatePositions.length; i++) {
+    const cand = candidatePositions[i];
+    const diff = Math.abs(cand - p);
+    if (diff < minDiff) {
+      minDiff = diff;
+      bestPos = cand;
+    }
+  }
+
+  return Math.round(bestPos * 100) / 100;
+}
+
 // Sesión activa de recorte (Trim)
 let activeTrim = null;
+
+// Sesión activa de arrastre de clips (Fase 24)
+let activeClipDrag = null;
+let justFinishedClipDrag = false;
 
 /**
  * Divide el clip actualmente seleccionado en la posición temporal exacta del playhead (Fase 24).
@@ -3671,6 +3753,9 @@ function bindTimelineEvents() {
     }
 
     // Clic en clip para selección y alineación de reproducción (Fase 9)
+    if (justFinishedClipDrag) {
+      return;
+    }
     const clipEl = e.target.closest('[data-clip-id]');
     if (clipEl && !e.target.closest('[data-handle]')) {
       const clipId = clipEl.dataset.clipId;
@@ -3698,6 +3783,199 @@ function bindTimelineEvents() {
         setState({ selection: { clipId: null } });
       }
     }
+  });
+
+  // 3. Arrastre de clips (Fase 24: movimiento horizontal y entre carriles)
+  timelineContainer.addEventListener('pointerdown', (e) => {
+    // Las asas de recorte tienen prioridad absoluta
+    if (e.target.closest('[data-handle]')) return;
+    // Solo botón principal del ratón/puntero
+    if (e.button !== 0) return;
+
+    const clipEl = e.target.closest('[data-clip-id]');
+    if (!clipEl) return;
+
+    const clipId = clipEl.dataset.clipId;
+    const trackId = clipEl.dataset.trackId;
+    const track = state.tracks.find((t) => t.id === trackId);
+    if (!track) return;
+    const clip = track.clips ? track.clips.find((c) => c.id === clipId) : null;
+    if (!clip) return;
+
+    activeClipDrag = {
+      pointerId: e.pointerId,
+      clipId: clip.id,
+      sourceTrackId: track.id,
+      currentTargetTrackId: track.id,
+      startX: e.clientX,
+      startY: e.clientY,
+      initialClipStart: clip.start,
+      clipDuration: clip.duration,
+      clipEl,
+      isDragging: false,
+      snapshotTaken: false
+    };
+
+    clipEl.setPointerCapture(e.pointerId);
+
+    const onPointerMove = (ev) => {
+      if (!activeClipDrag) return;
+
+      const deltaX = ev.clientX - activeClipDrag.startX;
+      const deltaY = ev.clientY - activeClipDrag.startY;
+
+      if (!activeClipDrag.isDragging) {
+        if (Math.hypot(deltaX, deltaY) >= 4) {
+          activeClipDrag.isDragging = true;
+          document.body.classList.add('is-clip-dragging');
+          activeClipDrag.clipEl.classList.add('is-dragging-clip');
+          pushUndoSnapshot('Mover clip');
+          activeClipDrag.snapshotTaken = true;
+        }
+      }
+
+      if (activeClipDrag.isDragging) {
+        const deltaSec = pixelsToTime(deltaX);
+        const proposedStart = Math.max(0, activeClipDrag.initialClipStart + deltaSec);
+        activeClipDrag.clipEl.style.left = Math.round(timeToPixels(proposedStart)) + 'px';
+
+        // Detectar carril bajo el puntero
+        const elements = document.elementsFromPoint(ev.clientX, ev.clientY);
+        const laneEl = elements.find((el) => el.classList && el.classList.contains('timeline-lane'));
+        $$('.timeline-lane').forEach((l) => l.classList.remove('lane-dragover'));
+        if (laneEl) {
+          laneEl.classList.add('lane-dragover');
+          if (laneEl.dataset.trackId) {
+            activeClipDrag.currentTargetTrackId = laneEl.dataset.trackId;
+          }
+        }
+      }
+    };
+
+    const cleanupDragListeners = () => {
+      if (clipEl.hasPointerCapture && clipEl.hasPointerCapture(e.pointerId)) {
+        try {
+          clipEl.releasePointerCapture(e.pointerId);
+        } catch (_) {}
+      }
+      clipEl.removeEventListener('pointermove', onPointerMove);
+      clipEl.removeEventListener('pointerup', onPointerUp);
+      clipEl.removeEventListener('pointercancel', onPointerCancel);
+      document.body.classList.remove('is-clip-dragging');
+      clipEl.classList.remove('is-dragging-clip');
+      $$('.timeline-lane').forEach((l) => l.classList.remove('lane-dragover'));
+    };
+
+    const onPointerUp = (ev) => {
+      cleanupDragListeners();
+      if (!activeClipDrag) return;
+
+      if (!activeClipDrag.isDragging) {
+        // Clic sin desplazamiento (< 4px): selección normal
+        activeClipDrag = null;
+        return;
+      }
+
+      const deltaX = ev.clientX - activeClipDrag.startX;
+      const deltaSec = pixelsToTime(deltaX);
+      const proposedStart = Math.max(0, activeClipDrag.initialClipStart + deltaSec);
+
+      const targetTrack = state.tracks.find((t) => t.id === activeClipDrag.currentTargetTrackId)
+        || state.tracks.find((t) => t.id === activeClipDrag.sourceTrackId);
+
+      const finalStart = findNearestFreePosition(
+        targetTrack,
+        activeClipDrag.clipId,
+        proposedStart,
+        activeClipDrag.clipDuration
+      );
+
+      const didMove = (finalStart !== activeClipDrag.initialClipStart)
+        || (targetTrack.id !== activeClipDrag.sourceTrackId);
+
+      if (!didMove) {
+        if (activeClipDrag.snapshotTaken) {
+          undoStack.pop();
+          renderUndoButton();
+        }
+        activeClipDrag.clipEl.style.left = Math.round(timeToPixels(activeClipDrag.initialClipStart)) + 'px';
+        renderTimelineTracks();
+      } else {
+        let movingClip = null;
+        for (const t of state.tracks) {
+          const found = t.clips?.find((c) => c.id === activeClipDrag.clipId);
+          if (found) {
+            movingClip = found;
+            break;
+          }
+        }
+
+        if (movingClip) {
+          const updatedClip = { ...movingClip, start: finalStart };
+          const srcId = activeClipDrag.sourceTrackId;
+          const tgtId = targetTrack.id;
+
+          const nextTracks = state.tracks.map((t) => {
+            if (t.id === srcId && t.id === tgtId) {
+              return {
+                ...t,
+                clips: t.clips.map((c) => (c.id === movingClip.id ? updatedClip : c)).sort((a, b) => a.start - b.start)
+              };
+            }
+            if (t.id === srcId) {
+              return {
+                ...t,
+                clips: t.clips.filter((c) => c.id !== movingClip.id)
+              };
+            }
+            if (t.id === tgtId) {
+              return {
+                ...t,
+                clips: [...t.clips, updatedClip].sort((a, b) => a.start - b.start)
+              };
+            }
+            return t;
+          });
+
+          const nextDuration = recomputeProjectDuration(nextTracks);
+
+          setState({
+            tracks: nextTracks,
+            project: { duration: nextDuration },
+            selection: { clipId: activeClipDrag.clipId }
+          });
+
+          if (state.project?.isPlaying && typeof schedulePlaybackDebounce === 'function') {
+            schedulePlaybackDebounce(150);
+          }
+
+          console.info(`[PodcastCraft AI] Clip ${activeClipDrag.clipId} movido a carril ${tgtId} en t=${finalStart}s`);
+        }
+      }
+
+      justFinishedClipDrag = true;
+      setTimeout(() => {
+        justFinishedClipDrag = false;
+      }, 80);
+
+      activeClipDrag = null;
+    };
+
+    const onPointerCancel = () => {
+      cleanupDragListeners();
+      if (!activeClipDrag) return;
+      if (activeClipDrag.snapshotTaken) {
+        undoStack.pop();
+        renderUndoButton();
+      }
+      activeClipDrag.clipEl.style.left = Math.round(timeToPixels(activeClipDrag.initialClipStart)) + 'px';
+      activeClipDrag = null;
+      renderTimelineTracks();
+    };
+
+    clipEl.addEventListener('pointermove', onPointerMove);
+    clipEl.addEventListener('pointerup', onPointerUp);
+    clipEl.addEventListener('pointercancel', onPointerCancel);
   });
 
   // Estado de gestos continuos de volumen para un solo snapshot de deshacer (Fase 23)
@@ -4135,8 +4413,30 @@ function bindTimelineEvents() {
     activeTrackVolumeGestures.clear();
   });
 
-  // 6. Atajos de teclado globales (Sprint 4 — 6, Fase 15, Fase 16)
+  // 6. Atajos de teclado globales (Sprint 4 — 6, Fase 15, Fase 16, Fase 24)
   document.addEventListener('keydown', (e) => {
+    // Escape: cancela arrastre de clip en curso (Fase 24)
+    if (e.key === 'Escape' && activeClipDrag) {
+      if (activeClipDrag.clipEl && activeClipDrag.clipEl.hasPointerCapture && activeClipDrag.clipEl.hasPointerCapture(activeClipDrag.pointerId)) {
+        try {
+          activeClipDrag.clipEl.releasePointerCapture(activeClipDrag.pointerId);
+        } catch (_) {}
+      }
+      document.body.classList.remove('is-clip-dragging');
+      if (activeClipDrag.clipEl) {
+        activeClipDrag.clipEl.classList.remove('is-dragging-clip');
+        activeClipDrag.clipEl.style.left = Math.round(timeToPixels(activeClipDrag.initialClipStart)) + 'px';
+      }
+      $$('.timeline-lane').forEach((l) => l.classList.remove('lane-dragover'));
+      if (activeClipDrag.snapshotTaken) {
+        undoStack.pop();
+        renderUndoButton();
+      }
+      activeClipDrag = null;
+      renderTimelineTracks();
+      return;
+    }
+
     // Guardia de campo editable: si el usuario está en un input, textarea o contentEditable
     const activeTag = document.activeElement ? document.activeElement.tagName : '';
     const isEditable = activeTag === 'INPUT' || activeTag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable);

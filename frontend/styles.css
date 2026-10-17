@@ -528,15 +528,33 @@ input[type="range"]:focus-visible::-moz-range-thumb {
 .timeline-clip {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   touch-action: none;
+  cursor: grab;
 }
 .timeline-clip:hover {
   filter: brightness(1.08);
+}
+.timeline-clip:active {
+  cursor: grabbing;
+}
+.timeline-clip.is-dragging-clip {
+  cursor: grabbing !important;
+  opacity: 0.85;
+  z-index: 50 !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+  transform: scale(1.02);
+  transition: none !important;
 }
 .timeline-clip.is-selected {
   border-color: var(--text-primary) !important;
   box-shadow: 0 0 0 2px var(--text-primary), 0 4px 12px rgba(0, 0, 0, 0.3) !important;
   transform: scale(1.02);
   z-index: 25 !important;
+}
+body.is-clip-dragging,
+body.is-clip-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 /* Asas de recorte (Trim Handles) */
