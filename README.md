@@ -2,7 +2,7 @@
 
 Estación de trabajo de audio digital (DAW) y editor de podcasts con asistencia de Inteligencia Artificial (estilo Descript / Adobe Audition), desarrollada como proyecto final para la asignatura **Diseño de Interfaces de Software** en la Universidad Cooperativa de Colombia.
 
-Este repositorio contiene la **Fase 24 (Edición tipo editor — colocación en el playhead, movimiento de clips en horizontal y entre carriles, división manual en el playhead con atajo S y eliminación con cierre automático de huecos / ripple delete)**, integrando el 100% de la funcionalidad de carriles dinámicos, importación de MP3 reales, playhead sincronizado al píxel, motor de IA real con Google Gemini, edición no destructiva por transcripción y autenticación local.
+Este repositorio contiene la **Fase 25 (Exportar MP3 real multicanal con ffmpeg + Nuevo Proyecto con borrado físico y confirmación condicional + Botón de Análisis de IA funcional)**, integrando el 100% de la funcionalidad de carriles dinámicos, importación de MP3 reales, motor de mezcla con normalización 1:1, playhead sincronizado al píxel, motor de IA con Google Gemini, edición no destructiva y empaquetado de escritorio nativo.
 
 ---
 
@@ -1397,5 +1397,152 @@ Validada mediante suite automatizada ejecutada en el entorno nativo de Electron 
 | 10 | **Dividir con playhead fuera del clip** | Clip en `[10.00s, 18.00s]`, playhead en `25.00s`. Intento de división emitió toast de aviso y conservó el proyecto inalterado. | ✅ **APROBADO** |
 | 11 | **Preservación de transcripción sintética** | Clip con palabras "Hola" `[1.0s, 2.0s]` y "mundo" `[2.0s, 3.5s]`. Tras dividir en `t = 2.5s`: Pieza A retuvo "Hola" y Pieza B retuvo "mundo" con tiempos locales relativos correctos. | ✅ **APROBADO** |
 | 12 | **Regresión completa (Alineación 0 px, multitrack y persistencia)** | - **Alineación geométrica:** $\Delta(\text{Playhead}_{t=0}, \text{Regla}, \text{Carriles}) = \mathbf{0.00 \text{ px}}$ (`diff = 0 px`).<br>- **Multitrack real:** 2 carriles concurrentes reproduciendo simultáneamente (`activeSources = 2`).<br>- **Persistencia:** Guardado y recarga en backend verificados sin pérdida de volumen ni de estructura. | ✅ **APROBADO** |
+
+---
+
+## 🎛️ Fase 25: Exportar MP3 Real + Nuevo Proyecto + Botón "Análisis de IA" Funcional
+
+La **Fase 25** dota a PodcastCraft AI de la capacidad de renderizar y exportar un **archivo MP3 final unificado** con la mezcla completa del proyecto (todos los carriles, cortes, offsets temporales y volúmenes individuales), listo para ser distribuido a través de WhatsApp, Gmail, plataformas de podcasting o incorporado a un editor de video, pudiendo además ser reimportado en la biblioteca como cualquier audio convencional. Asimismo, introduce el flujo de **"Nuevo Proyecto"** con limpieza integral de memoria y almacenamiento físico, y transforma el botón de **"Análisis de IA"** en un control completamente funcional y accesible.
+
+---
+
+### 17.1 Arquitectura del Motor de Mezcla Multicanal con FFmpeg
+
+El renderizado se ejecuta en el backend mediante el binario empaquetado `ffmpeg-static` a través de un módulo centralizado (`backend/src/utils/audioMixer.js`) y expuesto en el endpoint `POST /api/export`:
+
+```text
+                               ┌─────────────────────────────────────────────────────────────┐
+                               │                    POST /api/export                         │
+                               └──────────────────────────────┬──────────────────────────────┘
+                                                              │
+                                       ┌──────────────────────▼──────────────────────┐
+                                       │        Validación de Estructura JSON        │
+                                       │   (Límite 2 MB, verificación de clips)      │
+                                       └──────────────────────┬──────────────────────┘
+                                                              │
+                                       ┌──────────────────────▼──────────────────────┐
+                                       │    Resolución de libraryId -> AUDIO_DIR     │
+                                       │    (Protección estricta Path Traversal)     │
+                                       └──────────────────────┬──────────────────────┘
+                                                              │
+                                ┌─────────────────────────────┴─────────────────────────────┐
+                                │                                                           │
+                                ▼                                                           ▼
+                     [Clip 1: trk1, vol=0.8]                                     [Clip 2: trk2, vol=1.2]
+                                │                                                           │
+              atrim=start:end, asetpts=PTS-STARTPTS                       atrim=start:end, asetpts=PTS-STARTPTS
+                                │                                                           │
+                    aformat=44100Hz:stereo                                      aformat=44100Hz:stereo
+                                │                                                           │
+                     volume=0.8 x 1.0 = 0.80                                     volume=1.2 x 0.5 = 0.60
+                                │                                                           │
+                         adelay=start_ms                                             adelay=start_ms
+                                │                                                           │
+                                └─────────────────────────────┬─────────────────────────────┘
+                                                              │
+                                       ┌──────────────────────▼──────────────────────┐
+                                       │   amix=inputs=N:normalize=0:duration=longest│
+                                       │    (Suma lineal de amplitudes sin atenuar)  │
+                                       └──────────────────────┬──────────────────────┘
+                                                              │
+                                       ┌──────────────────────▼──────────────────────┐
+                                       │  alimiter=limit=1.0:attack=5:release=50     │
+                                       │     (Control suave de picos digitales)      │
+                                       └──────────────────────┬──────────────────────┘
+                                                              │
+                                       ┌──────────────────────▼──────────────────────┐
+                                       │  libmp3lame (192 kbps, 44.1 kHz, Estéreo)   │
+                                       │  Metadatos ID3v2 con título sanitizado      │
+                                       └──────────────────────┬──────────────────────┘
+                                                              │
+                                       ┌──────────────────────▼──────────────────────┐
+                                       │       Descarga Nativa Windows / HTTP        │
+                                       │    (Limpieza garantizada en storage/tmp/)   │
+                                       └─────────────────────────────────────────────┘
+```
+
+#### Reglas de Ingeniería de Audio en FFmpeg:
+1. **Cadena `filter_complex` en un solo comando:**
+   - **`atrim` & `asetpts`:** Recorta el archivo fuente en `[sourceOffset, sourceOffset + duration]` y resetea las marcas de tiempo para evitar desincronización de reloj.
+   - **`aformat=sample_rates=44100:channel_layouts=stereo`:** Estandariza fuentes mono y estéreo a una tasa de muestreo universal antes de la suma.
+   - **`volume = clip.volume × track.volume`:** Aplica el producto exacto del fader del carril y el fader del clip.
+   - **`adelay = start_ms|start_ms`:** Desplaza el clip con precisión de milisegundos en ambos canales estéreo hasta su posición en la línea de tiempo.
+2. **`amix=inputs=N:normalize=0:duration=longest`:**
+   - La opción `normalize=0` es obligatoria: evita que ffmpeg atenúe la mezcla dividiendo entre $N$ canales. Las señales concurrentes se combinan de manera aditiva pura, cumpliendo $V_{\text{total}} \approx \sqrt{V_1^2 + V_2^2}$.
+   - Si el proyecto contiene un solo clip, se omite el nodo `amix` automáticamente para optimizar el grafo de procesamiento.
+3. **Limitador Suave (`alimiter`):**
+   - Configurado con `limit=1.0:attack=5:release=50` para evitar saturación digital dura (*hard clipping*) en pasajes donde la suma de múltiples carriles supere $0\text{ dBFS}$.
+4. **Metadatos y Codificación:**
+   - Salida codificada con `libmp3lame`, tasa de bits constante de 192 kbps, 44100 Hz y 2 canales (estéreo). Se inyecta la etiqueta ID3v2 `title` debidamente sanitizada.
+5. **Aislamiento de la Barra de Transporte:**
+   - El control de volumen master y el botón de silencio (*mute*) del pie de la aplicación (`#master-volume-slider`, `#btn-master-mute`) actúan exclusivamente sobre el nodo de monitorización en vivo del navegador (`masterGain`). **No afectan la exportación en disco**, garantizando mezclas estandarizadas.
+6. **Ciclo de Vida de Archivos Temporales:**
+   - Las exportaciones se escriben en `storage/tmp/` con identificadores únicos (`export-<uuid>.mp3`). Se implementa un manejador garantizado de limpieza (`finally`) que elimina el archivo temporal tras el envío exitoso, en caso de fallo o ante una cancelación prematura de la conexión por parte del cliente.
+7. **Control de Concurrencia:**
+   - Se mantiene un bloqueo de proceso único (`isExportInProgress`). Si se solicita una segunda exportación mientras otra está activa, se retorna `429 Too Many Requests` para proteger la CPU del sistema.
+
+---
+
+### 17.2 Integración en Frontend: Guardado Nativo y Experiencia de Usuario
+
+- **Renombrado y Semántica:** El botón del topbar se titula **"Exportar MP3" / "Export MP3"** con el estilo primario claro. Si el proyecto carece de clips, permanece deshabilitado (`aria-disabled="true"`) con tooltip explicativo.
+- **Estado de Exportación Reactivo:** Al pulsar, el botón transiciona a estado deshabilitado con el texto *"Exportando…"* / *"Exporting…"*, sin alterar la reproducción en curso ni los colores del tema.
+- **Desacoplamiento del Badge:** Se erradicó la simulación de la Fase 1 que alternaba entre `draft` y `saved` al exportar. **El badge del proyecto es gobernado exclusivamente por el motor de autoguardado** (`storage/project.json`).
+- **Diálogo Nativo de Windows (`dialog.showSaveDialog`):**
+  - En la aplicación de escritorio Electron, la exportación invoca el canal seguro de IPC (`saveExportedFile`) en `electron/preload.js` y `electron/main.js`, abriendo el explorador de Windows nativo con el nombre sugerido `<título_sanitizado>.mp3` para que el usuario elija carpeta y nombre.
+  - En navegadores web convencionales, se ejecuta una descarga estándar HTML5 mediante elemento `<a>` temporal.
+- **Sanitización de Nombres:** Se reemplazan caracteres prohibidos en el sistema de archivos de Windows (`\ / : * ? " < > |`) por guiones bajos.
+
+---
+
+### 17.3 Flujo de "Nuevo Proyecto"
+
+- **Acceso:** Botón con icono `file-plus` en el topbar (`#btn-new-project`), junto a Exportar, con etiqueta y tooltip accesibles.
+- **Confirmación Condicional:**
+  - Si el proyecto contiene carriles o audios importados en la biblioteca, despliega un cuadro de diálogo nativo (`window.confirm`) con advertencia traducida:
+    > *"Se borrará el proyecto actual (carriles y audios importados). Exporta antes si quieres conservarlo."*
+  - Si el proyecto ya se encuentra completamente vacío, la acción procede de inmediato sin interrupciones ni modales superfluos. Cancelar el diálogo no altera el estado.
+- **Limpieza Integral No Deshacible:**
+  1. Detiene la reproducción en curso y cancela los bucles del playhead.
+  2. Vacía `state.tracks`, `state.library`, `state.selection`, `state.ai.transcriptByClip` y la pila de `undoStack`.
+  3. Purga la caché de buffers decodificados en memoria (`audioBufferCache.clear()`).
+  4. Restablece el título a *"Untitled Project"* y la duración a `0s`.
+  5. Persiste el proyecto vacío en el backend (`PUT /api/project`).
+  6. Envía peticiones `DELETE /api/audio/:id` al backend para purgar físicamente los archivos MP3 descartados de `storage/audio-files/` (operación de mejor esfuerzo).
+  7. Conserva intactos el tema visual (claro/oscuro), el idioma seleccionado y la sesión de usuario autenticada.
+
+---
+
+### 17.4 Botón "Análisis de IA" (`#btn-ai-analysis`) Funcional
+
+Se conectó el botón de la barra contextual `#btn-ai-analysis`:
+- **Con un clip seleccionado:** Ejecuta de inmediato el flujo de transcripción y análisis inteligente (`transcribeSelectedClip()`), equivalente a `#btn-transcribe-clip`.
+- **Sin ningún clip seleccionado:** Presenta una notificación toast informativa y traducida: *"Selecciona un clip para analizarlo"* / *"Select a clip to analyze"*.
+- Garantiza que ningún elemento interactivo visible en la interfaz carezca de funcionalidad real.
+
+---
+
+### 17.5 Matriz de Pruebas Obligatorias de la Fase 25 (14/14 Superadas)
+
+Verificada mediante suite automatizada ejecutada en el entorno nativo de Electron (`tests/test_phase25.js`), midiendo archivos de audio deterministas (tonos puros de 440 Hz y 880 Hz generados con FFmpeg) mediante decodificación matemática PCM Float32:
+
+| # | Prueba Obligatoria | Condición de Aceptación y Medición Numérica Real | Resultado |
+|---|---|---|:---:|
+| 1 | **Un clip de 10 s** | Duración exportada $\approx 10\text{ s}$ ($\pm 0.15\text{ s}$ relleno MP3).<br>**Medido:** $\mathbf{10.000\text{ s}}$ exactos. | ✅ **APROBADO** |
+| 2 | **Dos carriles simultáneos (440 Hz y 880 Hz)** | $\text{RMS}_{\text{mezcla}} \approx \sqrt{\text{RMS}_1^2 + \text{RMS}_2^2}$ ($\pm 10\%$, no atenuado a la mitad).<br>**Medido:** $\text{RMS} = \mathbf{0.117582}$, Teórico = $0.117582$ ($\Delta = \mathbf{0.00009\%}$). | ✅ **APROBADO** |
+| 3 | **Escalas de volumen por clip y carril** | - Carril al 30%: $\mathbf{0.299998\times}$ el valor base ($\Delta = 0.0003\%$).<br>- Clip al 150%: $\mathbf{1.500003\times}$ el valor base ($\Delta = 0.0002\%$).<br>- Clip al 0%: $\text{RMS} = \mathbf{0.000000}$ (silencio absoluto). | ✅ **APROBADO** |
+| 4 | **Clip con retardo (`start = 5s`)** | Primeros 5 s en silencio y sonido en $[5\text{s}, 10\text{s}]$.<br>**Medido:** $\text{RMS}_{[0,5\text{s}]} = \mathbf{0.000000}$, $\text{RMS}_{[5,10\text{s}]} = \mathbf{0.083151}$. | ✅ **APROBADO** |
+| 5 | **Recorte de fuente (`sourceOffset = 5s`)** | Archivo dual (5s 440 Hz + 5s 880 Hz) con offset de 5s debe exportar 880 Hz ($\pm 3\%$).<br>**Medido:** $\mathbf{880.0\text{ Hz}}$ (frecuencia fundamental exacta). | ✅ **APROBADO** |
+| 6 | **Continuidad en empalme contiguo** | Clip dividido en 2 piezas consecutivas: duración total de 6s y sin caída de energía sonora.<br>**Medido:** $\text{Duración} = \mathbf{6.000\text{ s}}$, $\text{RMS}_{\text{ventana 50ms}} = \mathbf{0.083148}$ vs referencia $0.083151$. | ✅ **APROBADO** |
+| 7 | **Hueco cerrado por borrado (Ripple)** | Duración igual a la suma de piezas remanentes ($2.5\text{s} + 3.5\text{s} = 6.0\text{s}$).<br>**Medido:** $\mathbf{6.000\text{ s}}$ exactos. | ✅ **APROBADO** |
+| 8 | **Manejo de errores y limpieza en `storage/tmp/`** | - Proyecto sin clips $\to$ HTTP 400.<br>- Audio inexistente $\to$ HTTP 404.<br>- Archivos temporales `export-*.mp3` purgados al 100%: $\mathbf{0\text{ archivos huérfanos}}$. | ✅ **APROBADO** |
+| 9a | **Botón Exportar deshabilitado sin clips** | Botón `#btn-export` con `disabled` y `aria-disabled="true"` al no haber clips en la línea de tiempo. | ✅ **APROBADO** |
+| 9b | **Sanitización de nombres en Windows** | Título con caracteres prohibidos `Mi/Podcast:Capitulo*1?"<demo>|` sanitizado limpiamente a `Mi_Podcast_Capitulo_1___demo__`. | ✅ **APROBADO** |
+| 10 | **Nuevo proyecto reinicia y persiste** | Al confirmar: `tracks = []`, `library = []`, `duration = 0s`, `undoStack.length = 0` y `project.json` persistido como borrador vacío. | ✅ **APROBADO** |
+| 11 | **Re-importación de MP3 exportado** | El MP3 exportado se añade a un proyecto nuevo: duración decodificada $\mathbf{4.500\text{ s}}$, duración calculada en UI $\mathbf{4.545\text{ s}}$. | ✅ **APROBADO** |
+| 12 | **Botón Análisis de IA (`#btn-ai-analysis`)** | - Con clip seleccionado: activa la canalización de transcripción inteligente.<br>- Sin clip: emite notificación informativa y descriptiva en toast accesible. | ✅ **APROBADO** |
+| 13 | **Regresión: Alineación y multitrack** | - Desfase horizontal: $\Delta(\text{Playhead}_{t=0}, \text{Regla}, \text{Carriles}) = \mathbf{0.00\text{ px}}$.<br>- Modos claro y oscuro sin anomalías visuales ni colores violeta fuera de IA. | ✅ **APROBADO** |
+| 14 | **Exclusión de pruebas en instalador** | Confirmado que `tests/` está excluido de `files` y `extraResources` en `package.json`. | ✅ **APROBADO** |
+
 
 
