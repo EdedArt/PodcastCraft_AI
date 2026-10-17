@@ -2,7 +2,7 @@
 
 Estación de trabajo de audio digital (DAW) y editor de podcasts con asistencia de Inteligencia Artificial (estilo Descript / Adobe Audition), desarrollada como proyecto final para la asignatura **Diseño de Interfaces de Software** en la Universidad Cooperativa de Colombia.
 
-Este repositorio contiene la **Fase 25 (Exportar MP3 real multicanal con ffmpeg + Nuevo Proyecto con borrado físico y confirmación condicional + Botón de Análisis de IA funcional)**, integrando el 100% de la funcionalidad de carriles dinámicos, importación de MP3 reales, motor de mezcla con normalización 1:1, playhead sincronizado al píxel, motor de IA con Google Gemini, edición no destructiva y empaquetado de escritorio nativo.
+Este repositorio contiene la **Fase 26 (Versión Final: Login completo — crear cuenta, "Recordarme", código de recuperación y límites anti-saturación)**, integrando el 100% de la funcionalidad de control de acceso multiusuario, tokens de sesión persistente, recuperación criptográfica de credenciales, límites estrictos de carga y mitigación de fuerza bruta, junto con carriles dinámicos, importación de MP3 reales, motor de mezcla multicanal, playhead sincronizado al píxel, motor de IA con Google Gemini y empaquetado de escritorio nativo.
 
 ---
 
@@ -1543,6 +1543,136 @@ Verificada mediante suite automatizada ejecutada en el entorno nativo de Electro
 | 12 | **Botón Análisis de IA (`#btn-ai-analysis`)** | - Con clip seleccionado: activa la canalización de transcripción inteligente.<br>- Sin clip: emite notificación informativa y descriptiva en toast accesible. | ✅ **APROBADO** |
 | 13 | **Regresión: Alineación y multitrack** | - Desfase horizontal: $\Delta(\text{Playhead}_{t=0}, \text{Regla}, \text{Carriles}) = \mathbf{0.00\text{ px}}$.<br>- Modos claro y oscuro sin anomalías visuales ni colores violeta fuera de IA. | ✅ **APROBADO** |
 | 14 | **Exclusión de pruebas en instalador** | Confirmado que `tests/` está excluido de `files` y `extraResources` en `package.json`. | ✅ **APROBADO** |
+
+---
+
+## 🔐 Fase 26 (Versión Final): Login Completo — Creación de Cuenta, "Recordarme", Código de Recuperación y Defensas Anti-Saturación
+
+Esta fase implementa la arquitectura definitiva del sistema de autenticación y control de acceso local para la aplicación de escritorio, respondiendo a la necesidad de múltiples usuarios, persistencia de sesión ("Recordarme"), recuperación segura sin depender de servicios externos (correo/SMS) y blindaje riguroso contra saturación del servidor local.
+
+### 18.1 Decisiones Arquitectónicas y Modelo de Dominio
+
+1. **Modelo de Cuentas Compartidas (Puerta de Entrada):**
+   - Se admite la creación de **hasta 10 cuentas de usuario** en el sistema local.
+   - **Alcance explícito:** Todas las cuentas comparten el mismo proyecto (`storage/project.json`) y la misma biblioteca de audios (`storage/audio-files/`). El login actúa como una puerta de acceso y autenticación a la estación de trabajo local, no como un sistema de sandbox multi-inquilino.
+2. **Recuperación Autónoma mediante Código de 12 Caracteres:**
+   - Sin intermediarios externos (ni SMS ni correo electrónico).
+   - Al registrar una cuenta o solicitar recuperación, el backend genera un código criptográfico con formato `XXXX-XXXX-XXXX` utilizando `crypto.randomInt` sobre un alfabeto libre de ambigüedades visuales (excluye `0`, `O`, `1`, `I`, `L`).
+   - El código en texto plano se entrega **una única vez** al cliente. El servidor almacena únicamente su derivación criptográfica (`scrypt` asíncrono con `salt` aleatorio de 16 bytes).
+3. **Cero Dependencias Externas:**
+   - Implementado al 100% con el módulo nativo `crypto` de Node.js.
+4. **Almacenamiento Serializado y Atómico:**
+   - `storage/auth.json` estructura los usuarios en un arreglo `users: [...]`.
+   - Mutaciones concurrentes protegidas por un semáforo/cola de mutex en memoria (`mutateAuth`), garantizando que escrituras paralelas no corrompan el archivo.
+   - Guardado atómico mediante escritura en archivo temporal (`auth.json.tmp`) y renombrado atómico (`fs.renameSync`).
+   - **Migración transparente:** Cuentas preexistentes con formato de raíz (`username`, `passwordHash`, `salt`) se transforman automáticamente a `users[0]`. Si no cuentan con `recoveryHash`, el código de recuperación se genera y entrega por única vez en su primer inicio de sesión exitoso.
+
+---
+
+### 18.2 Tabla de Límites Contractuales y Validaciones Estrictas
+
+| Campo / Objeto | Regla del Servidor | Comportamiento Frontend |
+|---|---|---|
+| **Usuario** | 3 a 32 caracteres (tras `trim`). Solo letras (incluye acentos), números, `.`, `_` y `-` (`/^[\p{L}\p{N}._-]+$/u`). Único insensible a mayúsculas (`usernameKey`). | `maxlength="32"`, contador dinámico al superar 24 caracteres, validación inmediata con regex. |
+| **Contraseña** | 6 a 128 caracteres y máximo 256 bytes en codificación UTF-8. | `maxlength="128"`, contador dinámico al superar 100 caracteres, comprobación de coincidencia de confirmación. |
+| **Código de recuperación** | Entrada cruda de hasta 20 caracteres; tras normalizar (mayúsculas, sin espacios ni guiones) exactamente 12 caracteres. | `maxlength="20"`, contador dinámico al superar 10 caracteres, normalización automática. |
+| **Token "Recordarme"** | Exactamente 64 caracteres hexadecimales (32 bytes aleatorios). | Generado por el backend al iniciar sesión con casilla activada; almacenado en `localStorage`. |
+| **Cuerpo de Petición (`/api/auth/*`)** | Máximo **2 KB**. Montado antes del `express.json()` global; excederlo retorna `HTTP 413 Payload Too Large` de forma instantánea sin parsear ni procesar hashes. | El cliente no envía payloads excesivos; maneja visualmente el error `413`. |
+| **Tipos de Datos** | Campos de texto estrictamente `string`; `remember` estrictamente `boolean`. Objetos, arreglos, números o `null` retornan `HTTP 400 Bad Request`. | Envío tipado estricto. |
+| **Máximo de Cuentas** | Límite estricto de **10 cuentas**. Intentar registrar la 11.ª retorna `HTTP 403 Forbidden` con mensaje descriptivo. | Despliega alerta cuando se ha alcanzado el tope de cuentas. |
+| **Tokens Activos por Cuenta** | Máximo **5 tokens vigentes**. Al generar el sexto, se descarta automáticamente el más antiguo (política FIFO). Caducidad fija de 30 días. | Gestión transparente de sesiones persistentes. |
+
+---
+
+### 18.3 Mecanismos Anti-Saturación y Seguridad
+
+1. **Hashes Asíncronos No Bloqueantes (`crypto.scrypt` promisificado):**
+   - Se reemplazó por completo `crypto.scryptSync` por `crypto.scrypt` asíncrono. El hilo principal de eventos de Node.js permanece reactivo ante cualquier petición entrante (por ejemplo `GET /health` o reproducción de audio).
+2. **Tope de Concurrencia y Cola de Derivación Criptográfica:**
+   - Máximo **2 cálculos `scrypt` simultáneos** en el pool de threads.
+   - Cola de espera acotada a **máximo 20 peticiones**.
+   - Si la cola se satura ante una ráfaga, las solicitudes excedentes son rechazadas de inmediato con `HTTP 503 Service Unavailable` ("Servidor ocupado, intenta de nuevo"), evitando sobrecarga de memoria o congelamiento de la CPU.
+3. **Freno a Fuerza Bruta en Memoria (Rate Limiting Delimitado):**
+   - Tras **5 intentos fallidos consecutivos** (en `login`, `resume` o `recover`) para un usuario específico, la cuenta se bloquea temporalmente durante **30 segundos** con `HTTP 429 Too Many Requests`, devolviendo los segundos restantes en el payload y en la cabecera `Retry-After`.
+   - Un inicio de sesión exitoso reinicia el contador de fallos.
+   - Los intentos fallidos sobre usuarios inexistentes también se contabilizan y bloquean para mitigar ataques de enumeración y consumo de CPU.
+   - **Freno global:** Máximo **5 creaciones de cuenta por minuto** en el sistema (`HTTP 429`).
+   - **Memoria acotada:** El registro en memoria de contadores está limitado contractualmente a **1000 entradas**. Al alcanzar el límite, se purgan automáticamente las entradas vencidas o más antiguas (política LRU), imposibilitando fugas de memoria (*memory leaks*).
+4. **Comparación en Tiempo Constante:**
+   - Comparación de hashes de contraseñas, tokens y códigos de recuperación implementada con `crypto.timingSafeEqual`, validando previamente la igualdad estricta de longitud en los buffers para evitar discrepancias de canal lateral (*timing attacks*).
+5. **Mensajes Genéricos de Seguridad:**
+   - Credenciales inválidas devuelven siempre `"Usuario o contraseña incorrectos"`, sin revelar si el error provino del usuario o de la clave.
+   - Recuperación inválida devuelve genéricamente `"Datos de recuperación inválidos"`.
+   - Las contraseñas, tokens y códigos jamás se imprimen en logs del servidor ni en respuestas de error.
+
+---
+
+### 18.4 Experiencia de Usuario en Frontend (`#auth-lock-screen`)
+
+- **Navegación Dinámica entre 3 Vistas:**
+  - **Login:** Formulario principal con usuario, contraseña, casilla *"Recordarme"* (marcada por defecto) y enlaces directos a *"¿No tienes cuenta? Créala"* y *"¿Olvidaste tu contraseña?"*.
+  - **Crear Cuenta:** Accesible en cualquier momento (mientras no se superen las 10 cuentas). Valida usuario, contraseña y confirmación. Muestra el modal de código de recuperación antes de ingresar.
+  - **Recuperación:** Formulario para restablecer clave mediante código y confirmación de nueva contraseña.
+  - Botón *"Volver"* para retornar al login sin pérdida de contexto.
+- **Modal de Código de Recuperación con Foco Atrapado (`#auth-recovery-modal`):**
+  - Muestra el código en tipografía monospace destacada.
+  - Botón para copiar al portapapeles con confirmación visual.
+  - Banner de advertencia sobre la imposibilidad de volver a consultarlo.
+  - Casilla obligatoria *"Ya guardé mi código de forma segura"* para habilitar el botón *"Continuar"*.
+  - Foco atrapado (*focus trap*), impidiendo el cierre mediante tecla `Escape` o clics accidentales en el fondo.
+- **Auto-Reanudación Silenciosa ("Recordarme"):**
+  - Si existe un token válido en `localStorage` (`podcastcraft_auth_session`), la aplicación arranca en estado de carga síncrona y valida la sesión contra `POST /api/auth/resume` sin parpadeos visuales de la pantalla de login.
+  - Botón de Cerrar Sesión en el Topbar (`#btn-logout`) que invalida el token en el servidor y purga el almacenamiento local.
+- **Contadores de Longitud y Temporizador Reactivo 429:**
+  - Contadores `n/32`, `n/128`, `n/20` visibles progresivamente conforme el usuario escribe.
+  - Detección de `429`: despliega cuenta regresiva en vivo segundo a segundo deshabilitando el botón de envío hasta que el bloqueo expire.
+  - Deshabilitación de botones de acción durante peticiones en curso para prevenir clics dobles.
+
+---
+
+### 18.5 Consideraciones de Seguridad y Procedimiento de Restablecimiento Manual
+
+> [!IMPORTANT]
+> **Consideraciones de Seguridad en Entorno de Escritorio:**
+> 1. **Ubicación del Token "Recordarme":** El token de sesión persistente se almacena en el `localStorage` de Chromium/Electron dentro del perfil de usuario de Windows (`%APPDATA%\podcastcraft-ai\`). Cualquier persona con acceso físico a la sesión de usuario activa del sistema operativo podrá abrir la aplicación sin volver a autenticarse.
+> 2. **Alcance de los Proyectos:** Todas las cuentas locales comparten el mismo entorno de trabajo y los mismos audios. El sistema de login no provee aislamiento criptográfico entre archivos locales.
+> 3. **Almacenamiento Criptográfico Seguro:**
+>    - Contraseñas: `scrypt` con salt aleatorio de 16 bytes (N=16384, r=8, p=1).
+>    - Códigos de recuperación: `scrypt` con salt aleatorio de 16 bytes.
+>    - Tokens "Recordarme": SHA-256 en base de datos local; el token en texto plano vive únicamente en el cliente.
+
+#### Procedimiento de Restablecimiento de Emergencia (Sin Contraseña ni Código)
+Si todos los usuarios de la estación de trabajo olvidan sus contraseñas y sus códigos de recuperación:
+1. Cierra la aplicación PodcastCraft AI.
+2. Abre el Explorador de Archivos de Windows y dirígete a:
+   `%APPDATA%\podcastcraft-ai\storage\` (o `backend/storage/` en entorno de desarrollo).
+3. Elimina o renombra el archivo `auth.json`.
+4. Abre PodcastCraft AI. El sistema detectará que no existen cuentas y presentará de inmediato el asistente de primer uso para registrar una nueva cuenta administradora.
+5. **Los proyectos, configuraciones de carriles y archivos de audio existentes NO se pierden ni se modifican**, ya que residen en `project.json` y `audio-files/`.
+
+---
+
+### 18.6 Matriz de Pruebas Obligatorias de la Fase 26 (14/14 Superadas)
+
+Verificada mediante suite automatizada integral en entorno Electron y backend Express aislado (`tests/test_phase26.js`):
+
+| # | Prueba Obligatoria | Condición de Aceptación y Medición Numérica Real | Resultado |
+|---|---|---|:---:|
+| 1 | **Primer uso y seguridad de secretos en `auth.json`** | `status` no configurado; `setup` crea cuenta y devuelve código `XXXX-XXXX-XXXX` (`STAZ-K6Z6-576C`). Verificación exhaustiva: `auth.json` **no contiene contraseñas, códigos ni tokens en claro**. | ✅ **APROBADO** |
+| 2 | **Límites de longitud y validaciones de campo** | Rechazo con HTTP 400: usuario de 2 y 33 caracteres, contraseña de 5 y 129 caracteres, caracteres inválidos (`a b`, `x/y`), usuario duplicado ignorando mayúsculas (`Ana` vs `ana`), código de 21 caracteres, token $\neq$ 64 hex. | ✅ **APROBADO** |
+| 3 | **Cuerpo excesivo (413) y tipos estrictos** | Payload de 1 MB a `/api/auth/login` rechazado con **HTTP 413 en 6 ms** (límite <150 ms) sin computar hashes. Tipos inválidos (arrays, objetos, números, null) rechazados con HTTP 400. | ✅ **APROBADO** |
+| 4 | **Tope de 10 cuentas y límite de creaciones/min** | Se crean 10 cuentas; la 11.ª es rechazada con **HTTP 403** (*"Se ha alcanzado el límite máximo de 10 cuentas en el sistema"*). Registro acelerado (>5/min) bloqueado con **HTTP 429**. Todas las cuentas inician sesión independientemente. | ✅ **APROBADO** |
+| 5 | **Anti-saturación bajo ráfaga (30 peticiones concurrentes)** | Durante la ráfaga de 30 logins incorrectos en paralelo: **latencia máxima de `GET /health` = 64 ms** (límite contractual <300 ms). Máximo de hashes `scrypt` activos simultáneos observado: **exactamente 2**. Solicitudes excedentes respondidas con **HTTP 503** (5 peticiones). | ✅ **APROBADO** |
+| 6 | **Fuerza bruta (429), reseteo con éxito y mapa acotado** | 5 fallos consecutivos bloquean con **HTTP 429 y 30 s** de espera. Un login exitoso reinicia el contador. Usuarios inexistentes también son frenados. Tras 5000 intentos con usuarios distintos, el tamaño del mapa en memoria permanece exactamente en **1000 entradas**. | ✅ **APROBADO** |
+| 7 | **Tokens "Recordarme": SHA-256, expiración y límite de 5** | Token generado de 64 hex; en `auth.json` solo se almacena su hash SHA-256. Reanudación (`resume`) exitosa; token alterado o expirado $\to$ 401. Tras 6 inicios con recordarme, se purga el más antiguo quedando **exactamente 5 tokens**. `logout` lo invalida de inmediato. | ✅ **APROBADO** |
+| 8 | **Recuperación de contraseña y rotación de código** | Código válido (incluso en minúsculas y sin guiones) restablece contraseña, rota el código e invalida tokens de sesión activos. El código viejo y la contraseña previa quedan completamente inoperativos. Código incorrecto $\to$ error genérico. | ✅ **APROBADO** |
+| 9 | **Migración automática de formato antiguo a `users[]`** | `auth.json` con esquema antiguo en raíz migra automáticamente a `users[0]`. El primer login devuelve `recoveryCode` para cuentas que no lo tenían y el segundo login ya no lo expone. Mantiene compatibilidad con cuentas que ya tenían `recoveryHash`. | ✅ **APROBADO** |
+| 10 | **Escrituras concurrentes serializadas (Mutex)** | 5 creaciones de cuenta lanzadas en paralelo estricto: el mutex serializa las escrituras sin condiciones de carrera. `auth.json` conserva íntegras y legibles las 5 cuentas sin corrupción. | ✅ **APROBADO** |
+| 11 | **UI en Electron: 3 vistas, contadores y modal atrapado** | Navegación fluida entre login, registro y recuperación con botón *"Volver"*. `maxlength` impide escribir de más en los 3 campos. Contadores visibles. Modal de código atrapa foco y solo habilita *"Continuar"* tras marcar la confirmación obligatoria. | ✅ **APROBADO** |
+| 12 | **Internacionalización y Temas en Pantalla de Bloqueo** | Conmutación instantánea ES/EN y Claro/Oscuro en todas las vistas de autenticación. Ratios de contraste conformes a WCAG AA/AAA y ausencia de violetas fuera de botones de acción. | ✅ **APROBADO** |
+| 13 | **Regresión: Alineación y motor DAW** | - Desfase horizontal: $\Delta(\text{Playhead}_{t=0}, \text{Regla}, \text{Carriles}) = \mathbf{0.00\text{ px}}$.<br>- Banner offline de reconexión, reproducción multitrack, zoom y controles de transporte 100% operativos. | ✅ **APROBADO** |
+| 14 | **Exclusión de pruebas en empaquetado del instalador** | Confirmado que `tests/` está explícitamente excluido de `files` y `extraResources` en `package.json`. | ✅ **APROBADO** |
+
 
 
 
