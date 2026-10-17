@@ -16,10 +16,11 @@ const INITIAL_PROJECT = {
 };
 
 const INITIAL_AUTH = {
-  username: null,
-  passwordHash: null,
-  salt: null
+  users: []
 };
+
+let authWriteQueue = Promise.resolve();
+let authMutex = Promise.resolve();
 
 async function ensureStorageDir() {
   await fs.mkdir(STORAGE_DIR, { recursive: true });
@@ -69,21 +70,25 @@ async function readProject() {
 }
 
 /**
- * Serializa y escribe las credenciales de autenticación de manera atómica.
- * @param {object} data { username, passwordHash, salt }
+ * Serializa y escribe las credenciales de autenticación de manera atómica y serializada.
+ * @param {object} data { users: [...] }
  */
 async function writeAuth(data) {
   await ensureStorageDir();
-  const serialized = JSON.stringify(data, null, 2);
-  await fs.writeFile(AUTH_TMP_FILE, serialized, 'utf8');
-  await fs.rename(AUTH_TMP_FILE, AUTH_FILE);
-  return data;
+  const executeWrite = async () => {
+    const serialized = JSON.stringify(data, null, 2);
+    await fs.writeFile(AUTH_TMP_FILE, serialized, 'utf8');
+    await fs.rename(AUTH_TMP_FILE, AUTH_FILE);
+    return data;
+  };
+
+  authWriteQueue = authWriteQueue.then(executeWrite, executeWrite);
+  return authWriteQueue;
 }
 
 /**
- * Lee storage/auth.json, lo parsea y lo devuelve.
- * Si el archivo no existe, lo crea con valores iniciales nulos y lo devuelve.
- * @returns {Promise<object>}
+ * Lee storage/auth.json, lo parsea, migra automáticamente versiones anteriores y lo devuelve.
+ * @returns {Promise<{ users: Array<object> }>}
  */
 async function readAuth() {
   await ensureStorageDir();
@@ -98,11 +103,56 @@ async function readAuth() {
     throw err;
   }
 
+  let data;
   try {
-    return JSON.parse(content);
+    data = JSON.parse(content);
   } catch (parseErr) {
     throw new Error(`El archivo de autenticación en "${AUTH_FILE}" está corrupto o contiene JSON inválido: ${parseErr.message}`);
   }
+
+  // Migración automática del formato anterior (campos en la raíz: username, passwordHash, salt)
+  if (data && !Array.isArray(data.users)) {
+    if (data.username && data.passwordHash && data.salt) {
+      const migratedUser = {
+        username: data.username,
+        usernameKey: data.username.toLowerCase(),
+        passwordHash: data.passwordHash,
+        salt: data.salt,
+        recoveryHash: data.recoveryHash || null,
+        recoverySalt: data.recoverySalt || null,
+        rememberTokens: Array.isArray(data.rememberTokens) ? data.rememberTokens : []
+      };
+      const migratedData = { users: [migratedUser] };
+      await writeAuth(migratedData);
+      return migratedData;
+    } else {
+      const emptyData = { users: [] };
+      await writeAuth(emptyData);
+      return emptyData;
+    }
+  }
+
+  if (!Array.isArray(data.users)) {
+    data.users = [];
+  }
+
+  return data;
+}
+
+/**
+ * Ejecuta una mutación atómica sobre auth.json garantizando serialización estricta.
+ * @param {Function} mutatorFn Función asíncrona que recibe `auth` y devuelve el auth modificado
+ */
+async function mutateAuth(mutatorFn) {
+  const execute = async () => {
+    const auth = await readAuth();
+    const result = await mutatorFn(auth);
+    const toSave = result !== undefined ? result : auth;
+    await writeAuth(toSave);
+    return toSave;
+  };
+  authMutex = authMutex.then(execute, execute);
+  return authMutex;
 }
 
 module.exports = {
@@ -110,6 +160,7 @@ module.exports = {
   writeProject,
   readAuth,
   writeAuth,
+  mutateAuth,
   STORAGE_DIR,
   AUDIO_DIR,
   TMP_DIR,
