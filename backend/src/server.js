@@ -31,30 +31,43 @@ app.use((req, res, next) => {
 // 2. CORS (abierto para desarrollo local y Electron)
 app.use(cors());
 
-// 3. Parser para cuerpos JSON
+// 3. Parser JSON específico con límite estricto de 2 KB para autenticación (Fase 26)
+// Se monta ANTES del express.json() global para que peticiones excesivas se rechacen con 413 de inmediato
+app.use('/api/auth', express.json({ limit: '2kb' }));
+app.use('/api/auth', (err, req, res, next) => {
+  if (err && (err.status === 413 || err.type === 'entity.too.large')) {
+    return res.status(413).json({ error: 'El tamaño de la petición excede el límite permitido (máximo 2 KB).' });
+  }
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ error: 'Cuerpo JSON inválido o malformado.' });
+  }
+  next(err);
+});
+
+// 4. Parser para cuerpos JSON global
 app.use(express.json());
 
-// 4. Servir archivos de audio como estáticos
+// 5. Servir archivos de audio como estáticos
 app.use('/audio-files', express.static(AUDIO_DIR));
 
-// 5. Endpoint de verificación de salud
+// 6. Endpoint de verificación de salud
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// 6. Rutas de API
+// 7. Rutas de API
 app.use('/api/auth', authRoutes);
 app.use('/api/project', projectRoutes);
 app.use('/api/audio', audioRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/export', exportRoutes);
 
-// 7. Middleware de 404 genérico para rutas no definidas (JSON consistente)
+// 8. Middleware de 404 genérico para rutas no definidas (JSON consistente)
 app.use((req, res) => {
   res.status(404).json({ error: `Ruta no encontrada: ${req.method} ${req.originalUrl}` });
 });
 
-// 8. Middleware de manejo de errores centralizado
+// 9. Middleware de manejo de errores centralizado
 app.use((err, req, res, next) => {
   console.error('[Error no manejado]', err.stack || err.message);
   if (res.headersSent) {
@@ -71,8 +84,8 @@ async function startServer() {
     console.log(`Proyecto cargado desde storage/project.json (${tracksCount} carriles, ${libraryCount} ítems en biblioteca)`);
 
     const authData = await readAuth();
-    const isConfigured = Boolean(authData && authData.username && authData.passwordHash && authData.salt);
-    console.log(`Estado de autenticación local: ${isConfigured ? `Configurado (usuario: "${authData.username}")` : 'Sin configurar (primer uso)'}`);
+    const userCount = Array.isArray(authData.users) ? authData.users.length : 0;
+    console.log(`Estado de autenticación local: ${userCount > 0 ? `Configurado (${userCount} cuenta(s))` : 'Sin configurar (primer uso)'}`);
 
     if (!process.env.GEMINI_API_KEY) {
       console.warn('[Advertencia de IA] GEMINI_API_KEY no configurada — la transcripción con IA no funcionará hasta que se configure .env');
