@@ -93,8 +93,8 @@ async function startServer() {
       console.log(`[IA Gemini] Integración activa con modelo "${process.env.GEMINI_MODEL || 'gemini-3.5-flash'}"`);
     }
 
-    app.listen(PORT, () => {
-      console.log(`PodcastCraft AI backend escuchando en http://localhost:${PORT}`);
+    app.listen(PORT, '127.0.0.1', () => {
+      console.log(`PodcastCraft AI backend escuchando en http://127.0.0.1:${PORT}`);
     });
   } catch (error) {
     console.error(`[Error de arranque] No se pudo inicializar el almacenamiento del proyecto: ${error.message}`);

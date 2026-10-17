@@ -79,38 +79,56 @@ function killBackend() {
 
 /**
  * Sondea el endpoint GET /health hasta que responda 200 OK o expire el timeout.
+ * Implementa un temporizador único sin fugas de sockets y con un margen de 30 segundos.
  */
-function waitForBackend(url, timeoutMs = 15000) {
+function waitForBackend(url, timeoutMs = 30000) {
   const startTime = Date.now();
   return new Promise((resolve, reject) => {
-    function check() {
-      if (isQuitting) {
-        return reject(new Error('Aplicación en proceso de cierre'));
+    let resolved = false;
+    let retryTimer = null;
+
+    function cleanup() {
+      resolved = true;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
       }
+    }
+
+    function check() {
+      if (resolved || isQuitting) return;
 
       const req = http.get(url, (res) => {
+        res.resume(); // Consumir stream inmediatamente para liberar el socket
         if (res.statusCode === 200) {
-          resolve();
+          const elapsed = Date.now() - startTime;
+          cleanup();
+          resolve(elapsed);
         } else {
-          retry();
+          scheduleRetry();
         }
       });
 
       req.on('error', () => {
-        retry();
+        scheduleRetry();
       });
 
-      req.setTimeout(1000, () => {
+      req.setTimeout(2000, () => {
         req.destroy();
-        retry();
+        scheduleRetry();
       });
     }
 
-    function retry() {
+    function scheduleRetry() {
+      if (resolved || isQuitting) return;
       if (Date.now() - startTime > timeoutMs) {
+        cleanup();
         reject(new Error(`El backend no respondió en ${url} tras ${timeoutMs}ms`));
-      } else {
-        setTimeout(check, 200);
+      } else if (!retryTimer) {
+        retryTimer = setTimeout(() => {
+          retryTimer = null;
+          check();
+        }, 200);
       }
     }
 
@@ -139,9 +157,9 @@ async function createWindow() {
   const frontendPath = path.join(__dirname, '..', 'frontend', 'index.html');
 
   try {
-    console.log(`[Electron Main] Esperando backend en ${HEALTH_URL}...`);
-    await waitForBackend(HEALTH_URL, 15000);
-    console.log('[Electron Main] Backend listo. Cargando interfaz...');
+    console.log(`[Electron Main] Esperando backend en ${HEALTH_URL} (timeout máx: 30000ms)...`);
+    const elapsed = await waitForBackend(HEALTH_URL, 30000);
+    console.log(`[Electron Main] Backend listo en ${elapsed}ms. Cargando interfaz...`);
 
     await mainWindow.loadFile(frontendPath);
     mainWindow.show();
