@@ -1,6 +1,7 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const path = require('path');
 const http = require('http');
+const fsPromises = require('fs').promises;
 const { fork, execSync } = require('child_process');
 
 let backendProcess = null;
@@ -160,7 +161,34 @@ async function createWindow() {
   });
 }
 
-// Bloqueo de instancia única para evitar múltiples procesos compitiendo por el puerto 3001
+// Manejo de diálogo nativo de Windows para guardar la exportación MP3 (Fase 25)
+ipcMain.handle('save-exported-file', async (event, payload) => {
+  const { defaultName, buffer } = payload || {};
+  const parentWindow = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+
+  const result = await dialog.showSaveDialog(parentWindow, {
+    title: 'Exportar MP3',
+    defaultPath: defaultName || 'Mi_Podcast.mp3',
+    filters: [
+      { name: 'Audio MP3 (*.mp3)', extensions: ['mp3'] },
+      { name: 'Todos los archivos (*.*)', extensions: ['*'] }
+    ]
+  });
+
+  if (result.canceled || !result.filePath) {
+    return { canceled: true };
+  }
+
+  try {
+    const rawData = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+    await fsPromises.writeFile(result.filePath, rawData);
+    return { success: true, filePath: result.filePath };
+  } catch (writeErr) {
+    console.error('[Electron Main] Error guardando archivo exportado:', writeErr);
+    return { success: false, error: writeErr.message };
+  }
+});
+
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
