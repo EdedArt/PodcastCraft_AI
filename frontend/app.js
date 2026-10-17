@@ -189,6 +189,9 @@ window.PodcastCraft = {
   startPlayheadLoop: () => startPlayheadLoop(),
   saveProjectToBackend: () => saveProjectToBackend(),
   loadProjectFromBackend: () => loadProjectFromBackend(),
+  exportProjectMp3: () => exportProjectMp3(),
+  createNewProject: () => createNewProject(),
+  get isExporting() { return isExporting; },
   scheduleAutoSave: () => scheduleAutoSave(),
   get audioContext() { return getAudioContext(); },
   get audioBufferCache() { return audioBufferCache; },
@@ -1162,6 +1165,55 @@ function renderTopbar() {
   const totalDuration = $('#total-duration');
   if (totalDuration) {
     totalDuration.textContent = formatTime(state.project.duration);
+  }
+
+  // Estado contextual del botón de exportar MP3 (#btn-export) (Fase 25)
+  const btnExport = $('#btn-export');
+  if (btnExport) {
+    const totalClips = state.tracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
+    const exportLabelEl = btnExport.querySelector('span');
+
+    if (isExporting) {
+      btnExport.setAttribute('disabled', 'true');
+      btnExport.setAttribute('aria-disabled', 'true');
+      btnExport.classList.add('opacity-60', 'cursor-not-allowed');
+      btnExport.classList.remove('active:scale-95');
+      const exportingText = typeof t === 'function' ? t('topbar.exporting') : 'Exportando…';
+      if (exportLabelEl) exportLabelEl.textContent = exportingText;
+      btnExport.setAttribute('title', exportingText);
+      btnExport.setAttribute('aria-label', exportingText);
+    } else if (totalClips === 0) {
+      btnExport.setAttribute('disabled', 'true');
+      btnExport.setAttribute('aria-disabled', 'true');
+      btnExport.classList.add('opacity-40', 'cursor-not-allowed');
+      btnExport.classList.remove('active:scale-95');
+      const noClipsText = typeof t === 'function' ? t('topbar.exportNoClips') : 'Agrega al menos un clip al timeline para exportar';
+      const exportText = typeof t === 'function' ? t('topbar.export') : 'Exportar MP3';
+      if (exportLabelEl) exportLabelEl.textContent = exportText;
+      btnExport.setAttribute('title', noClipsText);
+      btnExport.setAttribute('aria-label', noClipsText);
+    } else {
+      btnExport.removeAttribute('disabled');
+      btnExport.removeAttribute('aria-disabled');
+      btnExport.classList.remove('opacity-40', 'opacity-60', 'cursor-not-allowed');
+      btnExport.classList.add('active:scale-95');
+      const exportText = typeof t === 'function' ? t('topbar.export') : 'Exportar MP3';
+      if (exportLabelEl) exportLabelEl.textContent = exportText;
+      const exportTitle = typeof t === 'function' ? t('topbar.exportTitle') : 'Exportar MP3';
+      btnExport.setAttribute('title', exportTitle);
+      btnExport.setAttribute('aria-label', typeof t === 'function' ? t('topbar.exportAria') : 'Exportar mezcla a archivo MP3');
+    }
+  }
+
+  // Botón Nuevo Proyecto (#btn-new-project) (Fase 25)
+  const btnNewProject = $('#btn-new-project');
+  if (btnNewProject) {
+    const newProjText = typeof t === 'function' ? t('topbar.newProject') : 'Nuevo proyecto';
+    const newProjTitle = typeof t === 'function' ? t('topbar.newProjectTitle') : 'Nuevo proyecto';
+    btnNewProject.setAttribute('title', newProjTitle);
+    btnNewProject.setAttribute('aria-label', typeof t === 'function' ? t('topbar.newProjectAria') : 'Crear nuevo proyecto');
+    const labelSpan = btnNewProject.querySelector('span');
+    if (labelSpan) labelSpan.textContent = newProjText;
   }
 }
 
@@ -2339,6 +2391,7 @@ function bindAuthEvents() {
 
 let saveDebounceTimer = null;
 let isSaving = false;
+let isExporting = false;
 
 /**
  * Programa el guardado automático en el backend con un debounce de 1.5s.
@@ -2511,6 +2564,218 @@ async function loadProjectFromBackend() {
       : 'Servidor local no detectado. Los cambios se mantendrán solo durante esta sesión.';
     showImportFeedback(offlineMsg);
   }
+}
+
+/**
+ * Exporta la mezcla multitrack actual como un archivo MP3 estéreo llamando al backend POST /api/export (Fase 25).
+ * El archivo se guarda mediante el diálogo nativo de Windows si está en Electron, o descarga común en navegador.
+ */
+async function exportProjectMp3() {
+  const totalClips = state.tracks.reduce((acc, t) => acc + (t.clips ? t.clips.length : 0), 0);
+  if (totalClips === 0) {
+    const noClipsMsg = typeof t === 'function'
+      ? t('topbar.exportNoClips')
+      : 'Agrega al menos un clip al timeline para exportar';
+    showToast(noClipsMsg, 'warning');
+    return;
+  }
+
+  if (isExporting) return;
+  isExporting = true;
+  renderTopbar();
+
+  try {
+    const payload = {
+      title: state.project.title || 'Mi Podcast',
+      tracks: state.tracks.map((t) => ({
+        volume: typeof t.volume === 'number' ? t.volume : 1,
+        clips: (t.clips || []).map((c) => ({
+          libraryId: c.libraryId,
+          start: c.start,
+          duration: c.duration,
+          sourceOffset: typeof c.sourceOffset === 'number' ? c.sourceOffset : 0,
+          volume: typeof c.volume === 'number' ? c.volume : 1
+        }))
+      }))
+    };
+
+    const res = await fetch(`${API_BASE_URL}/api/export`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.error || `Error HTTP ${res.status}`);
+    }
+
+    // Obtener nombre de archivo sugerido del header o sanitized title
+    const contentDisp = res.headers.get('Content-Disposition') || '';
+    let exportFilename = '';
+    const fnMatch = contentDisp.match(/filename\*?=['"]?(?:UTF-\d['"]*)?([^;\r\n"']*)['"]?/i);
+    if (fnMatch && fnMatch[1]) {
+      try {
+        exportFilename = decodeURIComponent(fnMatch[1]);
+      } catch (_) {
+        exportFilename = fnMatch[1];
+      }
+    }
+    if (!exportFilename) {
+      const rawTitle = state.project.title || 'Mi Podcast';
+      const cleanTitle = rawTitle.replace(/[\\/:*?"<>|\r\n\t]/g, '_').trim() || 'Mi_Podcast';
+      exportFilename = `${cleanTitle}.mp3`;
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+
+    // Guardado nativo mediante diálogo de Windows si corre bajo Electron
+    if (window.electronAPI && typeof window.electronAPI.saveExportedFile === 'function') {
+      const uint8 = new Uint8Array(arrayBuffer);
+      const saveRes = await window.electronAPI.saveExportedFile({
+        defaultName: exportFilename,
+        buffer: uint8
+      });
+
+      if (saveRes && saveRes.canceled) {
+        console.info('[PodcastCraft AI] Exportación cancelada por el usuario en diálogo de guardado.');
+        return;
+      }
+
+      if (saveRes && saveRes.success) {
+        const savedName = saveRes.filePath ? saveRes.filePath.split(/[\\/]/).pop() : exportFilename;
+        const msg = typeof t === 'function'
+          ? t('topbar.exportSuccess', { filename: savedName })
+          : `Mezcla exportada exitosamente: ${savedName}`;
+        showToast(msg, 'success');
+      } else {
+        throw new Error(saveRes?.error || 'No se pudo guardar el archivo en la ruta seleccionada.');
+      }
+    } else {
+      // Descarga estándar en navegador web
+      const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = exportFilename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+
+      const msg = typeof t === 'function'
+        ? t('topbar.exportSuccess', { filename: exportFilename })
+        : `Mezcla exportada exitosamente: ${exportFilename}`;
+      showToast(msg, 'success');
+    }
+  } catch (err) {
+    console.error('[PodcastCraft AI] Error durante la exportación MP3:', err);
+    let errMsg = err.message;
+    if (err.message && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))) {
+      errMsg = typeof t === 'function' ? t('library.backendUnreachable') : 'No se pudo conectar con el servidor local.';
+    }
+    showToast(errMsg, 'error');
+  } finally {
+    isExporting = false;
+    renderTopbar();
+  }
+}
+
+/**
+ * Crea un nuevo proyecto desde cero (Fase 25).
+ * Si hay contenido, solicita confirmación mediante window.confirm traducido.
+ * Al confirmar, detiene reproducción, vacía estado, historial de undo, cachés,
+ * persiste el proyecto vacío en el backend y elimina los archivos físicos importados.
+ */
+async function createNewProject() {
+  const hasTracks = (state.tracks || []).length > 0;
+  const hasLibrary = (state.library || []).length > 0;
+  const hasContent = hasTracks || hasLibrary;
+
+  if (hasContent) {
+    const confirmMsg = typeof t === 'function'
+      ? t('topbar.newProjectConfirm')
+      : 'Se borrará el proyecto actual (carriles y audios importados). Exporta antes si quieres conservarlo.';
+    const ok = window.confirm(confirmMsg);
+    if (!ok) return;
+  }
+
+  // Detener cualquier reproducción en curso
+  if (typeof stopAllAudioSources === 'function') {
+    stopAllAudioSources();
+  }
+  stopPlayheadLoop();
+
+  // Guardar IDs de biblioteca para eliminación en el backend
+  const libraryIdsToDelete = (state.library || []).map((item) => item.id).filter(Boolean);
+
+  // Limpiar caché de AudioBuffers y pila de deshacer
+  audioBufferCache.clear();
+  audioBufferLoadingPromises.clear();
+  undoStack.length = 0;
+  if (typeof updateUndoButtonState === 'function') {
+    updateUndoButtonState();
+  }
+
+  const defaultTitle = typeof t === 'function' ? t('topbar.untitledProject') : 'Mi Podcast';
+
+  // Restablecer estado a vacío
+  setState({
+    project: {
+      title: defaultTitle,
+      status: 'draft',
+      duration: 0,
+      currentTime: 0,
+      isPlaying: false,
+      isMuted: false,
+      volume: 100,
+      zoom: 50
+    },
+    tracks: [],
+    library: [],
+    selection: {
+      trackId: null,
+      clipId: null,
+      libraryId: null
+    },
+    ai: {
+      transcriptByClip: {},
+      isMassCleaning: false
+    }
+  });
+
+  const playheadEl = $('#timeline-playhead');
+  if (playheadEl) {
+    playheadEl.style.transform = 'translateX(0px)';
+  }
+
+  // Persistir proyecto vacío en backend
+  try {
+    await fetch(`${API_BASE_URL}/api/project`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project: { title: defaultTitle, status: 'draft' },
+        library: [],
+        tracks: []
+      })
+    });
+  } catch (err) {
+    console.warn('[PodcastCraft AI] No se pudo guardar el nuevo proyecto en backend:', err.message);
+  }
+
+  // Eliminar audios físicos en storage/audio-files/ (mejor esfuerzo)
+  for (const libId of libraryIdsToDelete) {
+    fetch(`${API_BASE_URL}/api/audio/${encodeURIComponent(libId)}`, {
+      method: 'DELETE'
+    }).catch(() => {});
+  }
+
+  const createdMsg = typeof t === 'function' ? t('topbar.newProjectCreated') : 'Proyecto nuevo creado';
+  showToast(createdMsg, 'success');
+  console.info('[PodcastCraft AI] Nuevo proyecto creado exitosamente.');
 }
 
 
@@ -3109,14 +3374,28 @@ function bindTopbarEvents() {
   const btnAiAnalysis = $('#btn-ai-analysis');
   if (btnAiAnalysis) {
     btnAiAnalysis.addEventListener('click', () => {
-      console.info('[PodcastCraft AI] Análisis de IA solicitado.');
+      if (state.selection?.clipId) {
+        transcribeSelectedClip();
+      } else {
+        const notice = typeof t === 'function'
+          ? t('topbar.aiAnalysisNoClip')
+          : 'Selecciona un clip para analizarlo';
+        showToast(notice, 'info');
+      }
+    });
+  }
+
+  const btnNewProject = $('#btn-new-project');
+  if (btnNewProject) {
+    btnNewProject.addEventListener('click', () => {
+      createNewProject();
     });
   }
 
   const btnExport = $('#btn-export');
   if (btnExport) {
     btnExport.addEventListener('click', async () => {
-      await saveProjectToBackend();
+      await exportProjectMp3();
     });
   }
 
