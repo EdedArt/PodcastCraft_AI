@@ -2,7 +2,7 @@
 
 Estación de trabajo de audio digital (DAW) y editor de podcasts con asistencia de Inteligencia Artificial (estilo Descript / Adobe Audition), desarrollada como proyecto final para la asignatura **Diseño de Interfaces de Software** en la Universidad Cooperativa de Colombia.
 
-Este repositorio contiene la **Fase 20 (Empaquetado de escritorio con Electron, backend embebido autónomo e instalador ejecutable de Windows)**, integrando el 100% de la funcionalidad de carriles dinámicos, importación de MP3 reales, playhead sincronizado al píxel, motor de IA real con Google Gemini, edición no destructiva por transcripción y autenticación local.
+Este repositorio contiene la **Fase 23 (Controles de volumen por clip y por carril, unificación cromática del timeline y motor de mezcla Web Audio en vivo)**, integrando el 100% de la funcionalidad de carriles dinámicos, importación de MP3 reales, playhead sincronizado al píxel, motor de IA real con Google Gemini, edición no destructiva por transcripción y autenticación local.
 
 ---
 
@@ -1213,3 +1213,93 @@ Todas las pruebas exigidas se ejecutaron y validaron mediante automatización en
 | 8 | **No regresión (IA, Ctrl+Z, i18n, tema)** | Sustracción de intervalos por IA intacta; Ctrl+Z restauró clips; etiquetas de transporte *"Mezcla de 2 clips"* y *"Mix of 2 clips"* alternaron correctamente; playhead alineado al píxel. | ✅ **APROBADO** |
 | 9 | **Rendimiento de decodificación (3 MP3 de ~4 min)** | Decodificación asíncrona de 3 archivos reales de ~4 min (254s, 202s y 194s). Tiempo total: **2937 ms** (1142 ms + 924 ms + 871 ms) en segundo plano sin congelar la UI. | ✅ **APROBADO** |
 | 10 | **Terminación limpia de procesos** | Cierre de Electron verificado mediante `Get-Process "*PodcastCraft*", "*electron*"`. Cero procesos huérfanos y puerto `3001` liberado limpiamente. | ✅ **APROBADO** |
+
+---
+
+## 🎛️ 15. Fase 23: Controles de Volumen (por Clip y por Carril) + Unificación Cromática del Timeline
+
+Esta fase completa el control de mezcla sonora y coherencia visual del DAW atendiendo al feedback directo del usuario:
+1. **Unificación cromática de carriles y clips:** Se elimina la rotación multicolor arbitraria; todos los carriles y clips utilizan un único estilo visual consistente (`sky blue`) en modo claro y modo oscuro, respetando rigurosamente la Regla de Oro Cromática (cero violeta/fucsia fuera de IA).
+2. **Control de volumen por carril:** La franja de control lateral izquierda se amplía a 140 px para alojar la papelera de eliminación junto con un control deslizante de volumen de 0% a 200% con lectura numérica del porcentaje en tiempo real.
+3. **Barra contextual de volumen por clip (`#clip-toolbar`):** Barra fija ubicada entre el encabezado del timeline y la regla de tiempo. Al seleccionar un clip, muestra su nombre, slider de volumen (0%–200%) y valor porcentual. En ausencia de selección, conserva su altura fija sin saltos de layout (*zero layout shift*), mostrando el estado deshabilitado con mensaje de guía contextual.
+4. **Respuesta en vivo con Web Audio API:** Modificación de ganancia continua sin interrupciones ni recálculos costosos mediante rampas de audio `setTargetAtTime(v, ctx.currentTime, 0.01)`.
+5. **Historial de deshacer atómico:** Un solo paso de undo (`Ctrl+Z`) por gesto de volumen completo.
+6. **Restablecimiento rápido (doble clic):** Doble clic sobre cualquier slider restaura instantáneamente el volumen al 100% (ganancia unitaria `1.0`).
+
+---
+
+### 15.1 Advertencia de Saturación Digital (Valores > 100%)
+
+> [!WARNING]
+> **Riesgo de Saturación y Distorsión Digital (Clipping):**
+> Los controles de volumen permiten amplificar tanto el clip individual como el carril completo hasta un **200% (ganancia = 2.0)** para rescatar grabaciones con niveles débiles.
+> Sin embargo, si la señal de audio original ya se encuentra normalizada cerca de $0 \text{ dBFS}$, aplicar ganancias superiores al $100\%$ ($> 1.0$) puede provocar recorte (*digital clipping*), saturación armónica y distorsión en la salida maestra. Se recomienda mantener los niveles en o por debajo del $100\%$ a menos que la fuente requiera ganancia de compensación explícita.
+
+---
+
+### 15.2 Especificaciones de Diseño y Accesibilidad
+
+1. **Unificación Cromática y Contraste WCAG AAA:**
+   - Se eliminaron las clases de paleta rotativa (`.track-lane-amber`, `.track-lane-emerald`, etc.) y la constante `TRACK_PALETTE`.
+   - Todos los carriles aplican el fondo semántico unificado `--lane-bg` y borde `--lane-border`.
+   - Todos los clips aplican la clase unificada `.track-clip-default` basada en la gama `sky`:
+     - **Modo Claro:** Fondo `rgb(224 242 254)` (`sky-100`), borde `rgb(56 189 248)` (`sky-400`), texto `rgb(12 74 110)` (`sky-950`). Ratio de contraste medido: **7.77:1** (supera **WCAG AAA** $\ge 7:1$).
+     - **Modo Oscuro:** Fondo `rgba(3, 105, 161, 0.7)` (`sky-700/70`), borde `rgb(56 189 248)` (`sky-400`), texto `rgb(240 249 255)` (`sky-50`). Ratio de contraste medido: **9.95:1** (supera **WCAG AAA** $\ge 7:1$).
+   - Regla de oro cromática: ausencia absoluta de tonos violeta/fucsia en carriles y clips.
+   - Proyectos históricos hidratados desde el backend con `colorIndex` previo se procesan de forma transparente ignorando el atributo al renderizar.
+
+2. **Ensanchamiento de la Franja de Control y Alineación 0 px:**
+   - La variable CSS `--track-control-strip-width` se ajustó contractualmente a **140 px** (antes 48 px) para acomodar holgadamente la papelera, el slider y el texto porcentual sin recortes ni desbordamientos (`scrollWidth === offsetWidth === 140px`).
+   - Se verificó la alineación geométrica mediante `getBoundingClientRect()` en ambos temas (`light`/`dark`) y en ambos idiomas (`es`/`en`):
+     $$\Delta(\text{Playhead}_{t=0}, \text{Regla}_{\text{origen}}, \text{Carriles}_{\text{left}}) = \mathbf{0.00 \text{ px}}$$
+
+3. **Barra Contextual de Clip (`#clip-toolbar`):**
+   - Altura fija de 40 px (`h-10`) con borde inferior para evitar cualquier movimiento vertical del timeline al alternar selecciones.
+   - Con clip activo: foco visible, selector de volumen con accesibilidad completa (`aria-label="Volumen del clip"` / `"Clip volume"`, `role="slider"`, `aria-valuenow`, `aria-valuemin="0"`, `aria-valuemax="200"`).
+   - Sin clip activo: contenedor inerte accesible (`aria-disabled="true"`, slider deshabilitado, texto indicativo neutral).
+   - Espacio derecho despejado preparado para la Fase 24 (botones de Dividir y Eliminar).
+
+4. **Herencia de Volumen:**
+   - Clips nuevos incorporados desde la biblioteca nacen con `volume = 1` (100%).
+   - Al dividir un clip (split con doble clic o atajo), ambas piezas resultantes heredan el valor exacto de `volume` del clip original.
+   - Al ejecutar un corte por transcripción mediante IA, todas las piezas sobrevivientes conservan el `volume` original.
+
+---
+
+### 15.3 Arquitectura de Eventos y Deshacer (Undo / Redo)
+
+1. **Evento `input` (Gesto Continuo):**
+   - Aplica el volumen en vivo en el grafo Web Audio a través de `gainNode.gain.setTargetAtTime(target, ctx.currentTime, 0.01)`.
+   - Actualiza de forma reactiva la etiqueta porcentual en el DOM.
+   - **Cero llamadas a `setState`:** No dispara ciclos de renderizado completo durante el arrastre, evitando pausas en el hilo principal.
+
+2. **Evento `change` (Finalización del Gesto):**
+   - Ejecuta un único `setState()` con el valor final consolidado para persistirlo en el estado del proyecto.
+
+3. **Captura Atómica de Undo:**
+   - Al iniciar la interacción física (`pointerdown` o `keydown`), se registra el snapshot del estado previo si aún no se había capturado.
+   - Al soltar el control (`change`), dicho snapshot se encola en la pila de deshacer con la acción `"Ajustar volumen"`.
+   - Resultado: **un gesto de deslizamiento completo equivale exactamente a un paso de `Ctrl+Z`**.
+
+4. **Sincronización en Undo:**
+   - Si el audio se encuentra en reproducción y se presiona `Ctrl+Z`, la función de restauración actualiza de inmediato los nodos `AudioParam` de los carriles y clips correspondientes para reflejar el volumen restaurado sin necesidad de reiniciar la reproducción.
+
+---
+
+### 15.4 Matriz de Pruebas Obligatorias de la Fase 23 (10/10 Superadas)
+
+Validada mediante suite automatizada sobre Electron con archivos de audio MP3 reales (`test_phase23.js`):
+
+| # | Prueba Obligatoria | Condición y Valores Reales Medidos | Resultado |
+|---|---|---|:---:|
+| 1 | **Mezcla multitrack (Voz + Música) y baja de volumen en vivo a 30%** | Música y voz sonando concurrentemente (`activeSources: 2`). Volumen de carril de música bajado a 30% mientras suena: `musicGain.value` cambió de **1.0 a 0.30**; `voiceGain.value` se mantuvo inalterado en **1.0**. | ✅ **APROBADO** |
+| 2 | **Aumento de volumen de clip a 150%** | Clip de voz incrementado a 150%: `clipGain.value` alcanzó exactamente **1.50** en el grafo Web Audio en tiempo real. | ✅ **APROBADO** |
+| 3 | **Silencio absoluto al 0% (Clip y Carril)** | Clip ajustado a 0% $\rightarrow$ `clipGain.value = 0.00`. Carril ajustado a 0% $\rightarrow$ `trackGain.value = 0.00`. Silencio total confirmado sin artefactos. | ✅ **APROBADO** |
+| 4 | **Herencia de volumen en split (50%)** | Clip con volumen al 50% dividido en 2: **Pieza 1 = 0.50**, **Pieza 2 = 0.50**. | ✅ **APROBADO** |
+| 5 | **Deshacer atómico (Ctrl+Z en 1 solo paso)** | Slider deslizado continuamente a 180%. Un solo `Ctrl+Z` restauró el volumen exactamente a **1.0 (100%)**. | ✅ **APROBADO** |
+| 6 | **Persistencia completa en backend (PUT/GET)** | Carril guardado con 75% y clip con 125%. Tras recarga completa del proyecto desde `/api/project`: `track.volume = 0.75`, `clip.volume = 1.25`. | ✅ **APROBADO** |
+| 7 | **Unificación cromática sin rotación ni violeta/fucsia + Contraste AAA** | Cero clases rotativas ni violeta/fucsia. Ratios de contraste reales: Claro = **7.77:1** (WCAG AAA); Oscuro = **9.95:1** (WCAG AAA). | ✅ **APROBADO** |
+| 8 | **Alineación geométrica a 0 px en ambos temas y lenguajes** | `light_es`: Diff = **0.00 px** (Playhead: 410px, Regla: 410px, Carril: 410px)<br>`light_en`: Diff = **0.00 px** (Playhead: 410px, Regla: 410px, Carril: 410px)<br>`dark_es`: Diff = **0.00 px** (Playhead: 410px, Regla: 410px, Carril: 410px)<br>`dark_en`: Diff = **0.00 px** (Playhead: 410px, Regla: 410px, Carril: 410px) | ✅ **APROBADO** |
+| 9 | **Franja ensanchada (140 px) sin recorte de textos en ES/EN** | `offsetWidth = 140.00 px`, `scrollWidth = 140.00 px` en español e inglés. Cero desbordamiento y lectura completa de porcentajes. | ✅ **APROBADO** |
+| 10 | **No regresión (Corte IA, continuidad y playhead)** | Corte por transcripción dividió en piezas continuas con herencia de volumen (**0.85**). Playhead y transporte sincronizados. | ✅ **APROBADO** |
+
