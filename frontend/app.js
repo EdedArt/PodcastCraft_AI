@@ -4680,17 +4680,112 @@ function deleteSelectedClip(options = { ripple: true }) {
  * recorte por asas, renombrado in situ y borrado.
  */
 function bindTimelineEvents() {
-  // 0. Scrubbing en regla de tiempo (#timeline-ruler) — Sprint 5
+  // 0. Scrubbing fluido en regla de tiempo (#timeline-ruler) y agarre directo del playhead (Fase 27)
   const ruler = $('#timeline-ruler');
+  const playhead = $('#timeline-playhead');
+  const currentTimeEl = $('#current-time');
+
+  let isScrubbing = false;
+  let scrubRafId = null;
+  let pendingScrubTime = 0;
+  let lastPointerMoveTime = 0;
+  let wasPlayingBeforeScrub = false;
+
+  function getTimeFromPointerEvent(e) {
+    const scaleEl = $('#timeline-ruler-scale') || ruler;
+    if (!scaleEl) return 0;
+    const rect = scaleEl.getBoundingClientRect();
+    const pixelX = Math.max(0, e.clientX - rect.left);
+    const targetSeconds = pixelsToTime(pixelX);
+    const maxDuration = state.project.duration > 0 ? state.project.duration : Infinity;
+    return clamp(targetSeconds, 0, maxDuration);
+  }
+
+  function scheduleScrubVisualUpdate(targetTime, moveTimestamp) {
+    pendingScrubTime = targetTime;
+    lastPointerMoveTime = moveTimestamp || performance.now();
+    if (scrubRafId !== null) return;
+
+    scrubRafId = requestAnimationFrame(() => {
+      const renderTimestamp = performance.now();
+      const latencyMs = Math.round((renderTimestamp - lastPointerMoveTime) * 100) / 100;
+      window.PodcastCraftPlayheadLatencyMs = latencyMs;
+
+      const px = timeToPixels(pendingScrubTime);
+      const playheadEl = $('#timeline-playhead');
+      if (playheadEl) {
+        playheadEl.style.transform = `translateX(${px}px)`;
+      }
+      if (currentTimeEl) {
+        currentTimeEl.textContent = formatTime(pendingScrubTime);
+      }
+      scrubRafId = null;
+    });
+  }
+
+  function handleScrubStart(e, captureTarget) {
+    if (e.button !== 0) return;
+    isScrubbing = true;
+    wasPlayingBeforeScrub = Boolean(state.project.isPlaying);
+    if (wasPlayingBeforeScrub) {
+      pausePlayback();
+    }
+
+    try {
+      if (captureTarget && typeof captureTarget.setPointerCapture === 'function') {
+        captureTarget.setPointerCapture(e.pointerId);
+      }
+    } catch (_) {}
+
+    const targetTime = getTimeFromPointerEvent(e);
+    scheduleScrubVisualUpdate(targetTime, performance.now());
+  }
+
+  function handleScrubMove(e) {
+    if (!isScrubbing) return;
+    const targetTime = getTimeFromPointerEvent(e);
+    scheduleScrubVisualUpdate(targetTime, performance.now());
+  }
+
+  function handleScrubEnd(e, captureTarget) {
+    if (!isScrubbing) return;
+    isScrubbing = false;
+
+    try {
+      if (captureTarget && captureTarget.hasPointerCapture && captureTarget.hasPointerCapture(e.pointerId)) {
+        captureTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch (_) {}
+
+    if (scrubRafId !== null) {
+      cancelAnimationFrame(scrubRafId);
+      scrubRafId = null;
+    }
+
+    const finalTime = getTimeFromPointerEvent(e);
+    seekTo(finalTime);
+
+    if (wasPlayingBeforeScrub) {
+      wasPlayingBeforeScrub = false;
+      startPlayback(finalTime);
+    }
+  }
+
   if (ruler) {
-    ruler.addEventListener('click', (e) => {
-      const scaleEl = $('#timeline-ruler-scale') || ruler;
-      const rect = scaleEl.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      let seconds = pixelsToTime(Math.max(0, clickX));
-      const maxDuration = state.project.duration > 0 ? state.project.duration : Infinity;
-      seconds = clamp(seconds, 0, maxDuration);
-      seekTo(seconds);
+    ruler.addEventListener('pointerdown', (e) => {
+      handleScrubStart(e, ruler);
+    });
+
+    ruler.addEventListener('pointermove', (e) => {
+      handleScrubMove(e);
+    });
+
+    ruler.addEventListener('pointerup', (e) => {
+      handleScrubEnd(e, ruler);
+    });
+
+    ruler.addEventListener('pointercancel', (e) => {
+      handleScrubEnd(e, ruler);
     });
 
     ruler.addEventListener('keydown', (e) => {
@@ -4701,6 +4796,25 @@ function bindTimelineEvents() {
         const nextTime = clamp(state.project.currentTime + delta, 0, maxDur);
         seekTo(nextTime);
       }
+    });
+  }
+
+  if (playhead) {
+    playhead.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      handleScrubStart(e, playhead);
+    });
+
+    playhead.addEventListener('pointermove', (e) => {
+      handleScrubMove(e);
+    });
+
+    playhead.addEventListener('pointerup', (e) => {
+      handleScrubEnd(e, playhead);
+    });
+
+    playhead.addEventListener('pointercancel', (e) => {
+      handleScrubEnd(e, playhead);
     });
   }
 

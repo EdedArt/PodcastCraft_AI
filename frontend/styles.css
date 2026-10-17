@@ -671,10 +671,41 @@ body.is-trimming * {
   width: 2px;
   background: var(--playhead-color);
   box-shadow: 0 0 4px 1px var(--playhead-glow);
-  pointer-events: none;
-  z-index: 30;
+  pointer-events: auto;
+  cursor: ew-resize;
+  z-index: 35;
   transform: translateX(0px);
   will-change: transform;
+  touch-action: none;
+  user-select: none;
+}
+
+/* Área de agarre invisible de 16px sobre toda la línea del playhead (7px izquierda + 2px línea + 7px derecha) (Fase 27) */
+#timeline-playhead::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -7px;
+  width: 16px;
+  background: transparent;
+  cursor: ew-resize;
+  pointer-events: auto;
+}
+
+/* Cabeza visible del playhead con área de agarre ensanchada (~16px) y cursor grab (Fase 27) */
+#timeline-playhead::after {
+  content: '';
+  position: absolute;
+  top: 0px;
+  left: -7px;
+  width: 16px;
+  height: 14px;
+  background: var(--playhead-color, #ef4444);
+  clip-path: polygon(0% 0%, 100% 0%, 50% 100%);
+  cursor: grab;
+  pointer-events: auto;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
 }
 
 /* ==========================================================================
