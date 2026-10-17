@@ -2376,6 +2376,7 @@ async function initAuth() {
     try {
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sessionData));
     } catch (_) {}
+    document.documentElement.classList.add('has-saved-session');
 
     const loadingBanner = $('#auth-loading-banner');
     const loginForm = $('#auth-login-form');

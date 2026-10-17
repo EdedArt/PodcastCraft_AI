@@ -14,7 +14,7 @@
       document.documentElement.setAttribute('data-theme', theme);
 
       try {
-        var s = localStorage.getItem('podcastcraft-auth-session');
+        var s = localStorage.getItem('podcastcraft_auth_session') || localStorage.getItem('podcastcraft-auth-session');
         if (s) {
           var parsed = JSON.parse(s);
           if (parsed && parsed.token) {
