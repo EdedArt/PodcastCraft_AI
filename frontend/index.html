@@ -80,7 +80,19 @@
           Ingresa tus credenciales para acceder al editor.
         </p>
 
-        <!-- Banner de Error Dinámico (credenciales incorrectas, password corto, etc.) -->
+        <!-- Banner de Cargando Sesión Guardada ("Recordarme") -->
+        <div id="auth-loading-banner" role="status" aria-live="polite" class="hidden mb-4 p-4 rounded-xl text-xs font-medium border bg-violet-500/10 border-violet-500/30 text-violet-700 dark:text-violet-300 flex items-center justify-center gap-3">
+          <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-violet-600 dark:text-violet-400"></i>
+          <span id="auth-loading-text" data-i18n="auth.loadingSession">Verificando sesión guardada...</span>
+        </div>
+
+        <!-- Banner de Éxito Dinámico (recuperación o registro) -->
+        <div id="auth-success-banner" role="status" aria-live="polite" class="hidden mb-4 p-3 rounded-lg text-xs font-medium border bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+          <i data-lucide="check-circle-2" class="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400"></i>
+          <span id="auth-success-text" class="flex-1"></span>
+        </div>
+
+        <!-- Banner de Error Dinámico (credenciales incorrectas, bloqueo 429 con cuenta regresiva, etc.) -->
         <div id="auth-error-banner" role="alert" aria-live="assertive" class="hidden mb-4 p-3 rounded-lg text-xs font-medium border bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400 flex items-center gap-2">
           <i data-lucide="alert-circle" class="w-4 h-4 shrink-0 text-rose-500"></i>
           <span id="auth-error-text" class="flex-1"></span>
@@ -100,12 +112,15 @@
           </button>
         </div>
 
-        <!-- Formulario de Autenticación -->
-        <form id="auth-form" class="space-y-4">
+        <!-- VISTA 1: Formulario de Inicio de Sesión (Login) -->
+        <form id="auth-login-form" class="space-y-4">
           <div>
-            <label for="auth-username" class="block text-xs font-semibold theme-text-primary mb-1.5" data-i18n="auth.username">
-              Usuario
-            </label>
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="auth-username" class="block text-xs font-semibold theme-text-primary" data-i18n="auth.username">
+                Usuario
+              </label>
+              <span id="auth-username-count" aria-live="polite" class="hidden text-[10px] theme-text-secondary font-mono">0/32</span>
+            </div>
             <div class="relative">
               <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                 <i data-lucide="user" class="w-4 h-4"></i>
@@ -115,6 +130,7 @@
                 name="username"
                 type="text"
                 autocomplete="username"
+                maxlength="32"
                 required
                 class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
                 data-i18n-placeholder="auth.usernamePlaceholder"
@@ -124,9 +140,12 @@
           </div>
 
           <div>
-            <label for="auth-password" class="block text-xs font-semibold theme-text-primary mb-1.5" data-i18n="auth.password">
-              Contraseña
-            </label>
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="auth-password" class="block text-xs font-semibold theme-text-primary" data-i18n="auth.password">
+                Contraseña
+              </label>
+              <span id="auth-password-count" aria-live="polite" class="hidden text-[10px] theme-text-secondary font-mono">0/128</span>
+            </div>
             <div class="relative">
               <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                 <i data-lucide="key-round" class="w-4 h-4"></i>
@@ -136,6 +155,7 @@
                 name="password"
                 type="password"
                 autocomplete="current-password"
+                maxlength="128"
                 required
                 minlength="6"
                 class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
@@ -145,17 +165,344 @@
             </div>
           </div>
 
+          <!-- Casilla Recordarme -->
+          <div class="flex items-center justify-between text-xs pt-0.5">
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                id="auth-remember-me"
+                name="remember"
+                type="checkbox"
+                checked
+                class="rounded border-slate-400 text-violet-600 focus:ring-violet-500 w-3.5 h-3.5"
+              >
+              <span class="theme-text-secondary font-medium" data-i18n="auth.rememberMe">Recordarme en este equipo</span>
+            </label>
+          </div>
+
           <button
             id="auth-submit-btn"
             type="submit"
-            class="w-full mt-2 py-2.5 px-4 rounded-lg text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 active:scale-[0.99] transition-all shadow-md shadow-violet-500/25 flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+            class="w-full mt-2 py-2.5 px-4 rounded-lg text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 active:scale-[0.99] transition-all shadow-md shadow-violet-500/25 flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <i id="auth-submit-icon" data-lucide="log-in" class="w-4 h-4"></i>
             <span id="auth-submit-text" data-i18n="auth.login">Iniciar sesión</span>
           </button>
+
+          <!-- Enlaces Secundarios: Crear Cuenta y Recuperar -->
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-2 pt-3 border-t border-slate-200/50 dark:border-slate-800/50 text-xs">
+            <button
+              id="auth-goto-register-btn"
+              type="button"
+              class="text-violet-600 dark:text-violet-400 hover:underline font-semibold py-1 outline-none focus-visible:ring-1 focus-visible:ring-violet-500 rounded"
+              data-i18n="auth.noAccount"
+            >
+              ¿No tienes cuenta? Créala
+            </button>
+            <button
+              id="auth-goto-recover-btn"
+              type="button"
+              class="theme-text-secondary hover:underline py-1 outline-none focus-visible:ring-1 focus-visible:ring-violet-500 rounded"
+              data-i18n="auth.forgotPassword"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          </div>
+        </form>
+
+        <!-- VISTA 2: Formulario de Crear Cuenta (Registro) -->
+        <form id="auth-register-form" class="hidden space-y-4">
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="auth-reg-username" class="block text-xs font-semibold theme-text-primary" data-i18n="auth.username">
+                Usuario
+              </label>
+              <span id="auth-reg-username-count" aria-live="polite" class="hidden text-[10px] theme-text-secondary font-mono">0/32</span>
+            </div>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="user" class="w-4 h-4"></i>
+              </span>
+              <input
+                id="auth-reg-username"
+                name="regUsername"
+                type="text"
+                autocomplete="username"
+                maxlength="32"
+                required
+                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                data-i18n-placeholder="auth.usernamePlaceholder"
+                placeholder="Ej. podcaster"
+              >
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="auth-reg-password" class="block text-xs font-semibold theme-text-primary" data-i18n="auth.password">
+                Contraseña
+              </label>
+              <span id="auth-reg-password-count" aria-live="polite" class="hidden text-[10px] theme-text-secondary font-mono">0/128</span>
+            </div>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="key-round" class="w-4 h-4"></i>
+              </span>
+              <input
+                id="auth-reg-password"
+                name="regPassword"
+                type="password"
+                autocomplete="new-password"
+                maxlength="128"
+                required
+                minlength="6"
+                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                data-i18n-placeholder="auth.passwordPlaceholder"
+                placeholder="Mínimo 6 caracteres"
+              >
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="auth-reg-confirm" class="block text-xs font-semibold theme-text-primary" data-i18n="auth.confirmPassword">
+                Confirmar contraseña
+              </label>
+              <span id="auth-reg-confirm-count" aria-live="polite" class="hidden text-[10px] theme-text-secondary font-mono">0/128</span>
+            </div>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="check-check" class="w-4 h-4"></i>
+              </span>
+              <input
+                id="auth-reg-confirm"
+                name="regConfirm"
+                type="password"
+                autocomplete="new-password"
+                maxlength="128"
+                required
+                minlength="6"
+                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                data-i18n-placeholder="auth.confirmPasswordPlaceholder"
+                placeholder="Repite la contraseña"
+              >
+            </div>
+          </div>
+
+          <button
+            id="auth-reg-submit-btn"
+            type="submit"
+            class="w-full mt-2 py-2.5 px-4 rounded-lg text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 active:scale-[0.99] transition-all shadow-md shadow-violet-500/25 flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <i id="auth-reg-submit-icon" data-lucide="user-plus" class="w-4 h-4"></i>
+            <span id="auth-reg-submit-text" data-i18n="auth.createAccount">Crear cuenta</span>
+          </button>
+
+          <div class="pt-2 text-center">
+            <button
+              id="auth-reg-back-btn"
+              type="button"
+              class="theme-text-secondary hover:underline text-xs py-1 outline-none focus-visible:ring-1 focus-visible:ring-violet-500 rounded"
+              data-i18n="auth.backToLogin"
+            >
+              Volver al inicio de sesión
+            </button>
+          </div>
+        </form>
+
+        <!-- VISTA 3: Formulario de Recuperación de Contraseña -->
+        <form id="auth-recover-form" class="hidden space-y-4">
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="auth-rec-username" class="block text-xs font-semibold theme-text-primary" data-i18n="auth.username">
+                Usuario
+              </label>
+              <span id="auth-rec-username-count" aria-live="polite" class="hidden text-[10px] theme-text-secondary font-mono">0/32</span>
+            </div>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="user" class="w-4 h-4"></i>
+              </span>
+              <input
+                id="auth-rec-username"
+                name="recUsername"
+                type="text"
+                autocomplete="username"
+                maxlength="32"
+                required
+                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                data-i18n-placeholder="auth.usernamePlaceholder"
+                placeholder="Ej. podcaster"
+              >
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="auth-rec-code" class="block text-xs font-semibold theme-text-primary" data-i18n="auth.recoveryCode">
+                Código de recuperación
+              </label>
+              <span id="auth-rec-code-count" aria-live="polite" class="hidden text-[10px] theme-text-secondary font-mono">0/20</span>
+            </div>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="shield" class="w-4 h-4"></i>
+              </span>
+              <input
+                id="auth-rec-code"
+                name="recCode"
+                type="text"
+                autocomplete="off"
+                maxlength="20"
+                required
+                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-mono font-medium tracking-wider uppercase theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                data-i18n-placeholder="auth.recoveryCodePlaceholder"
+                placeholder="XXXX-XXXX-XXXX"
+              >
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="auth-rec-password" class="block text-xs font-semibold theme-text-primary" data-i18n="auth.newPassword">
+                Nueva contraseña
+              </label>
+              <span id="auth-rec-password-count" aria-live="polite" class="hidden text-[10px] theme-text-secondary font-mono">0/128</span>
+            </div>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="key-round" class="w-4 h-4"></i>
+              </span>
+              <input
+                id="auth-rec-password"
+                name="recPassword"
+                type="password"
+                autocomplete="new-password"
+                maxlength="128"
+                required
+                minlength="6"
+                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                data-i18n-placeholder="auth.newPasswordPlaceholder"
+                placeholder="Mínimo 6 caracteres"
+              >
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="auth-rec-confirm" class="block text-xs font-semibold theme-text-primary" data-i18n="auth.confirmPassword">
+                Confirmar contraseña
+              </label>
+              <span id="auth-rec-confirm-count" aria-live="polite" class="hidden text-[10px] theme-text-secondary font-mono">0/128</span>
+            </div>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="check-check" class="w-4 h-4"></i>
+              </span>
+              <input
+                id="auth-rec-confirm"
+                name="recConfirm"
+                type="password"
+                autocomplete="new-password"
+                maxlength="128"
+                required
+                minlength="6"
+                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                data-i18n-placeholder="auth.confirmPasswordPlaceholder"
+                placeholder="Repite la contraseña"
+              >
+            </div>
+          </div>
+
+          <button
+            id="auth-rec-submit-btn"
+            type="submit"
+            class="w-full mt-2 py-2.5 px-4 rounded-lg text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 active:scale-[0.99] transition-all shadow-md shadow-violet-500/25 flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <i id="auth-rec-submit-icon" data-lucide="rotate-ccw" class="w-4 h-4"></i>
+            <span id="auth-rec-submit-text" data-i18n="auth.resetPassword">Restablecer contraseña</span>
+          </button>
+
+          <div class="pt-2 text-center">
+            <button
+              id="auth-rec-back-btn"
+              type="button"
+              class="theme-text-secondary hover:underline text-xs py-1 outline-none focus-visible:ring-1 focus-visible:ring-violet-500 rounded"
+              data-i18n="auth.backToLogin"
+            >
+              Volver al inicio de sesión
+            </button>
+          </div>
         </form>
       </div>
     </main>
+
+    <!-- Modal del Código de Recuperación (Fase 26) -->
+    <div id="auth-recovery-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm select-none hidden">
+      <div class="theme-panel border rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative space-y-5" role="document">
+        <!-- Encabezado con Icono -->
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-violet-600/10 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+            <i data-lucide="key" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h2 id="auth-modal-title" class="text-base font-bold theme-text-primary" data-i18n="auth.modalTitle">
+              Tu Código de Recuperación
+            </h2>
+            <p class="text-xs theme-text-secondary">PodcastCraft AI Security</p>
+          </div>
+        </div>
+
+        <!-- Aviso de Advertencia -->
+        <div class="p-3 rounded-lg text-xs font-medium border bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 flex items-start gap-2.5">
+          <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5"></i>
+          <span data-i18n="auth.modalWarning">
+            Guárdalo en un lugar seguro. No se volverá a mostrar y lo necesitarás si olvidas tu contraseña.
+          </span>
+        </div>
+
+        <!-- Visualizador del Código Monospace y Botón Copiar -->
+        <div class="space-y-2">
+          <div id="auth-recovery-code-display" class="font-mono text-base sm:text-lg font-bold tracking-widest text-center py-3 px-4 rounded-xl border border-violet-500/30 bg-slate-100 dark:bg-slate-900/80 text-violet-600 dark:text-violet-400 select-all shadow-inner">
+            ---- ---- ----
+          </div>
+          <div class="flex justify-end">
+            <button
+              id="auth-recovery-copy-btn"
+              type="button"
+              class="theme-btn-secondary inline-flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold border active:scale-95 transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+            >
+              <i id="auth-recovery-copy-icon" data-lucide="copy" class="w-3.5 h-3.5"></i>
+              <span id="auth-recovery-copy-text" data-i18n="auth.copyCode">Copiar</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Casilla de Confirmación Requerida -->
+        <div class="pt-2 border-t border-slate-200/50 dark:border-slate-800/50">
+          <label class="flex items-start gap-2.5 cursor-pointer text-xs select-none">
+            <input
+              id="auth-recovery-confirm-check"
+              type="checkbox"
+              class="mt-0.5 rounded border-slate-400 text-violet-600 focus:ring-violet-500 w-4 h-4 shrink-0"
+            >
+            <span class="theme-text-primary font-medium" data-i18n="auth.recoverySavedConfirm">
+              Ya guardé mi código en un lugar seguro
+            </span>
+          </label>
+        </div>
+
+        <!-- Botón Continuar (bloqueado hasta marcar la casilla) -->
+        <button
+          id="auth-recovery-continue-btn"
+          type="button"
+          disabled
+          class="w-full py-2.5 px-4 rounded-lg text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 active:scale-[0.99] transition-all shadow-md shadow-violet-500/25 flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <span data-i18n="auth.continue">Continuar</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
 
     <!-- Footer Discreto -->
     <footer class="w-full max-w-4xl mx-auto py-2 text-center text-[11px] theme-text-secondary opacity-75">

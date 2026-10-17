@@ -2090,15 +2090,22 @@ function toggleTheme() {
 
 
 /* ==========================================================================
-   6.0 LOCAL AUTHENTICATION & LOCK SCREEN (Fase 17)
+   6.0 LOCAL AUTHENTICATION & LOCK SCREEN (Fases 17 & 26)
    ========================================================================== */
+
+const AUTH_STORAGE_KEY = 'podcastcraft_auth_session';
+const USERNAME_REGEX = /^[\p{L}\p{N}._-]+$/u;
 
 const authState = {
   isConfigured: false,
   isAuthenticated: false,
   currentUser: null,
   isChecking: true,
-  offline: false
+  offline: false,
+  currentView: 'login', // 'login' | 'register' | 'recover'
+  rateLimitTimer: null,
+  rateLimitSeconds: 0,
+  recoveryModalCallback: null
 };
 
 window.PodcastCraftAuth = authState;
@@ -2106,13 +2113,168 @@ window.PodcastCraftAuth = authState;
 let appHydrated = false;
 
 /**
+ * Limpia los banners de error y éxito de la pantalla de bloqueo.
+ */
+function clearAuthBanners() {
+  const errorBanner = $('#auth-error-banner');
+  const successBanner = $('#auth-success-banner');
+  if (errorBanner) errorBanner.classList.add('hidden');
+  if (successBanner) successBanner.classList.add('hidden');
+}
+
+/**
+ * Detiene cualquier temporizador de cuenta regresiva por rate-limit (429).
+ */
+function clearRateLimitCountdown() {
+  if (authState.rateLimitTimer) {
+    clearInterval(authState.rateLimitTimer);
+    authState.rateLimitTimer = null;
+  }
+  authState.rateLimitSeconds = 0;
+  setAuthButtonsDisabled(false);
+}
+
+/**
+ * Habilita o deshabilita los botones de envío de los formularios de autenticación.
+ * @param {boolean} disabled
+ */
+function setAuthButtonsDisabled(disabled) {
+  const btns = [
+    $('#auth-submit-btn'),
+    $('#auth-reg-submit-btn'),
+    $('#auth-rec-submit-btn')
+  ];
+  btns.forEach(btn => {
+    if (!btn) return;
+    btn.disabled = disabled;
+    if (disabled) {
+      btn.classList.add('opacity-60', 'cursor-not-allowed');
+    } else {
+      btn.classList.remove('opacity-60', 'cursor-not-allowed');
+    }
+  });
+}
+
+/**
+ * Muestra un mensaje de error en la pantalla de bloqueo, con soporte opcional para cuenta regresiva 429.
+ * @param {string} message
+ * @param {number|null} retryAfterSeconds
+ */
+function showAuthError(message, retryAfterSeconds = null) {
+  const errorBanner = $('#auth-error-banner');
+  const errorText = $('#auth-error-text');
+  const successBanner = $('#auth-success-banner');
+  if (successBanner) successBanner.classList.add('hidden');
+
+  if (errorBanner && errorText) {
+    errorText.textContent = message;
+    errorBanner.classList.remove('hidden');
+    renderIcons();
+  }
+
+  if (typeof retryAfterSeconds === 'number' && retryAfterSeconds > 0) {
+    clearRateLimitCountdown();
+    authState.rateLimitSeconds = retryAfterSeconds;
+    setAuthButtonsDisabled(true);
+
+    const updateCountdown = () => {
+      if (authState.rateLimitSeconds <= 0) {
+        clearRateLimitCountdown();
+        if (errorBanner) errorBanner.classList.add('hidden');
+        return;
+      }
+      const msg = typeof t === 'function'
+        ? t('auth.rateLimitBlocked').replace('{s}', authState.rateLimitSeconds)
+        : `Demasiados intentos fallidos. Intenta de nuevo en ${authState.rateLimitSeconds}s.`;
+      if (errorText) errorText.textContent = msg;
+      authState.rateLimitSeconds--;
+    };
+
+    updateCountdown();
+    authState.rateLimitTimer = setInterval(updateCountdown, 1000);
+  }
+}
+
+/**
+ * Muestra un mensaje de éxito en la pantalla de bloqueo.
+ * @param {string} message
+ */
+function showAuthSuccess(message) {
+  const successBanner = $('#auth-success-banner');
+  const successText = $('#auth-success-text');
+  const errorBanner = $('#auth-error-banner');
+  if (errorBanner) errorBanner.classList.add('hidden');
+
+  if (successBanner && successText) {
+    successText.textContent = message;
+    successBanner.classList.remove('hidden');
+    renderIcons();
+  }
+}
+
+/**
+ * Alterna entre las tres vistas de la pantalla de bloqueo ('login', 'register', 'recover').
+ * @param {'login' | 'register' | 'recover'} view
+ */
+function switchAuthView(view) {
+  authState.currentView = view;
+  clearAuthBanners();
+  clearRateLimitCountdown();
+
+  const loginForm = $('#auth-login-form');
+  const regForm = $('#auth-register-form');
+  const recForm = $('#auth-recover-form');
+  const titleEl = $('#auth-title');
+  const subtitleEl = $('#auth-subtitle');
+  const regBackBtn = $('#auth-reg-back-btn');
+
+  if (loginForm) loginForm.classList.add('hidden');
+  if (regForm) regForm.classList.add('hidden');
+  if (recForm) recForm.classList.add('hidden');
+
+  if (view === 'login') {
+    if (titleEl) titleEl.textContent = typeof t === 'function' ? t('auth.loginTitle') : 'Pantalla de Bloqueo';
+    if (subtitleEl) subtitleEl.textContent = typeof t === 'function' ? t('auth.loginSubtitle') : 'Ingresa tus credenciales para acceder al editor.';
+    if (loginForm) {
+      loginForm.classList.remove('hidden');
+      const u = $('#auth-username');
+      if (u) setTimeout(() => u.focus(), 50);
+    }
+  } else if (view === 'register') {
+    if (titleEl) titleEl.textContent = typeof t === 'function' ? t('auth.setupTitle') : 'Crear Cuenta';
+    if (subtitleEl) subtitleEl.textContent = typeof t === 'function' ? t('auth.setupSubtitle') : 'Crea tu usuario y contraseña de acceso local.';
+    if (regBackBtn) {
+      if (!authState.isConfigured) {
+        regBackBtn.classList.add('hidden');
+      } else {
+        regBackBtn.classList.remove('hidden');
+      }
+    }
+    if (regForm) {
+      regForm.classList.remove('hidden');
+      const u = $('#auth-reg-username');
+      if (u) setTimeout(() => u.focus(), 50);
+    }
+  } else if (view === 'recover') {
+    if (titleEl) titleEl.textContent = typeof t === 'function' ? t('auth.recoverTitle') : 'Recuperar Contraseña';
+    if (subtitleEl) subtitleEl.textContent = typeof t === 'function' ? t('auth.recoverSubtitle') : 'Ingresa tu usuario y tu código de recuperación de 12 caracteres.';
+    if (recForm) {
+      recForm.classList.remove('hidden');
+      const u = $('#auth-rec-username');
+      if (u) setTimeout(() => u.focus(), 50);
+    }
+  }
+
+  renderIcons();
+}
+
+/**
  * Consulta el estado de configuración de la autenticación local en el backend.
  * @returns {Promise<boolean>} Devuelve true si la petición fue exitosa.
  */
 async function checkAuthStatus() {
   authState.isChecking = true;
-  const errorBanner = $('#auth-error-banner');
-  if (errorBanner) errorBanner.classList.add('hidden');
+  clearAuthBanners();
 
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/status`, {
@@ -2128,6 +2290,12 @@ async function checkAuthStatus() {
     authState.isConfigured = Boolean(data.configured);
     authState.offline = false;
     authState.isChecking = false;
+
+    if (!authState.isConfigured) {
+      switchAuthView('register');
+    } else {
+      switchAuthView('login');
+    }
     renderAuthScreen();
     return true;
   } catch (err) {
@@ -2140,76 +2308,161 @@ async function checkAuthStatus() {
 }
 
 /**
+ * Inicializa la autenticación al arrancar la app:
+ * Si existe un token "Recordarme", valida con /api/auth/resume sin parpadeo de pantalla.
+ */
+async function initAuth() {
+  const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+  if (stored) {
+    let parsed = null;
+    try {
+      parsed = JSON.parse(stored);
+    } catch (_) {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    }
+
+    if (parsed && typeof parsed.username === 'string' && typeof parsed.token === 'string') {
+      const loadingBanner = $('#auth-loading-banner');
+      const loginForm = $('#auth-login-form');
+      const regForm = $('#auth-register-form');
+      const recForm = $('#auth-recover-form');
+
+      if (loadingBanner) loadingBanner.classList.remove('hidden');
+      if (loginForm) loginForm.classList.add('hidden');
+      if (regForm) regForm.classList.add('hidden');
+      if (recForm) recForm.classList.add('hidden');
+      renderIcons();
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/auth/resume`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ username: parsed.username, token: parsed.token })
+        });
+
+        if (loadingBanner) loadingBanner.classList.add('hidden');
+
+        if (res.ok) {
+          const data = await res.json();
+          authState.isConfigured = true;
+          await onAuthSuccess(data.username || parsed.username);
+          return;
+        } else {
+          // Token inválido, expirado o revocado: limpiar y mostrar login
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+        }
+      } catch (err) {
+        console.warn('[PodcastCraft AI] Backend no disponible en resume:', err);
+        if (loadingBanner) loadingBanner.classList.add('hidden');
+        authState.offline = true;
+        renderAuthScreen();
+        return;
+      }
+    }
+  }
+
+  await checkAuthStatus();
+}
+
+/**
  * Renderiza los textos, estados e inputs de la pantalla de bloqueo.
  */
 function renderAuthScreen() {
   const lockScreen = $('#auth-lock-screen');
   if (!lockScreen) return;
 
-  const authForm = $('#auth-form');
   const offlineBanner = $('#auth-offline-banner');
-  const errorBanner = $('#auth-error-banner');
-  const titleEl = $('#auth-title');
-  const subtitleEl = $('#auth-subtitle');
-  const submitTextEl = $('#auth-submit-text');
-  const submitIconEl = $('#auth-submit-icon');
 
   if (authState.offline) {
-    if (authForm) authForm.classList.add('hidden');
+    const loginForm = $('#auth-login-form');
+    const regForm = $('#auth-register-form');
+    const recForm = $('#auth-recover-form');
+    const errorBanner = $('#auth-error-banner');
+    const successBanner = $('#auth-success-banner');
+    const loadingBanner = $('#auth-loading-banner');
+
+    if (loginForm) loginForm.classList.add('hidden');
+    if (regForm) regForm.classList.add('hidden');
+    if (recForm) recForm.classList.add('hidden');
     if (errorBanner) errorBanner.classList.add('hidden');
+    if (successBanner) successBanner.classList.add('hidden');
+    if (loadingBanner) loadingBanner.classList.add('hidden');
     if (offlineBanner) offlineBanner.classList.remove('hidden');
     renderIcons();
     return;
   }
 
-  // Backend conectado y activo
   if (offlineBanner) offlineBanner.classList.add('hidden');
-  if (authForm) authForm.classList.remove('hidden');
-
-  if (!authState.isConfigured) {
-    if (titleEl) titleEl.textContent = typeof t === 'function' ? t('auth.setupTitle') : 'Configuración Inicial';
-    if (subtitleEl) subtitleEl.textContent = typeof t === 'function' ? t('auth.setupSubtitle') : 'Crea tu usuario y contraseña de acceso local.';
-    if (submitTextEl) submitTextEl.textContent = typeof t === 'function' ? t('auth.createAccount') : 'Crear cuenta';
-    if (submitIconEl) submitIconEl.setAttribute('data-lucide', 'user-plus');
-  } else {
-    if (titleEl) titleEl.textContent = typeof t === 'function' ? t('auth.loginTitle') : 'Pantalla de Bloqueo';
-    if (subtitleEl) subtitleEl.textContent = typeof t === 'function' ? t('auth.loginSubtitle') : 'Ingresa tus credenciales para acceder al editor.';
-    if (submitTextEl) submitTextEl.textContent = typeof t === 'function' ? t('auth.login') : 'Iniciar sesión';
-    if (submitIconEl) submitIconEl.setAttribute('data-lucide', 'log-in');
-  }
-
-  renderIcons();
+  switchAuthView(authState.currentView);
 }
 
 /**
- * Muestra un mensaje de error en la pantalla de bloqueo.
- * @param {string} message
+ * Muestra el modal del código de recuperación con confirmación obligatoria.
+ * @param {string} code
+ * @param {Function} onConfirm
  */
-function showAuthError(message) {
-  const errorBanner = $('#auth-error-banner');
-  const errorText = $('#auth-error-text');
-  if (errorBanner && errorText) {
-    errorText.textContent = message;
-    errorBanner.classList.remove('hidden');
-    renderIcons();
+function showRecoveryCodeModal(code, onConfirm) {
+  const modal = $('#auth-recovery-modal');
+  const codeDisplay = $('#auth-recovery-code-display');
+  const confirmCheck = $('#auth-recovery-confirm-check');
+  const continueBtn = $('#auth-recovery-continue-btn');
+  const copyText = $('#auth-recovery-copy-text');
+
+  if (!modal || !codeDisplay || !confirmCheck || !continueBtn) {
+    if (typeof onConfirm === 'function') onConfirm();
+    return;
+  }
+
+  codeDisplay.textContent = code;
+  confirmCheck.checked = false;
+  continueBtn.disabled = true;
+  continueBtn.classList.add('opacity-40', 'cursor-not-allowed');
+
+  if (copyText) {
+    copyText.textContent = typeof t === 'function' ? t('auth.copyCode') : 'Copiar';
+  }
+
+  authState.recoveryModalCallback = onConfirm;
+  modal.classList.remove('hidden');
+  renderIcons();
+
+  setTimeout(() => {
+    confirmCheck.focus();
+  }, 50);
+}
+
+/**
+ * Cierra el modal del código de recuperación y ejecuta la acción pendiente.
+ */
+function closeRecoveryCodeModal() {
+  const modal = $('#auth-recovery-modal');
+  if (modal) modal.classList.add('hidden');
+  const callback = authState.recoveryModalCallback;
+  authState.recoveryModalCallback = null;
+  if (typeof callback === 'function') {
+    callback();
   }
 }
 
 /**
- * Procesa el envío del formulario de login o de configuración inicial.
+ * Procesa el envío del formulario de inicio de sesión.
  * @param {Event} e
  */
-async function handleAuthSubmit(e) {
+async function handleLoginSubmit(e) {
   e.preventDefault();
-  const errorBanner = $('#auth-error-banner');
-  if (errorBanner) errorBanner.classList.add('hidden');
+  clearAuthBanners();
 
   const usernameInput = $('#auth-username');
   const passwordInput = $('#auth-password');
+  const rememberInput = $('#auth-remember-me');
   const submitBtn = $('#auth-submit-btn');
 
   const username = usernameInput ? usernameInput.value.trim() : '';
   const password = passwordInput ? passwordInput.value : '';
+  const remember = rememberInput ? rememberInput.checked : false;
 
   if (!username) {
     showAuthError(typeof t === 'function' ? t('auth.usernameRequired') : 'Debes ingresar un nombre de usuario.');
@@ -2217,7 +2470,13 @@ async function handleAuthSubmit(e) {
     return;
   }
 
-  if (!password || password.length < 6) {
+  if (username.length < 3 || username.length > 32 || !USERNAME_REGEX.test(username)) {
+    showAuthError(typeof t === 'function' ? t('auth.invalidCredentials') : 'Usuario o contraseña incorrectos.');
+    if (usernameInput) usernameInput.focus();
+    return;
+  }
+
+  if (!password || password.length < 6 || password.length > 128) {
     showAuthError(typeof t === 'function' ? t('auth.passwordTooShort') : 'La contraseña debe tener al menos 6 caracteres.');
     if (passwordInput) passwordInput.focus();
     return;
@@ -2228,10 +2487,119 @@ async function handleAuthSubmit(e) {
     submitBtn.classList.add('opacity-70', 'cursor-wait');
   }
 
-  const endpoint = !authState.isConfigured ? '/api/auth/setup' : '/api/auth/login';
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ username, password, remember })
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      if (res.status === 413) {
+        showAuthError(typeof t === 'function' ? t('auth.payloadTooLarge') : 'El tamaño de la petición excede el límite permitido (2 KB).');
+      } else if (res.status === 429) {
+        showAuthError(data.error || 'Demasiados intentos.', data.retryAfter || 30);
+      } else if (res.status === 503) {
+        showAuthError(typeof t === 'function' ? t('auth.serverBusy') : 'Servidor ocupado, intenta de nuevo.');
+      } else {
+        showAuthError(data.error || (typeof t === 'function' ? t('auth.invalidCredentials') : 'Usuario o contraseña incorrectos.'));
+      }
+
+      if (passwordInput) {
+        passwordInput.value = '';
+        passwordInput.focus();
+      }
+      return;
+    }
+
+    // Éxito en login
+    if (data.token) {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
+        username: data.username || username,
+        token: data.token
+      }));
+    } else {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    }
+
+    // Si devuelve recoveryCode (cuenta migrada sin código previo), mostrar modal obligatorio
+    if (data.recoveryCode) {
+      showRecoveryCodeModal(data.recoveryCode, async () => {
+        await onAuthSuccess(data.username || username);
+      });
+    } else {
+      await onAuthSuccess(data.username || username);
+    }
+  } catch (err) {
+    console.error('[PodcastCraft AI] Error de red en login:', err);
+    showAuthError(typeof t === 'function' ? t('auth.connectingError') : 'No se pudo conectar con el servidor local para iniciar sesión.');
+  } finally {
+    if (submitBtn && authState.rateLimitSeconds <= 0) {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('opacity-70', 'cursor-wait');
+    }
+  }
+}
+
+/**
+ * Procesa el envío del formulario de creación de cuenta (registro).
+ * @param {Event} e
+ */
+async function handleRegisterSubmit(e) {
+  e.preventDefault();
+  clearAuthBanners();
+
+  const usernameInput = $('#auth-reg-username');
+  const passwordInput = $('#auth-reg-password');
+  const confirmInput = $('#auth-reg-confirm');
+  const submitBtn = $('#auth-reg-submit-btn');
+
+  const username = usernameInput ? usernameInput.value.trim() : '';
+  const password = passwordInput ? passwordInput.value : '';
+  const confirmPassword = confirmInput ? confirmInput.value : '';
+
+  if (!username) {
+    showAuthError(typeof t === 'function' ? t('auth.usernameRequired') : 'Debes ingresar un nombre de usuario.');
+    if (usernameInput) usernameInput.focus();
+    return;
+  }
+
+  if (username.length < 3 || username.length > 32) {
+    showAuthError(typeof t === 'function' ? t('auth.usernameLengthError') : 'El nombre de usuario debe tener entre 3 y 32 caracteres.');
+    if (usernameInput) usernameInput.focus();
+    return;
+  }
+
+  if (!USERNAME_REGEX.test(username)) {
+    showAuthError('El nombre de usuario solo puede contener letras, números, puntos, guiones y guiones bajos.');
+    if (usernameInput) usernameInput.focus();
+    return;
+  }
+
+  if (!password || password.length < 6 || password.length > 128) {
+    showAuthError(typeof t === 'function' ? t('auth.passwordTooShort') : 'La contraseña debe tener al menos 6 caracteres.');
+    if (passwordInput) passwordInput.focus();
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    showAuthError(typeof t === 'function' ? t('auth.passwordsDoNotMatch') : 'Las contraseñas no coinciden.');
+    if (confirmInput) confirmInput.focus();
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.classList.add('opacity-70', 'cursor-wait');
+  }
 
   try {
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const res = await fetch(`${API_BASE_URL}/api/auth/setup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2243,25 +2611,144 @@ async function handleAuthSubmit(e) {
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      const defaultErr = !authState.isConfigured
-        ? (data.error || 'Error al crear la cuenta.')
-        : (typeof t === 'function' ? t('auth.invalidCredentials') : 'Credenciales incorrectas.');
-      showAuthError(data.error || defaultErr);
-      if (passwordInput) {
-        passwordInput.value = '';
-        passwordInput.focus();
+      if (res.status === 413) {
+        showAuthError(typeof t === 'function' ? t('auth.payloadTooLarge') : 'El tamaño de la petición excede el límite permitido (2 KB).');
+      } else if (res.status === 403) {
+        showAuthError(data.error || (typeof t === 'function' ? t('auth.maxAccountsReached') : 'Se ha alcanzado el límite máximo de 10 cuentas.'));
+      } else if (res.status === 429) {
+        showAuthError(data.error || 'Demasiadas cuentas creadas.', data.retryAfter || 60);
+      } else {
+        showAuthError(data.error || 'Error al crear la cuenta.');
       }
       return;
     }
 
-    // Éxito: marcamos autenticación y entramos a la app
+    // Éxito: limpiar formulario de registro y marcar configuración
     authState.isConfigured = true;
-    await onAuthSuccess(data.username || username);
+    if (usernameInput) usernameInput.value = '';
+    if (passwordInput) passwordInput.value = '';
+    if (confirmInput) confirmInput.value = '';
+
+    // Mostrar modal con el código de recuperación generado y luego acceder
+    showRecoveryCodeModal(data.recoveryCode, async () => {
+      await onAuthSuccess(data.username || username);
+    });
   } catch (err) {
-    console.error('[PodcastCraft AI] Error de red en autenticación:', err);
+    console.error('[PodcastCraft AI] Error de red en registro:', err);
     showAuthError(typeof t === 'function' ? t('auth.connectingError') : 'No se pudo conectar con el servidor local para iniciar sesión.');
   } finally {
-    if (submitBtn) {
+    if (submitBtn && authState.rateLimitSeconds <= 0) {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('opacity-70', 'cursor-wait');
+    }
+  }
+}
+
+/**
+ * Procesa el envío del formulario de recuperación de contraseña.
+ * @param {Event} e
+ */
+async function handleRecoverSubmit(e) {
+  e.preventDefault();
+  clearAuthBanners();
+
+  const usernameInput = $('#auth-rec-username');
+  const codeInput = $('#auth-rec-code');
+  const passwordInput = $('#auth-rec-password');
+  const confirmInput = $('#auth-rec-confirm');
+  const submitBtn = $('#auth-rec-submit-btn');
+
+  const username = usernameInput ? usernameInput.value.trim() : '';
+  const recoveryCode = codeInput ? codeInput.value.trim() : '';
+  const newPassword = passwordInput ? passwordInput.value : '';
+  const confirmPassword = confirmInput ? confirmInput.value : '';
+
+  if (!username) {
+    showAuthError(typeof t === 'function' ? t('auth.usernameRequired') : 'Debes ingresar un nombre de usuario.');
+    if (usernameInput) usernameInput.focus();
+    return;
+  }
+
+  if (!recoveryCode) {
+    showAuthError(typeof t === 'function' ? t('auth.recoveryCodeRequired') : 'Debes ingresar el código de recuperación.');
+    if (codeInput) codeInput.focus();
+    return;
+  }
+
+  if (!newPassword || newPassword.length < 6 || newPassword.length > 128) {
+    showAuthError(typeof t === 'function' ? t('auth.passwordTooShort') : 'La contraseña debe tener al menos 6 caracteres.');
+    if (passwordInput) passwordInput.focus();
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    showAuthError(typeof t === 'function' ? t('auth.passwordsDoNotMatch') : 'Las contraseñas no coinciden.');
+    if (confirmInput) confirmInput.focus();
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.classList.add('opacity-70', 'cursor-wait');
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/recover`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ username, recoveryCode, newPassword })
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      if (res.status === 413) {
+        showAuthError(typeof t === 'function' ? t('auth.payloadTooLarge') : 'El tamaño de la petición excede el límite permitido (2 KB).');
+      } else if (res.status === 429) {
+        showAuthError(data.error || 'Demasiados intentos fallidos.', data.retryAfter || 30);
+      } else if (res.status === 503) {
+        showAuthError(typeof t === 'function' ? t('auth.serverBusy') : 'Servidor ocupado, intenta de nuevo.');
+      } else {
+        showAuthError(data.error || 'Datos de recuperación inválidos.');
+      }
+      return;
+    }
+
+    // Éxito: limpiar campos de recuperación
+    if (codeInput) codeInput.value = '';
+    if (passwordInput) passwordInput.value = '';
+    if (confirmInput) confirmInput.value = '';
+
+    // Invalidar token de sesión guardado si coincidía con este usuario
+    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed.username && parsed.username.toLowerCase() === username.toLowerCase()) {
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+        }
+      } catch (_) {}
+    }
+
+    // Mostrar modal con el nuevo código generado tras la rotación
+    showRecoveryCodeModal(data.recoveryCode, () => {
+      switchAuthView('login');
+      const u = $('#auth-username');
+      if (u) {
+        u.value = data.username || username;
+        const p = $('#auth-password');
+        if (p) p.focus();
+      }
+      showAuthSuccess(typeof t === 'function' ? t('auth.recoverySuccessMsg') : 'Contraseña restablecida con éxito. Inicia sesión con tus nuevas credenciales.');
+    });
+  } catch (err) {
+    console.error('[PodcastCraft AI] Error de red en recuperación:', err);
+    showAuthError(typeof t === 'function' ? t('auth.connectingError') : 'No se pudo conectar con el servidor local para iniciar sesión.');
+  } finally {
+    if (submitBtn && authState.rateLimitSeconds <= 0) {
       submitBtn.disabled = false;
       submitBtn.classList.remove('opacity-70', 'cursor-wait');
     }
@@ -2302,9 +2789,9 @@ async function onAuthSuccess(username) {
 }
 
 /**
- * Cierre de sesión voluntario (bloqueo local de pantalla sin reiniciar el backend ni perder estado).
+ * Cierre de sesión voluntario (bloqueo local de pantalla e invalidación opcional del token).
  */
-function logout() {
+async function logout() {
   if (state.project.isPlaying) {
     if (typeof pausePlayback === 'function') {
       pausePlayback();
@@ -2319,6 +2806,22 @@ function logout() {
     }
   }
 
+  // Notificar al backend de la revocación del token "Recordarme" si existe
+  const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+  if (stored) {
+    try {
+      const { username, token } = JSON.parse(stored);
+      fetch(`${API_BASE_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ username, token })
+      }).catch(() => {});
+    } catch (_) {}
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+  }
+
   authState.isAuthenticated = false;
   authState.currentUser = null;
 
@@ -2326,43 +2829,168 @@ function logout() {
   const topbar = $('#topbar');
   const workspace = $('#workspace');
   const transport = $('#transport');
-  const passwordInput = $('#auth-password');
-  const errorBanner = $('#auth-error-banner');
 
   if (topbar) topbar.classList.add('hidden');
   if (workspace) workspace.classList.add('hidden');
   if (transport) transport.classList.add('hidden');
 
-  if (passwordInput) passwordInput.value = '';
-  if (errorBanner) errorBanner.classList.add('hidden');
+  clearAuthBanners();
+  clearRateLimitCountdown();
 
   if (lockScreen) {
     lockScreen.classList.remove('hidden');
-    renderAuthScreen();
-    if (passwordInput) passwordInput.focus();
+    switchAuthView('login');
   }
 
   console.info('[PodcastCraft AI] Sesión cerrada. Pantalla de bloqueo activada.');
 }
 
 /**
- * Vincula los eventos específicos de la pantalla de bloqueo.
+ * Vincula contadores de longitud de caracteres dinámicos (n/max) que aparecen al acercarse al límite.
+ */
+function bindCharacterCounters() {
+  const pairs = [
+    { inputId: '#auth-username', counterId: '#auth-username-count', max: 32, threshold: 24 },
+    { inputId: '#auth-password', counterId: '#auth-password-count', max: 128, threshold: 100 },
+    { inputId: '#auth-reg-username', counterId: '#auth-reg-username-count', max: 32, threshold: 24 },
+    { inputId: '#auth-reg-password', counterId: '#auth-reg-password-count', max: 128, threshold: 100 },
+    { inputId: '#auth-reg-confirm', counterId: '#auth-reg-confirm-count', max: 128, threshold: 100 },
+    { inputId: '#auth-rec-username', counterId: '#auth-rec-username-count', max: 32, threshold: 24 },
+    { inputId: '#auth-rec-code', counterId: '#auth-rec-code-count', max: 20, threshold: 14 },
+    { inputId: '#auth-rec-password', counterId: '#auth-rec-password-count', max: 128, threshold: 100 },
+    { inputId: '#auth-rec-confirm', counterId: '#auth-rec-confirm-count', max: 128, threshold: 100 }
+  ];
+
+  pairs.forEach(({ inputId, counterId, max, threshold }) => {
+    const el = $(inputId);
+    const counter = $(counterId);
+    if (!el || !counter) return;
+
+    const update = () => {
+      const len = el.value.length;
+      if (len >= threshold) {
+        counter.textContent = `${len}/${max}`;
+        counter.classList.remove('hidden');
+      } else {
+        counter.classList.add('hidden');
+      }
+    };
+
+    el.addEventListener('input', update);
+    el.addEventListener('focus', update);
+  });
+}
+
+/**
+ * Vincula los eventos específicos de la pantalla de bloqueo y sus tres vistas.
  */
 function bindAuthEvents() {
-  const authForm = $('#auth-form');
-  if (authForm) {
-    authForm.addEventListener('submit', handleAuthSubmit);
+  // 1. Envío de formularios
+  const loginForm = $('#auth-login-form');
+  if (loginForm) loginForm.addEventListener('submit', handleLoginSubmit);
+
+  const regForm = $('#auth-register-form');
+  if (regForm) regForm.addEventListener('submit', handleRegisterSubmit);
+
+  const recForm = $('#auth-recover-form');
+  if (recForm) recForm.addEventListener('submit', handleRecoverSubmit);
+
+  // 2. Navegación entre vistas
+  const gotoRegBtn = $('#auth-goto-register-btn');
+  if (gotoRegBtn) gotoRegBtn.addEventListener('click', () => switchAuthView('register'));
+
+  const gotoRecBtn = $('#auth-goto-recover-btn');
+  if (gotoRecBtn) gotoRecBtn.addEventListener('click', () => switchAuthView('recover'));
+
+  const regBackBtn = $('#auth-reg-back-btn');
+  if (regBackBtn) regBackBtn.addEventListener('click', () => switchAuthView('login'));
+
+  const recBackBtn = $('#auth-rec-back-btn');
+  if (recBackBtn) recBackBtn.addEventListener('click', () => switchAuthView('login'));
+
+  // 3. Modal de Código de Recuperación
+  const confirmCheck = $('#auth-recovery-confirm-check');
+  const continueBtn = $('#auth-recovery-continue-btn');
+  if (confirmCheck && continueBtn) {
+    confirmCheck.addEventListener('change', () => {
+      continueBtn.disabled = !confirmCheck.checked;
+      if (confirmCheck.checked) {
+        continueBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+      } else {
+        continueBtn.classList.add('opacity-40', 'cursor-not-allowed');
+      }
+    });
   }
 
+  if (continueBtn) {
+    continueBtn.addEventListener('click', () => {
+      if (!continueBtn.disabled) {
+        closeRecoveryCodeModal();
+      }
+    });
+  }
+
+  const copyBtn = $('#auth-recovery-copy-btn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      const codeDisplay = $('#auth-recovery-code-display');
+      const copyText = $('#auth-recovery-copy-text');
+      if (!codeDisplay) return;
+      const code = codeDisplay.textContent.trim();
+      try {
+        await navigator.clipboard.writeText(code);
+        if (copyText) {
+          copyText.textContent = typeof t === 'function' ? t('auth.copied') : '¡Copiado!';
+          setTimeout(() => {
+            if (copyText) copyText.textContent = typeof t === 'function' ? t('auth.copyCode') : 'Copiar';
+          }, 2000);
+        }
+      } catch (err) {
+        console.warn('[PodcastCraft AI] No se pudo copiar al portapapeles:', err);
+      }
+    });
+  }
+
+  // Atrapado de foco en el modal de recuperación (evita salir con tab o cerrar con Escape)
+  const recoveryModal = $('#auth-recovery-modal');
+  if (recoveryModal) {
+    recoveryModal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault(); // No se cierra con Escape hasta confirmar
+      }
+      if (e.key === 'Tab') {
+        const focusables = recoveryModal.querySelectorAll('button:not([disabled]), input:not([disabled])');
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    });
+  }
+
+  // 4. Reintentar conexión
   const retryBtn = $('#auth-retry-btn');
   if (retryBtn) {
     retryBtn.addEventListener('click', async () => {
       retryBtn.classList.add('animate-spin');
-      await checkAuthStatus();
+      await initAuth();
       retryBtn.classList.remove('animate-spin');
     });
   }
 
+  // 5. Botón de Cerrar Sesión en Topbar
+  const topbarLogoutBtn = $('#btn-logout');
+  if (topbarLogoutBtn) {
+    topbarLogoutBtn.addEventListener('click', logout);
+  }
+
+  // 6. Controles de Tema e Idioma en pantalla de bloqueo
   const authThemeToggle = $('#auth-theme-toggle');
   if (authThemeToggle) {
     authThemeToggle.addEventListener('click', toggleTheme);
@@ -2379,8 +3007,12 @@ function bindAuthEvents() {
       if (typeof applyTranslations === 'function') {
         applyTranslations();
       }
+      switchAuthView(authState.currentView);
     });
   }
+
+  // 7. Contadores dinámicos de caracteres
+  bindCharacterCounters();
 }
 
 
@@ -4943,8 +5575,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Fase 17: Verificación de autenticación local antes de dar acceso al workspace
-  await checkAuthStatus();
+  // Fases 17 & 26: Inicialización de autenticación local ("Recordarme" auto-resume o pantalla de bloqueo)
+  await initAuth();
 
-  console.info('[PodcastCraft AI] Fase 17 (Sistema de login local y pantalla de bloqueo) inicializado.');
+  console.info('[PodcastCraft AI] Fase 26 (Sistema de login local multi-cuenta, Recordarme y recuperación) inicializado.');
 });
