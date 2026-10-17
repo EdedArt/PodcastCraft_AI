@@ -596,19 +596,18 @@ body.is-trimming * {
   max-width: var(--track-control-strip-width);
 }
 
-/* Clases de paleta rotativa para carriles */
-.track-lane-sky { background-color: var(--lane-sky-bg); border-color: var(--lane-sky-border); }
-.track-clip-sky { background-color: var(--clip-sky-bg); border-color: var(--clip-sky-border); color: var(--clip-sky-text); }
-.track-lane-amber { background-color: var(--lane-amber-bg); border-color: var(--lane-amber-border); }
-.track-clip-amber { background-color: var(--clip-amber-bg); border-color: var(--clip-amber-border); color: var(--clip-amber-text); }
-.track-lane-emerald { background-color: var(--lane-emerald-bg); border-color: var(--lane-emerald-border); }
-.track-clip-emerald { background-color: var(--clip-emerald-bg); border-color: var(--clip-emerald-border); color: var(--clip-emerald-text); }
-.track-lane-fuchsia { background-color: var(--lane-fuchsia-bg); border-color: var(--lane-fuchsia-border); }
-.track-clip-fuchsia { background-color: var(--clip-fuchsia-bg); border-color: var(--clip-fuchsia-border); color: var(--clip-fuchsia-text); }
-.track-lane-rose { background-color: var(--lane-rose-bg); border-color: var(--lane-rose-border); }
-.track-clip-rose { background-color: var(--clip-rose-bg); border-color: var(--clip-rose-border); color: var(--clip-rose-text); }
-.track-lane-cyan { background-color: var(--lane-cyan-bg); border-color: var(--lane-cyan-border); }
-.track-clip-cyan { background-color: var(--clip-cyan-bg); border-color: var(--clip-cyan-border); color: var(--clip-cyan-text); }
+/* Estilo unificado para todos los carriles y clips (Fase 23 — azul sky sin rotación) */
+.timeline-lane,
+.track-lane-sky {
+  background-color: var(--lane-sky-bg);
+  border-color: var(--lane-sky-border);
+}
+.timeline-clip,
+.track-clip-sky {
+  background-color: var(--clip-sky-bg);
+  border-color: var(--clip-sky-border);
+  color: var(--clip-sky-text);
+}
 
 /* 9. Accesibilidad: Reducción de movimiento */
 @media (prefers-reduced-motion: reduce) {

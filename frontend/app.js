@@ -38,16 +38,11 @@ const PROJECT_STATUS = {
 };
 
 /**
- * Paleta cromática rotativa para carriles dinámicos (Sprint 4).
+ * Paleta cromática unificada para carriles y clips (Fase 23: todos de un solo color).
  * Regla de oro: No incluye violet-500 puro para respetar el color reservado a IA/Play.
  */
 const TRACK_PALETTE = [
-  { lane: 'track-lane-sky',     clip: 'track-clip-sky',     dot: 'bg-sky-500' },
-  { lane: 'track-lane-amber',   clip: 'track-clip-amber',   dot: 'bg-amber-500' },
-  { lane: 'track-lane-emerald', clip: 'track-clip-emerald', dot: 'bg-emerald-500' },
-  { lane: 'track-lane-fuchsia', clip: 'track-clip-fuchsia', dot: 'bg-fuchsia-500' },
-  { lane: 'track-lane-rose',    clip: 'track-clip-rose',    dot: 'bg-rose-500' },
-  { lane: 'track-lane-cyan',    clip: 'track-clip-cyan',    dot: 'bg-cyan-500' }
+  { lane: 'timeline-lane', clip: 'timeline-clip', dot: 'bg-sky-500' }
 ];
 
 /**
@@ -94,7 +89,6 @@ const state = {
   }
 };
 
-let nextColorIndex = 0; // Índice rotativo de color, nunca se decrementa
 
 
 /* ==========================================================================
@@ -966,7 +960,6 @@ function createTrack() {
 
   const newTrack = {
     id: `track-${crypto.randomUUID()}`,
-    colorIndex: (nextColorIndex++) % TRACK_PALETTE.length,
     volume: 1,
     clips: []
   };
@@ -1412,7 +1405,6 @@ function renderTimelineTracks() {
   const emptyLaneText = typeof t === 'function' ? t('timeline.emptyLane') : 'Carril vacío — Arrastra un audio aquí';
 
   const tracksHtml = state.tracks.map((track) => {
-    const palette = TRACK_PALETTE[track.colorIndex % TRACK_PALETTE.length];
     const clips = track.clips || [];
 
     const clipsHtml = clips.map((clip) => {
@@ -1433,7 +1425,7 @@ function renderTimelineTracks() {
           tabindex="0"
           aria-label="${escapeHtml(fullAriaLabel)}"
           title="${escapeHtml(clip.name)} (${formattedDuration}) — ${splitText}"
-          class="timeline-clip absolute top-1.5 bottom-1.5 rounded-md border flex items-center px-2 gap-1 cursor-pointer select-none transition-all duration-100 ${palette.clip} ${isSelected ? 'is-selected' : ''}"
+          class="timeline-clip absolute top-1.5 bottom-1.5 rounded-md border flex items-center px-2 gap-1 cursor-pointer select-none transition-all duration-100 ${isSelected ? 'is-selected' : ''}"
           style="left: ${leftPx}px; width: ${widthPx}px;"
         >
           <!-- Asa de recorte izquierda -->
@@ -1480,7 +1472,7 @@ function renderTimelineTracks() {
         <!-- Zona de Carril / Drop zone -->
         <div
           data-track-id="${track.id}"
-          class="timeline-lane flex-1 min-w-0 h-16 relative rounded-lg border transition-all duration-150 overflow-x-auto overflow-y-hidden ${palette.lane}"
+          class="timeline-lane flex-1 min-w-0 h-16 relative rounded-lg border transition-all duration-150 overflow-x-auto overflow-y-hidden"
         >
           ${clips.length === 0
             ? `<div class="h-full flex items-center justify-center text-xs theme-text-muted italic select-none pointer-events-none px-4">
@@ -2327,11 +2319,6 @@ async function loadProjectFromBackend() {
       // Recomputar duración total del proyecto a partir de los clips cargados
       state.project.duration = recomputeProjectDuration(state.tracks);
 
-      // Ajustar índice de color rotativo para nuevos carriles
-      if (state.tracks.length > 0) {
-        const maxColor = Math.max(...state.tracks.map((t) => t.colorIndex || 0));
-        nextColorIndex = Math.max(maxColor + 1, nextColorIndex);
-      }
 
       // Precarga en segundo plano de todos los buffers decodificados en memoria (Fase 22)
       if (typeof preloadAllLibraryBuffers === 'function') {
