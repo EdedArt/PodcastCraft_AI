@@ -7,6 +7,7 @@ const projectRoutes = require('./routes/project');
 const audioRoutes = require('./routes/audio');
 const authRoutes = require('./routes/auth');
 const aiRoutes = require('./routes/ai');
+const exportRoutes = require('./routes/export');
 
 // Salir limpiamente si el proceso padre (Electron) se desconecta
 process.on('disconnect', () => {
@@ -46,6 +47,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/project', projectRoutes);
 app.use('/api/audio', audioRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/export', exportRoutes);
 
 // 7. Middleware de 404 genérico para rutas no definidas (JSON consistente)
 app.use((req, res) => {
