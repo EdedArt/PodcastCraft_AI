@@ -32,10 +32,10 @@
   <!-- Orden estricto de carga de scripts y estilos -->
   <script src="./vendor/tailwind.js"></script>
   <script src="./tailwind-config.js"></script>
-  <link rel="stylesheet" href="./styles.css?v=16.0">
+  <link rel="stylesheet" href="./styles.css?v=27b.0">
   <script src="./vendor/lucide.min.js"></script>
-  <script src="./i18n.js?v=16.0"></script>
-  <script src="./app.js?v=16.0" defer></script>
+  <script src="./i18n.js?v=27b.0"></script>
+  <script src="./app.js?v=27b.0" defer></script>
 </head>
 <body class="h-full flex flex-col overflow-hidden theme-bg-app theme-text-app font-sans antialiased selection:bg-violet-500/30 selection:text-violet-700">
 
@@ -172,10 +172,22 @@
                 maxlength="128"
                 required
                 minlength="6"
-                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                class="w-full pl-9 pr-10 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
                 data-i18n-placeholder="auth.passwordPlaceholder"
                 placeholder="Mínimo 6 caracteres"
               >
+              <button
+                id="auth-password-toggle"
+                type="button"
+                class="auth-password-toggle absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-colors"
+                aria-label="Mostrar contraseña"
+                data-i18n-aria-label="auth.showPassword"
+                aria-pressed="false"
+                data-target="auth-password"
+                title="Mostrar contraseña"
+              >
+                <i data-lucide="eye" class="w-4 h-4 pointer-events-none"></i>
+              </button>
             </div>
           </div>
 
@@ -269,10 +281,22 @@
                 maxlength="128"
                 required
                 minlength="6"
-                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                class="w-full pl-9 pr-10 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
                 data-i18n-placeholder="auth.passwordPlaceholder"
                 placeholder="Mínimo 6 caracteres"
               >
+              <button
+                id="auth-reg-password-toggle"
+                type="button"
+                class="auth-password-toggle absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-colors"
+                aria-label="Mostrar contraseña"
+                data-i18n-aria-label="auth.showPassword"
+                aria-pressed="false"
+                data-target="auth-reg-password"
+                title="Mostrar contraseña"
+              >
+                <i data-lucide="eye" class="w-4 h-4 pointer-events-none"></i>
+              </button>
             </div>
           </div>
 
@@ -295,10 +319,22 @@
                 maxlength="128"
                 required
                 minlength="6"
-                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                class="w-full pl-9 pr-10 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
                 data-i18n-placeholder="auth.confirmPasswordPlaceholder"
                 placeholder="Repite la contraseña"
               >
+              <button
+                id="auth-reg-confirm-toggle"
+                type="button"
+                class="auth-password-toggle absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-colors"
+                aria-label="Mostrar contraseña"
+                data-i18n-aria-label="auth.showPassword"
+                aria-pressed="false"
+                data-target="auth-reg-confirm"
+                title="Mostrar contraseña"
+              >
+                <i data-lucide="eye" class="w-4 h-4 pointer-events-none"></i>
+              </button>
             </div>
           </div>
 
@@ -394,10 +430,22 @@
                 maxlength="128"
                 required
                 minlength="6"
-                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                class="w-full pl-9 pr-10 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
                 data-i18n-placeholder="auth.newPasswordPlaceholder"
                 placeholder="Mínimo 6 caracteres"
               >
+              <button
+                id="auth-rec-password-toggle"
+                type="button"
+                class="auth-password-toggle absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-colors"
+                aria-label="Mostrar contraseña"
+                data-i18n-aria-label="auth.showPassword"
+                aria-pressed="false"
+                data-target="auth-rec-password"
+                title="Mostrar contraseña"
+              >
+                <i data-lucide="eye" class="w-4 h-4 pointer-events-none"></i>
+              </button>
             </div>
           </div>
 
@@ -420,10 +468,22 @@
                 maxlength="128"
                 required
                 minlength="6"
-                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                class="w-full pl-9 pr-10 py-2.5 rounded-lg text-xs font-medium theme-input border outline-none focus:ring-2 focus:ring-violet-500 transition-all"
                 data-i18n-placeholder="auth.confirmPasswordPlaceholder"
                 placeholder="Repite la contraseña"
               >
+              <button
+                id="auth-rec-confirm-toggle"
+                type="button"
+                class="auth-password-toggle absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-colors"
+                aria-label="Mostrar contraseña"
+                data-i18n-aria-label="auth.showPassword"
+                aria-pressed="false"
+                data-target="auth-rec-confirm"
+                title="Mostrar contraseña"
+              >
+                <i data-lucide="eye" class="w-4 h-4 pointer-events-none"></i>
+              </button>
             </div>
           </div>
 

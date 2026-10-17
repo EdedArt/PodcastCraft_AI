@@ -215,6 +215,8 @@ const I18N = {
     'auth.connectingError': 'No se pudo conectar con el servidor local para iniciar sesión.',
     'auth.connecting': 'Conectando con el servidor local...',
     'auth.loadingSession': 'Verificando sesión guardada...',
+    'auth.showPassword': 'Mostrar contraseña',
+    'auth.hidePassword': 'Ocultar contraseña',
     'auth.retry': 'Reintentar',
     'auth.logout': 'Cerrar sesión',
     'auth.logoutAria': 'Cerrar sesión y bloquear pantalla',
@@ -430,6 +432,8 @@ const I18N = {
     'auth.connectingError': 'Could not connect to the local server to sign in.',
     'auth.connecting': 'Connecting to local server...',
     'auth.loadingSession': 'Checking saved session...',
+    'auth.showPassword': 'Show password',
+    'auth.hidePassword': 'Hide password',
     'auth.retry': 'Retry',
     'auth.logout': 'Log out',
     'auth.logoutAria': 'Log out and lock screen',
@@ -528,6 +532,15 @@ function applyTranslations() {
       btn.setAttribute('aria-label', label);
       btn.setAttribute('title', label);
     }
+  });
+
+  // 5b. Actualizar botones de mostrar/ocultar contraseña según estado actual
+  document.querySelectorAll('.auth-password-toggle').forEach((btn) => {
+    const isVisible = btn.getAttribute('aria-pressed') === 'true';
+    const key = isVisible ? 'auth.hidePassword' : 'auth.showPassword';
+    btn.setAttribute('data-i18n-aria-label', key);
+    btn.setAttribute('aria-label', t(key));
+    btn.setAttribute('title', t(key));
   });
 
   // 6. Re-renderizado de componentes con estados dinámicos si las funciones existen

@@ -2148,6 +2148,8 @@ const authState = {
 };
 
 window.PodcastCraftAuth = authState;
+window.PodcastCraftAuth.resetAllPasswordFieldsVisibility = () => resetAllPasswordFieldsVisibility();
+window.PodcastCraftAuth.togglePasswordVisibility = (button, input) => togglePasswordVisibility(button, input);
 
 let appHydrated = false;
 
@@ -2252,6 +2254,77 @@ function showAuthSuccess(message) {
 }
 
 /**
+ * Alterna la visibilidad de una contraseña entre 'password' y 'text' y actualiza su icono y accesibilidad.
+ * @param {HTMLButtonElement} button
+ * @param {HTMLInputElement} input
+ */
+function togglePasswordVisibility(button, input) {
+  if (!button || !input) return;
+  const isCurrentlyPassword = input.type === 'password';
+  const newType = isCurrentlyPassword ? 'text' : 'password';
+  input.type = newType;
+
+  const isVisible = newType === 'text';
+  button.setAttribute('aria-pressed', isVisible ? 'true' : 'false');
+
+  const label = isVisible
+    ? (typeof t === 'function' ? t('auth.hidePassword') : 'Ocultar contraseña')
+    : (typeof t === 'function' ? t('auth.showPassword') : 'Mostrar contraseña');
+  button.setAttribute('aria-label', label);
+  button.setAttribute('title', label);
+  button.setAttribute('data-i18n-aria-label', isVisible ? 'auth.hidePassword' : 'auth.showPassword');
+  button.innerHTML = `<i data-lucide="${isVisible ? 'eye-off' : 'eye'}" class="w-4 h-4 pointer-events-none"></i>`;
+  renderIcons();
+}
+
+/**
+ * Restablece todos los campos de contraseña al estado oculto ('password') por seguridad.
+ */
+function resetAllPasswordFieldsVisibility() {
+  const toggles = document.querySelectorAll('.auth-password-toggle');
+  toggles.forEach((button) => {
+    const targetId = button.getAttribute('data-target');
+    const input = targetId ? document.getElementById(targetId) : null;
+    if (input && input.type !== 'password') {
+      input.type = 'password';
+    }
+    button.setAttribute('aria-pressed', 'false');
+    const label = typeof t === 'function' ? t('auth.showPassword') : 'Mostrar contraseña';
+    button.setAttribute('aria-label', label);
+    button.setAttribute('title', label);
+    button.setAttribute('data-i18n-aria-label', 'auth.showPassword');
+    button.innerHTML = '<i data-lucide="eye" class="w-4 h-4 pointer-events-none"></i>';
+  });
+  renderIcons();
+}
+
+/**
+ * Vincula los escuchadores de eventos a los botones de mostrar/ocultar contraseña.
+ */
+function bindPasswordToggles() {
+  const toggles = document.querySelectorAll('.auth-password-toggle');
+  toggles.forEach((button) => {
+    button.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const targetId = button.getAttribute('data-target');
+      const input = targetId ? document.getElementById(targetId) : null;
+      if (input) {
+        togglePasswordVisibility(button, input);
+      }
+    });
+
+    button.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault();
+        e.stopPropagation();
+        button.click();
+      }
+    });
+  });
+}
+
+/**
  * Alterna entre las tres vistas de la pantalla de bloqueo ('login', 'register', 'recover').
  * @param {'login' | 'register' | 'recover'} view
  */
@@ -2259,6 +2332,7 @@ function switchAuthView(view) {
   authState.currentView = view;
   clearAuthBanners();
   clearRateLimitCountdown();
+  resetAllPasswordFieldsVisibility();
 
   const loginForm = $('#auth-login-form');
   const regForm = $('#auth-register-form');
@@ -2465,6 +2539,7 @@ function renderAuthScreen() {
  * @param {Function} onConfirm
  */
 function showRecoveryCodeModal(code, onConfirm) {
+  resetAllPasswordFieldsVisibility();
   const modal = $('#auth-recovery-modal');
   const codeDisplay = $('#auth-recovery-code-display');
   const confirmCheck = $('#auth-recovery-confirm-check');
@@ -2514,6 +2589,7 @@ function closeRecoveryCodeModal() {
 async function handleLoginSubmit(e) {
   e.preventDefault();
   clearAuthBanners();
+  resetAllPasswordFieldsVisibility();
 
   const usernameInput = $('#auth-username');
   const passwordInput = $('#auth-password');
@@ -2622,6 +2698,7 @@ async function handleLoginSubmit(e) {
 async function handleRegisterSubmit(e) {
   e.preventDefault();
   clearAuthBanners();
+  resetAllPasswordFieldsVisibility();
 
   const usernameInput = $('#auth-reg-username');
   const passwordInput = $('#auth-reg-password');
@@ -2720,6 +2797,7 @@ async function handleRegisterSubmit(e) {
 async function handleRecoverSubmit(e) {
   e.preventDefault();
   clearAuthBanners();
+  resetAllPasswordFieldsVisibility();
 
   const usernameInput = $('#auth-rec-username');
   const codeInput = $('#auth-rec-code');
@@ -3090,6 +3168,9 @@ function bindAuthEvents() {
 
   // 7. Contadores dinámicos de caracteres
   bindCharacterCounters();
+
+  // 8. Botones de mostrar/ocultar contraseña (Fase 27b)
+  bindPasswordToggles();
 }
 
 
