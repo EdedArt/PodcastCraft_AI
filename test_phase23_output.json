@@ -1,0 +1,175 @@
+{
+  "tests": [
+    {
+      "name": "Prueba 7a: Sin clases de paleta rotativa ni violeta/fucsia en carriles y clips",
+      "pass": true,
+      "details": ""
+    },
+    {
+      "name": "Prueba 7b: Contraste tema claro cumple WCAG AAA (>= 7:1)",
+      "pass": true,
+      "details": "Ratio: 7.77:1"
+    },
+    {
+      "name": "Prueba 7c: Contraste tema oscuro cumple WCAG AAA (>= 7:1)",
+      "pass": true,
+      "details": "Ratio: 9.95:1"
+    },
+    {
+      "name": "Prueba 8: Alineación 0 px [light/es]",
+      "pass": true,
+      "details": "Playhead: 410px, Ruler: 410px, Lane: 410px (diff: 0px)"
+    },
+    {
+      "name": "Prueba 8: Alineación 0 px [light/en]",
+      "pass": true,
+      "details": "Playhead: 410px, Ruler: 410px, Lane: 410px (diff: 0px)"
+    },
+    {
+      "name": "Prueba 8: Alineación 0 px [dark/es]",
+      "pass": true,
+      "details": "Playhead: 410px, Ruler: 410px, Lane: 410px (diff: 0px)"
+    },
+    {
+      "name": "Prueba 8: Alineación 0 px [dark/en]",
+      "pass": true,
+      "details": "Playhead: 410px, Ruler: 410px, Lane: 410px (diff: 0px)"
+    },
+    {
+      "name": "Prueba 9: Franja de control de 140px sin overflow [es]",
+      "pass": true,
+      "details": "Width: 140px, scrollWidth: 140px"
+    },
+    {
+      "name": "Prueba 9: Franja de control de 140px sin overflow [en]",
+      "pass": true,
+      "details": "Width: 140px, scrollWidth: 140px"
+    },
+    {
+      "name": "Prueba 1a: Reproducción simultánea multitrack iniciada",
+      "pass": true,
+      "details": "Fuentes activas: 2"
+    },
+    {
+      "name": "Prueba 1b: Volumen de carril música bajó a 30% en vivo",
+      "pass": true,
+      "details": "Antes: 1, Después: 0.3"
+    },
+    {
+      "name": "Prueba 1c: Volumen de carril voz no cambió (se mantiene en 1.0)",
+      "pass": true,
+      "details": "Antes: 1, Después: 1"
+    },
+    {
+      "name": "Prueba 2a: Nodo clipGain activo encontrado",
+      "pass": true,
+      "details": ""
+    },
+    {
+      "name": "Prueba 2b: Volumen de clip subió a 150% en nodo clipGain",
+      "pass": true,
+      "details": "clipGain.value: 1.5"
+    },
+    {
+      "name": "Prueba 3a: Clip al 0% silencio absoluto",
+      "pass": true,
+      "details": "clipGain: 0"
+    },
+    {
+      "name": "Prueba 3b: Carril al 0% silencio absoluto",
+      "pass": true,
+      "details": "trackGain: 0"
+    },
+    {
+      "name": "Prueba 4: Al dividir un clip al 50%, ambas piezas heredan volume: 0.5",
+      "pass": true,
+      "details": "Pieza 1: 0.5, Pieza 2: 0.5"
+    },
+    {
+      "name": "Prueba 5a: Volumen modificado a 180%",
+      "pass": true,
+      "details": ""
+    },
+    {
+      "name": "Prueba 5b: Ctrl+Z revirtió el cambio de volumen en exactamente 1 paso",
+      "pass": true,
+      "details": "Volumen restaurado: 1"
+    },
+    {
+      "name": "Prueba 6a: Estado limpiado temporalmente",
+      "pass": true,
+      "details": ""
+    },
+    {
+      "name": "Prueba 6b: Volumen de carril persistió en backend (0.75)",
+      "pass": true,
+      "details": "Volumen: 0.75"
+    },
+    {
+      "name": "Prueba 6c: Volumen de clip persistió en backend (1.25)",
+      "pass": true,
+      "details": "Volumen: 1.25"
+    },
+    {
+      "name": "Prueba 10a: Corte por transcripción IA divide en piezas continuas",
+      "pass": true,
+      "details": ""
+    },
+    {
+      "name": "Prueba 10b: Piezas sobrevivientes del corte por IA heredan volume: 0.85",
+      "pass": true,
+      "details": ""
+    }
+  ],
+  "measurements": {
+    "contrastLight": 7.77,
+    "contrastDark": 9.95,
+    "alignment": {
+      "light_es": {
+        "playheadLeft": 410,
+        "rulerScaleLeft": 410,
+        "laneLeft": 410,
+        "diffPlayheadRuler": 0,
+        "diffPlayheadLane": 0,
+        "diffRulerLane": 0
+      },
+      "light_en": {
+        "playheadLeft": 410,
+        "rulerScaleLeft": 410,
+        "laneLeft": 410,
+        "diffPlayheadRuler": 0,
+        "diffPlayheadLane": 0,
+        "diffRulerLane": 0
+      },
+      "dark_es": {
+        "playheadLeft": 410,
+        "rulerScaleLeft": 410,
+        "laneLeft": 410,
+        "diffPlayheadRuler": 0,
+        "diffPlayheadLane": 0,
+        "diffRulerLane": 0
+      },
+      "dark_en": {
+        "playheadLeft": 410,
+        "rulerScaleLeft": 410,
+        "laneLeft": 410,
+        "diffPlayheadRuler": 0,
+        "diffPlayheadLane": 0,
+        "diffRulerLane": 0
+      }
+    },
+    "voiceGainBefore": 1,
+    "musicGainBefore": 1,
+    "voiceGainAfter": 1,
+    "musicGainAfter": 0.3,
+    "clipVoiceGain150": 1.5,
+    "clipMutedVal": 0,
+    "trackMutedVal": 0,
+    "splitPiece1Volume": 0.5,
+    "splitPiece2Volume": 0.5,
+    "restoredVolume": 1,
+    "reloadedTrackVolume": 0.75,
+    "reloadedClipVolume": 1.25
+  },
+  "passed": true
+}

@@ -205,6 +205,8 @@ window.PodcastCraft = {
   renderAiPanel: () => renderAiPanel(),
   showToast: (msg, type) => showToast(msg, type),
   renderClipToolbar: () => renderClipToolbar(),
+  undo: () => undo(),
+  pushUndoSnapshot: () => pushUndoSnapshot(),
   get undoStack() { return undoStack; },
   get trackGainNodes() { return trackGainNodes; },
   getTrackGain: (trackId) => trackGainNodes.get(trackId),
