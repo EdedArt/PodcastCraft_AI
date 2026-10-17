@@ -1322,7 +1322,7 @@ function renderTimelineRuler() {
   if (!scaleEl) return;
 
   const pps = getPixelsPerSecond();
-  const visibleWidth = scaleEl.clientWidth || (scaleEl.parentElement?.clientWidth ? scaleEl.parentElement.clientWidth - 40 : 800);
+  const visibleWidth = scaleEl.clientWidth || (scaleEl.parentElement?.clientWidth ? scaleEl.parentElement.clientWidth - 140 : 800);
   const visibleSeconds = pps > 0 ? visibleWidth / pps : 200;
   const projectDur = state.project.duration || 0;
   // La regla se extiende a lo largo de toda la ventana visible o hasta el fin del audio
@@ -1404,7 +1404,16 @@ function renderTimelineTracks() {
   const deleteTrackTitle = typeof t === 'function' ? t('timeline.deleteTrackTitle') : 'Eliminar carril';
   const emptyLaneText = typeof t === 'function' ? t('timeline.emptyLane') : 'Carril vacío — Arrastra un audio aquí';
 
-  const tracksHtml = state.tracks.map((track) => {
+  const tracksHtml = state.tracks.map((track, trackIndex) => {
+    const trackPos = trackIndex + 1;
+    const trackVol = typeof track.volume === 'number' ? track.volume : 1;
+    const trackVolPercent = Math.round(trackVol * 100);
+    const trackVolumeAria = typeof t === 'function'
+      ? t('timeline.trackVolumeAria', { index: trackPos })
+      : `Volumen del carril ${trackPos}`;
+    const trackVolumeTitle = typeof t === 'function'
+      ? t('timeline.trackVolumeTitle', { index: trackPos })
+      : `Volumen del carril ${trackPos}`;
     const clips = track.clips || [];
 
     const clipsHtml = clips.map((clip) => {
@@ -1455,18 +1464,40 @@ function renderTimelineTracks() {
 
     return `
       <div class="timeline-row flex items-stretch pr-4 group/track" data-track-id="${track.id}">
-        <!-- Franja de control minimalista de ancho fijo (Fase 13.5) -->
-        <div class="timeline-control-strip shrink-0 flex items-center justify-center select-none" style="width: var(--track-control-strip-width);">
+        <!-- Franja de control de ancho fijo con papelera y slider de volumen (Fase 23) -->
+        <div class="timeline-control-strip shrink-0 flex items-center justify-between px-2 gap-1.5 select-none" style="width: var(--track-control-strip-width, 140px);">
+          <!-- Botón eliminar carril -->
           <button
             type="button"
             id="track-delete-${track.id}"
             data-delete-track="${track.id}"
             aria-label="${deleteTrackAria}"
             title="${deleteTrackTitle}"
-            class="w-7 h-7 rounded-md flex items-center justify-center theme-text-muted hover:text-rose-500 hover:bg-rose-500/10 active:scale-90 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-rose-500"
+            class="w-6 h-6 rounded-md flex items-center justify-center shrink-0 theme-text-muted hover:text-rose-500 hover:bg-rose-500/10 active:scale-90 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-rose-500"
           >
             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
           </button>
+
+          <!-- Slider compacto de volumen de carril (0–200%, default 100%) -->
+          <div class="flex items-center gap-1 flex-1 min-w-0">
+            <input
+              type="range"
+              id="track-volume-${track.id}"
+              data-track-volume="${track.id}"
+              min="0"
+              max="200"
+              step="1"
+              value="${trackVolPercent}"
+              aria-label="${escapeHtml(trackVolumeAria)}"
+              title="${escapeHtml(trackVolumeTitle)}"
+              class="track-volume-slider w-full min-w-[44px] h-1.5 accent-sky-600 rounded-lg appearance-none cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+            >
+            <span
+              id="track-volume-val-${track.id}"
+              data-track-volume-val="${track.id}"
+              class="text-[10px] font-mono font-medium theme-text-secondary shrink-0 tabular-nums w-8 text-right"
+            >${trackVolPercent}%</span>
+          </div>
         </div>
 
         <!-- Zona de Carril / Drop zone -->

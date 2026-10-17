@@ -87,12 +87,21 @@ const I18N = {
     'timeline.deleteTrackAria': 'Eliminar carril',
     'timeline.deleteTrackTitle': 'Eliminar carril',
     'timeline.deleteTrackConfirm': 'Este carril tiene {count} clip(s). ¿Eliminarlo de todas formas?',
+    'timeline.trackVolumeAria': 'Volumen del carril {index}',
+    'timeline.trackVolumeTitle': 'Volumen del carril {index}',
     'timeline.emptyLane': 'Carril vacío — Arrastra un audio aquí',
     'timeline.clipFrom': 'de',
     'timeline.clipTo': 'a',
     'timeline.doubleClickToSplit': 'Doble clic para dividir',
     'timeline.dragToTrimStart': 'Arrastra para recortar inicio',
     'timeline.dragToTrimEnd': 'Arrastra para recortar final',
+
+    // Barra contextual de clip (Fase 23)
+    'clipToolbar.toolbarAria': 'Herramientas del clip seleccionado',
+    'clipToolbar.noClipSelected': 'Selecciona un clip para ajustar su volumen',
+    'clipToolbar.volumeLabel': 'Volumen del clip',
+    'clipToolbar.volumeSliderAria': 'Volumen del clip',
+    'clipToolbar.volumeSliderTitle': 'Volumen del clip',
 
     // Espacio de Trabajo y Ajustes
     'workspace.ariaLabel': 'Espacio de trabajo del editor',
@@ -245,12 +254,21 @@ const I18N = {
     'timeline.deleteTrackAria': 'Delete track',
     'timeline.deleteTrackTitle': 'Delete track',
     'timeline.deleteTrackConfirm': 'This track contains {count} clip(s). Delete it anyway?',
+    'timeline.trackVolumeAria': 'Track {index} volume',
+    'timeline.trackVolumeTitle': 'Track {index} volume',
     'timeline.emptyLane': 'Empty track — Drag audio here',
     'timeline.clipFrom': 'from',
     'timeline.clipTo': 'to',
     'timeline.doubleClickToSplit': 'Double-click to split',
     'timeline.dragToTrimStart': 'Drag to trim start',
     'timeline.dragToTrimEnd': 'Drag to trim end',
+
+    // Contextual clip toolbar (Phase 23)
+    'clipToolbar.toolbarAria': 'Selected clip tools',
+    'clipToolbar.noClipSelected': 'Select a clip to adjust its volume',
+    'clipToolbar.volumeLabel': 'Clip volume',
+    'clipToolbar.volumeSliderAria': 'Clip volume',
+    'clipToolbar.volumeSliderTitle': 'Clip volume',
 
     // Espacio de Trabajo y Ajustes
     'workspace.ariaLabel': 'Editor workspace',

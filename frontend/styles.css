@@ -13,7 +13,7 @@
 /* Tema CLARO — Default de la aplicación */
 :root,
 [data-theme="light"] {
-  --track-control-strip-width: 40px;    /* Franja de control minimalista de carriles (Fase 13.5) */
+  --track-control-strip-width: 140px;   /* Franja de control de carriles con volumen (Fase 23) */
   --bg-primary: #f8fafc;                /* slate-50 */
   --bg-panel: #ffffff;                  /* blanco puro para paneles y tarjetas */
   --bg-panel-header: #ffffff;
@@ -127,7 +127,7 @@
 
 /* Tema OSCURO — Valores existentes del proyecto */
 [data-theme="dark"] {
-  --track-control-strip-width: 40px;    /* Franja de control minimalista de carriles (Fase 13.5) */
+  --track-control-strip-width: 140px;   /* Franja de control de carriles con volumen (Fase 23) */
   --bg-primary: #020617;                /* slate-950 */
   --bg-panel: #0f172a;                  /* slate-900 */
   --bg-panel-header: rgba(15, 23, 42, 0.9);
@@ -589,11 +589,22 @@ body.is-trimming * {
   user-select: none !important;
 }
 
-/* Franja de control minimalista de carril (Fase 13.5) */
+/* Franja de control de carriles con volumen (Fase 23) */
 .timeline-control-strip {
-  width: var(--track-control-strip-width);
-  min-width: var(--track-control-strip-width);
-  max-width: var(--track-control-strip-width);
+  width: var(--track-control-strip-width, 140px);
+  min-width: var(--track-control-strip-width, 140px);
+  max-width: var(--track-control-strip-width, 140px);
+}
+
+.track-volume-slider,
+#clip-volume-slider {
+  accent-color: #0284c7;
+}
+
+.track-volume-slider:focus-visible,
+#clip-volume-slider:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
 }
 
 /* Estilo unificado para todos los carriles y clips (Fase 23 — azul sky sin rotación) */
@@ -624,17 +635,21 @@ body.is-trimming * {
 
 /* 10. Playhead de Alta Fidelidad adaptable */
 .timeline-control-strip {
-  width: var(--track-control-strip-width, 40px);
+  width: var(--track-control-strip-width, 140px);
+  min-width: var(--track-control-strip-width, 140px);
+  max-width: var(--track-control-strip-width, 140px);
 }
 .timeline-ruler-gutter {
-  width: var(--track-control-strip-width, 40px);
+  width: var(--track-control-strip-width, 140px);
+  min-width: var(--track-control-strip-width, 140px);
+  max-width: var(--track-control-strip-width, 140px);
 }
 
 #timeline-playhead {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: var(--track-control-strip-width, 40px);
+  left: var(--track-control-strip-width, 140px);
   width: 2px;
   background: var(--playhead-color);
   box-shadow: 0 0 4px 1px var(--playhead-glow);
