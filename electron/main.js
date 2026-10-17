@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, screen } = require('electron');
 const path = require('path');
 const http = require('http');
 const fsPromises = require('fs').promises;
@@ -140,12 +140,18 @@ function waitForBackend(url, timeoutMs = 30000) {
 }
 
 async function createWindow() {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const workArea = primaryDisplay.workAreaSize;
+  const targetWidth = Math.min(1440, Math.max(1024, Math.floor(workArea.width * 0.95)));
+  const targetHeight = Math.min(900, Math.max(580, Math.floor(workArea.height * 0.95)));
+
   mainWindow = new BrowserWindow({
     title: 'PodcastCraft AI',
-    width: 1440,
-    height: 900,
-    minWidth: 1280,
-    minHeight: 800,
+    width: targetWidth,
+    height: targetHeight,
+    minWidth: 960,
+    minHeight: 540,
+    center: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -157,6 +163,52 @@ async function createWindow() {
 
   mainWindow.on('page-title-updated', (e) => e.preventDefault());
 
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[Renderer Console] ${message}`);
+  });
+
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    console.error('[Electron Main] Render process gone:', details);
+  });
+
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('[Electron Main] Fallo al cargar interfaz:', errorCode, errorDescription);
+  });
+
+  function showAndActivate() {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.center();
+    mainWindow.show();
+    mainWindow.focus();
+
+    // En Windows, setAlwaysOnTop breve garantiza que la ventana
+    // pase al frente si el proceso se inició en segundo plano
+    mainWindow.setAlwaysOnTop(true);
+    mainWindow.focus();
+    mainWindow.setAlwaysOnTop(false);
+
+    const bounds = mainWindow.getBounds();
+    const display = screen.getDisplayMatching(bounds);
+    const hwndBuf = mainWindow.getNativeWindowHandle();
+    const hwndDec = process.arch === 'x64' ? hwndBuf.readBigInt64LE(0).toString() : hwndBuf.readInt32LE(0).toString();
+    const hwndHex = '0x' + (process.arch === 'x64' ? hwndBuf.readBigInt64LE(0).toString(16) : hwndBuf.readInt32LE(0).toString(16));
+
+    console.log(`[Electron Main] Ventana activa: "${mainWindow.getTitle()}"`);
+    console.log(`[Electron Main] Visible: ${mainWindow.isVisible()}`);
+    console.log(`[Electron Main] MainWindowHandle (HWND): ${hwndDec} (${hwndHex})`);
+    console.log(`[Electron Main] Monitor: ${display.id} (${display.bounds.width}x${display.bounds.height}, Primario: ${display.id === primaryDisplay.id})`);
+    console.log(`[Electron Main] Bounds: x=${bounds.x}, y=${bounds.y}, w=${bounds.width}, h=${bounds.height}`);
+  }
+
+  mainWindow.once('ready-to-show', () => {
+    console.log('[Electron Main] Evento ready-to-show recibido.');
+    showAndActivate();
+  });
+
   const frontendPath = path.join(__dirname, '..', 'frontend', 'index.html');
 
   try {
@@ -165,7 +217,8 @@ async function createWindow() {
     console.log(`[Electron Main] Backend listo en ${elapsed}ms. Cargando interfaz...`);
 
     await mainWindow.loadFile(frontendPath);
-    mainWindow.show();
+    console.log('[Electron Main] Archivo frontend index.html cargado con éxito.');
+    showAndActivate();
   } catch (error) {
     console.error('[Electron Main] Fallo al inicializar el backend:', error.message);
     if (!isQuitting) {
