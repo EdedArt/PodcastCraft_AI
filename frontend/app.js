@@ -204,6 +204,7 @@ window.PodcastCraft = {
   executeIntervalSubtraction: (clipId, removedRanges) => executeIntervalSubtraction(clipId, removedRanges),
   renderAiPanel: () => renderAiPanel(),
   showToast: (msg, type) => showToast(msg, type),
+  renderClipToolbar: () => renderClipToolbar(),
   undo: () => undo(),
   pushUndoSnapshot: () => pushUndoSnapshot(),
   get undoStack() { return undoStack; }
@@ -1312,6 +1313,79 @@ function renderLibraryList() {
 }
 
 /**
+ * Renderiza la barra de herramientas contextual de clip (#clip-toolbar) (Fase 23).
+ * Si hay un clip seleccionado, muestra su nombre y habilita el slider de volumen (0–200%).
+ * Si no hay clip seleccionado, la barra mantiene su altura física para no mover el layout,
+ * deshabilita el slider con aria-disabled y muestra el mensaje guía.
+ */
+function renderClipToolbar() {
+  const toolbar = $('#clip-toolbar');
+  if (!toolbar) return;
+
+  const titleEl = $('#clip-toolbar-title');
+  const groupEl = $('#clip-toolbar-volume-group');
+  const sliderEl = $('#clip-volume-slider');
+  const valEl = $('#clip-volume-value');
+
+  let selectedClip = null;
+  const clipId = state.selection?.clipId;
+  if (clipId) {
+    for (const track of state.tracks) {
+      const found = (track.clips || []).find((c) => c.id === clipId);
+      if (found) {
+        selectedClip = found;
+        break;
+      }
+    }
+  }
+
+  if (selectedClip) {
+    if (titleEl) {
+      titleEl.textContent = selectedClip.name;
+      titleEl.classList.remove('theme-text-muted', 'italic');
+      titleEl.classList.add('theme-text-primary', 'font-semibold');
+      titleEl.removeAttribute('data-i18n');
+      titleEl.title = selectedClip.name;
+    }
+    if (groupEl) {
+      groupEl.classList.remove('opacity-50', 'pointer-events-none');
+    }
+    const cVol = typeof selectedClip.volume === 'number' ? selectedClip.volume : 1;
+    const cPercent = Math.round(cVol * 100);
+    if (sliderEl) {
+      sliderEl.disabled = false;
+      sliderEl.setAttribute('aria-disabled', 'false');
+      sliderEl.value = cPercent;
+    }
+    if (valEl) {
+      valEl.textContent = `${cPercent}%`;
+    }
+  } else {
+    if (titleEl) {
+      const placeholderText = typeof t === 'function'
+        ? t('clipToolbar.noClipSelected')
+        : 'Selecciona un clip para ajustar su volumen';
+      titleEl.textContent = placeholderText;
+      titleEl.classList.add('theme-text-muted', 'italic');
+      titleEl.classList.remove('theme-text-primary', 'font-semibold');
+      titleEl.setAttribute('data-i18n', 'clipToolbar.noClipSelected');
+      titleEl.removeAttribute('title');
+    }
+    if (groupEl) {
+      groupEl.classList.add('opacity-50', 'pointer-events-none');
+    }
+    if (sliderEl) {
+      sliderEl.disabled = true;
+      sliderEl.setAttribute('aria-disabled', 'true');
+      sliderEl.value = 100;
+    }
+    if (valEl) {
+      valEl.textContent = '100%';
+    }
+  }
+}
+
+/**
  * Renderiza dinámicamente las marcas de tiempo de la regla (#timeline-ruler-scale)
  * adaptando la granularidad de las marcas al nivel de zoom actual y a la duración del proyecto.
  * Fase 14: Todas las marcas se posicionan con timeToPixels(t), compartiendo exactamente
@@ -1787,6 +1861,7 @@ function renderAll(currentState = state, prevState) {
     renderTimelineRuler();
     renderTimelineTracks();
     renderTransport();
+    renderClipToolbar();
   }
 
   if (aiChanged) {

@@ -307,6 +307,64 @@
         </div>
       </div>
 
+      <!-- Barra contextual de clip (Fase 23) -->
+      <div
+        id="clip-toolbar"
+        role="toolbar"
+        data-i18n-aria-label="clipToolbar.toolbarAria"
+        aria-label="Herramientas del clip seleccionado"
+        class="h-9 px-4 border-b flex items-center justify-between shrink-0 theme-panel-header select-none text-xs"
+      >
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <!-- Nombre del clip seleccionado o texto placeholder cuando no hay clip -->
+          <div class="flex items-center gap-2 min-w-0">
+            <i data-lucide="music" class="w-3.5 h-3.5 theme-text-secondary shrink-0"></i>
+            <span
+              id="clip-toolbar-title"
+              class="font-medium truncate max-w-[200px] lg:max-w-[320px] theme-text-muted italic"
+              data-i18n="clipToolbar.noClipSelected"
+            >Selecciona un clip para ajustar su volumen</span>
+          </div>
+
+          <!-- Divisor sutil -->
+          <div class="h-3.5 w-px bg-slate-200 dark:bg-slate-700 shrink-0"></div>
+
+          <!-- Control de volumen del clip -->
+          <div id="clip-toolbar-volume-group" class="flex items-center gap-2 shrink-0 opacity-50 pointer-events-none transition-opacity">
+            <label
+              for="clip-volume-slider"
+              id="clip-volume-label"
+              class="text-xs font-medium theme-text-secondary select-none"
+              data-i18n="clipToolbar.volumeLabel"
+            >Volumen del clip</label>
+            <div class="flex items-center gap-1.5 w-24 sm:w-28">
+              <input
+                id="clip-volume-slider"
+                type="range"
+                min="0"
+                max="200"
+                step="1"
+                value="100"
+                disabled
+                aria-disabled="true"
+                data-i18n-aria-label="clipToolbar.volumeSliderAria"
+                data-i18n-title="clipToolbar.volumeSliderTitle"
+                aria-label="Volumen del clip"
+                title="Volumen del clip"
+                class="w-full accent-sky-600 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded"
+              >
+            </div>
+            <span
+              id="clip-volume-value"
+              class="text-xs font-mono font-medium theme-text-secondary tabular-nums w-10 text-right"
+            >100%</span>
+          </div>
+        </div>
+
+        <!-- Zona libre a la derecha reservada para Fase 24 (Dividir y Eliminar) -->
+        <div id="clip-toolbar-actions" class="flex items-center gap-1.5 shrink-0"></div>
+      </div>
+
       <!-- Regla de tiempo interactiva con scrubbing dinámico (Fase 14) -->
       <div
         id="timeline-ruler"
