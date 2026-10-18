@@ -99,8 +99,8 @@ jobs:
         run: |
           echo "=== Verificando archivos generados en dist/ ==="
           ls -la dist/
-          APPIMAGE="dist/PodcastCraft-AI-1.1.0-linux-x64.AppImage"
-          DEB="dist/PodcastCraft-AI-1.1.0-linux-x64.deb"
+          APPIMAGE="dist/PodcastCraft-AI-1.2.0-linux-x64.AppImage"
+          DEB="dist/PodcastCraft-AI-1.2.0-linux-x64.deb"
 
           if [ ! -f "$APPIMAGE" ] || [ ! -s "$APPIMAGE" ]; then
             echo "::error::El archivo AppImage no existe o pesa 0 bytes: $APPIMAGE"
@@ -129,7 +129,7 @@ jobs:
 
           # Extraer AppImage para inspeccionar binarios internos
           cd dist
-          APPIMAGE_FILE="PodcastCraft-AI-1.1.0-linux-x64.AppImage"
+          APPIMAGE_FILE="PodcastCraft-AI-1.2.0-linux-x64.AppImage"
           chmod +x "$APPIMAGE_FILE"
           ./"$APPIMAGE_FILE" --appimage-extract
           cd ..
@@ -157,13 +157,19 @@ jobs:
             exit 1
           fi
 
-          DEB_ARCH=$(dpkg-deb -I dist/PodcastCraft-AI-1.1.0-linux-x64.deb | grep "Architecture:" | tr -d ' ')
+          DEB_ARCH=$(dpkg-deb -I dist/PodcastCraft-AI-1.2.0-linux-x64.deb | grep "Architecture:" | tr -d ' ')
           if echo "$DEB_ARCH" | grep -q "amd64"; then
             echo "ARCH_CHECK=PASS file=deb target=amd64 info=\"$DEB_ARCH\""
           else
             echo "ARCH_CHECK=FAIL file=deb target=amd64 info=\"$DEB_ARCH\""
             exit 1
           fi
+          echo "================ ARCH_CHECK SUMMARY ================"
+          echo "ARCH_CHECK: runner=$RUNNER_ARCH"
+          echo "ARCH_CHECK: electron=$MAIN_FILE_DESC"
+          echo "ARCH_CHECK: ffmpeg=$FFMPEG_FILE_DESC"
+          echo "ARCH_CHECK: deb=$DEB_ARCH"
+          echo "====================================================="
           echo "Arquitectura x64 confirmada en ejecutable, FFmpeg y metadatos de .deb."
 
       - name: Upload Linux Installers Artifact
@@ -171,8 +177,8 @@ jobs:
         with:
           name: podcastcraft-linux-x64
           path: |
-            dist/PodcastCraft-AI-1.1.0-linux-x64.AppImage
-            dist/PodcastCraft-AI-1.1.0-linux-x64.deb
+            dist/PodcastCraft-AI-1.2.0-linux-x64.AppImage
+            dist/PodcastCraft-AI-1.2.0-linux-x64.deb
           if-no-files-found: error
           retention-days: 14
 
@@ -180,7 +186,7 @@ jobs:
         timeout-minutes: 10
         run: |
           echo "=== Ejecutando Prueba de Humo en AppImage ==="
-          APPIMAGE_FILE="dist/PodcastCraft-AI-1.1.0-linux-x64.AppImage"
+          APPIMAGE_FILE="dist/PodcastCraft-AI-1.2.0-linux-x64.AppImage"
           xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" \
             node .github/scripts/smoke-test.js \
               --app-path "$APPIMAGE_FILE" \
@@ -201,7 +207,7 @@ jobs:
         timeout-minutes: 10
         run: |
           echo "=== Instalando y ejecutando Prueba de Humo en paquete .deb ==="
-          DEB_FILE="dist/PodcastCraft-AI-1.1.0-linux-x64.deb"
+          DEB_FILE="dist/PodcastCraft-AI-1.2.0-linux-x64.deb"
           sudo dpkg -i "$DEB_FILE" || sudo apt-get install -f -y
 
           INSTALLED_BIN=""
@@ -326,7 +332,7 @@ jobs:
         run: |
           echo "=== Verificando archivos generados en dist/ ==="
           ls -la dist/
-          DMG_FILE="dist/PodcastCraft-AI-1.1.0-mac-arm64.dmg"
+          DMG_FILE="dist/PodcastCraft-AI-1.2.0-mac-arm64.dmg"
 
           if [ ! -f "$DMG_FILE" ] || [ ! -s "$DMG_FILE" ]; then
             echo "::error::El archivo DMG arm64 no existe o pesa 0 bytes: $DMG_FILE"
@@ -376,13 +382,18 @@ jobs:
             exit 1
           fi
 
+          echo "================ ARCH_CHECK SUMMARY ================"
+          echo "ARCH_CHECK: runner=$RUNNER_ARCH"
+          echo "ARCH_CHECK: electron=$MAIN_FILE_DESC"
+          echo "ARCH_CHECK: ffmpeg=$FFMPEG_FILE_DESC"
+          echo "====================================================="
           echo "Arquitectura arm64 confirmada en ejecutable y FFmpeg."
 
       - name: Upload macOS arm64 Installer Artifact
         uses: actions/upload-artifact@v4
         with:
           name: podcastcraft-macos-arm64
-          path: dist/PodcastCraft-AI-1.1.0-mac-arm64.dmg
+          path: dist/PodcastCraft-AI-1.2.0-mac-arm64.dmg
           if-no-files-found: error
           retention-days: 14
 
@@ -489,7 +500,7 @@ jobs:
         run: |
           echo "=== Verificando archivos generados en dist/ ==="
           ls -la dist/
-          DMG_FILE="dist/PodcastCraft-AI-1.1.0-mac-x64.dmg"
+          DMG_FILE="dist/PodcastCraft-AI-1.2.0-mac-x64.dmg"
 
           if [ ! -f "$DMG_FILE" ] || [ ! -s "$DMG_FILE" ]; then
             echo "::error::El archivo DMG x64 no existe o pesa 0 bytes: $DMG_FILE"
@@ -539,13 +550,18 @@ jobs:
             exit 1
           fi
 
+          echo "================ ARCH_CHECK SUMMARY ================"
+          echo "ARCH_CHECK: runner=$RUNNER_ARCH"
+          echo "ARCH_CHECK: electron=$MAIN_FILE_DESC"
+          echo "ARCH_CHECK: ffmpeg=$FFMPEG_FILE_DESC"
+          echo "====================================================="
           echo "Arquitectura Intel x64 confirmada en ejecutable y FFmpeg."
 
       - name: Upload macOS x64 Installer Artifact
         uses: actions/upload-artifact@v4
         with:
           name: podcastcraft-macos-x64
-          path: dist/PodcastCraft-AI-1.1.0-mac-x64.dmg
+          path: dist/PodcastCraft-AI-1.2.0-mac-x64.dmg
           if-no-files-found: error
           retention-days: 14
 

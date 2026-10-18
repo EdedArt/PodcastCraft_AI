@@ -263,8 +263,10 @@ async function cleanupProcesses(child, opts) {
       const termElapsedMs = Date.now() - termStart;
       console.log(`[Cleanup] Etapa SIGTERM finalizada en ${termElapsedMs} ms. Proceso líder ${pid} sigue activo: ${alive}`);
 
-      // Si sigue vivo tras 10 segundos, forzar SIGKILL al grupo de procesos
-      if (alive) {
+      if (!alive) {
+        console.log(`CLEANUP_STAGE=SIGTERM_OK elapsedMs=${termElapsedMs}`);
+      } else {
+        console.log(`CLEANUP_STAGE=SIGKILL_NEEDED elapsedMs=${termElapsedMs}`);
         console.log(`[Cleanup] Proceso líder ${pid} no terminó con SIGTERM en 10s. Forzando SIGKILL al grupo (-${pgid})...`);
         const killStart = Date.now();
         try {
