@@ -1,6 +1,5 @@
 # Dependencias de Node
 node_modules/
-package-lock.json
 
 # Salida de empaquetado de Electron Builder
 dist/
