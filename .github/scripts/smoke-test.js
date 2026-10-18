@@ -48,6 +48,21 @@ function parseArgs() {
   return options;
 }
 
+function flushOutput() {
+  try {
+    if (process.stdout && typeof process.stdout.write === 'function') {
+      process.stdout.write('');
+    }
+    if (process.stderr && typeof process.stderr.write === 'function') {
+      process.stderr.write('');
+    }
+    if (process.platform !== 'win32') {
+      try { fs.fsyncSync(1); } catch (_) {}
+      try { fs.fsyncSync(2); } catch (_) {}
+    }
+  } catch (_) {}
+}
+
 function sendRequest(method, endpoint, body = null, headers = {}, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     const url = new URL(endpoint, 'http://127.0.0.1:3001');
@@ -150,14 +165,51 @@ function generateSineWaveMp3(ffmpegExe, frequencyHz, durationSec, outputPath) {
   }
 }
 
+function getProtectedPids() {
+  const protectedPids = new Set();
+  protectedPids.add(process.pid);
+  if (process.ppid) protectedPids.add(process.ppid);
+
+  if (process.platform !== 'win32') {
+    try {
+      let current = process.ppid;
+      while (current > 1) {
+        protectedPids.add(current);
+        const ppidOutput = execSync(`ps -o ppid= -p ${current} 2>/dev/null`, { encoding: 'utf8' }).trim();
+        const next = parseInt(ppidOutput, 10);
+        if (!next || next === current || next < 1) break;
+        current = next;
+      }
+    } catch (_) {}
+  }
+  return protectedPids;
+}
+
+function isDescendantOf(pid, ancestorPid) {
+  if (process.platform === 'win32') return false;
+  try {
+    let current = pid;
+    while (current > 1) {
+      if (current === ancestorPid) return true;
+      const ppidOutput = execSync(`ps -o ppid= -p ${current} 2>/dev/null`, { encoding: 'utf8' }).trim();
+      const parent = parseInt(ppidOutput, 10);
+      if (!parent || parent === current || parent < 1) break;
+      current = parent;
+    }
+  } catch (_) {}
+  return false;
+}
+
 async function cleanupProcesses(child, opts) {
   const isWindows = process.platform === 'win32';
   const pid = child ? child.pid : null;
+  const pgid = pid;
+  const protectedPids = getProtectedPids();
 
-  if (pid) {
-    console.log(`[Cleanup] Terminando proceso de la aplicación (PID: ${pid})...`);
+  console.log(`[Cleanup] Iniciando limpieza de procesos. PID de la app: ${pid || 'ninguno'}. PIDs protegidos: ${[...protectedPids].join(', ')}`);
 
-    // 1. Destruir y desreferenciar streams stdio para liberar el event loop de Node
+  // 1. Destruir y desreferenciar streams stdio para liberar el event loop de Node
+  if (child) {
     try {
       if (child.stdout && typeof child.stdout.destroy === 'function') {
         child.stdout.destroy();
@@ -173,23 +225,29 @@ async function cleanupProcesses(child, opts) {
         child.unref();
       }
     } catch (_) {}
+  }
 
-    // 2. Enviar SIGTERM al grupo (POSIX) o árbol (Windows)
+  // 2. Terminar grupo de procesos lanzado (POSIX) o árbol de procesos (Windows)
+  if (pid) {
     if (isWindows) {
+      const winStart = Date.now();
       try {
         execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
       } catch (_) {}
+      console.log(`[Cleanup] taskkill en Windows completado en ${Date.now() - winStart} ms.`);
     } else {
+      // POSIX: SIGTERM al grupo de procesos (-pgid)
+      console.log(`[Cleanup] Enviando SIGTERM al grupo de procesos (-${pgid})...`);
+      const termStart = Date.now();
       try {
-        // Enviar SIGTERM a todo el grupo de procesos (-pid)
-        process.kill(-pid, 'SIGTERM');
+        process.kill(-pgid, 'SIGTERM');
       } catch (e1) {
         try {
           process.kill(pid, 'SIGTERM');
         } catch (_) {}
       }
 
-      // 3. Esperar hasta 10 segundos a que el proceso y grupo terminen
+      // Esperar hasta 10 segundos a que el proceso y grupo terminen
       const deadline = Date.now() + 10000;
       let alive = true;
       while (Date.now() < deadline) {
@@ -202,56 +260,139 @@ async function cleanupProcesses(child, opts) {
           break;
         }
       }
+      const termElapsedMs = Date.now() - termStart;
+      console.log(`[Cleanup] Etapa SIGTERM finalizada en ${termElapsedMs} ms. Proceso líder ${pid} sigue activo: ${alive}`);
 
-      // 4. Si sigue vivo tras 10 segundos, forzar SIGKILL al grupo de procesos
+      // Si sigue vivo tras 10 segundos, forzar SIGKILL al grupo de procesos
       if (alive) {
-        console.log(`[Cleanup] Proceso ${pid} sigue activo tras 10s. Forzando SIGKILL al grupo de procesos...`);
+        console.log(`[Cleanup] Proceso líder ${pid} no terminó con SIGTERM en 10s. Forzando SIGKILL al grupo (-${pgid})...`);
+        const killStart = Date.now();
         try {
-          process.kill(-pid, 'SIGKILL');
+          process.kill(-pgid, 'SIGKILL');
         } catch (e2) {
           try {
             process.kill(pid, 'SIGKILL');
           } catch (_) {}
         }
-        await new Promise(r => setTimeout(r, 500));
+
+        // Breve espera para confirmar terminación
+        while (Date.now() - killStart < 3000) {
+          try {
+            process.kill(pid, 0);
+            await new Promise(r => setTimeout(r, 200));
+          } catch (_) {
+            alive = false;
+            break;
+          }
+        }
+        const killElapsedMs = Date.now() - killStart;
+        console.log(`[Cleanup] Etapa SIGKILL al grupo finalizada en ${killElapsedMs} ms. Proceso líder ${pid} sigue activo: ${alive}`);
       }
     }
   }
 
-  // 5. Barrido específico para macOS: matar procesos cuyo ejecutable esté dentro del .app de la prueba
-  if (process.platform === 'darwin') {
+  // 3. Respaldo por nombre ANCLADO al ejecutable exacto (filtrando por PID, NUNCA pkill -f genérico)
+  if (!isWindows && opts && opts.appPath) {
     try {
-      let appBundle = '';
-      if (opts && opts.appPath && opts.appPath.includes('.app')) {
-        appBundle = opts.appPath.substring(0, opts.appPath.indexOf('.app') + 4);
+      let realAppPath = opts.appPath;
+      try { realAppPath = fs.realpathSync(opts.appPath); } catch (_) {}
+
+      const psOutput = execSync('ps -eo pid,args 2>/dev/null || true', { encoding: 'utf8' });
+      const lines = psOutput.split('\n');
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const match = trimmed.match(/^(\d+)\s+(.+)$/);
+        if (!match) continue;
+        const candidatePid = parseInt(match[1], 10);
+        const cmdArgs = match[2];
+
+        // Regla absoluta: NUNCA matar procesos protegidos (runner, xvfb-run, este script o ancestros)
+        if (protectedPids.has(candidatePid)) {
+          continue;
+        }
+
+        let isMatch = false;
+        if (process.platform === 'darwin') {
+          // En macOS, coincidir si el comando se ejecuta desde dentro del bundle .app de la prueba
+          if (opts.appPath.includes('.app')) {
+            const bundlePath = opts.appPath.substring(0, opts.appPath.indexOf('.app') + 4);
+            if (cmdArgs.includes(bundlePath)) {
+              isMatch = true;
+            }
+          }
+        } else {
+          // En Linux: anclado al inicio del comando para NO coincidir con líneas que empiecen por "node" o "xvfb-run"
+          if (cmdArgs.startsWith(opts.appPath) || cmdArgs.startsWith(realAppPath) || cmdArgs.startsWith(`"${opts.appPath}"`)) {
+            isMatch = true;
+          }
+        }
+
+        if (isMatch) {
+          console.log(`[Cleanup Respaldo] Terminando proceso residual detectado por ruta anclada: PID ${candidatePid} (${cmdArgs.substring(0, 80)}...)`);
+          try {
+            process.kill(candidatePid, 'SIGKILL');
+          } catch (_) {}
+        }
       }
-      if (appBundle) {
-        console.log(`[Cleanup macOS] Terminando procesos residuales en bundle: "${appBundle}"...`);
-        execSync(`pkill -9 -f "${appBundle}" || true`, { stdio: 'ignore' });
-      }
-      execSync('pkill -9 -f "PodcastCraft AI" || true', { stdio: 'ignore' });
-      execSync('lsof -ti :3001 | xargs kill -9 2>/dev/null || true', { stdio: 'ignore' });
-    } catch (_) {}
+    } catch (e) {
+      console.warn(`[Cleanup Warning] Advertencia en barrido de respaldo por ejecutable anclado: ${e.message}`);
+    }
   }
 
-  // 6. Barrido para Linux: matar procesos de la app y liberar puerto 3001
-  if (process.platform === 'linux') {
+  // 4. Limpieza en puerto 3001: SOLO si el PID que escucha pertenece al grupo o es descendiente
+  if (!isWindows) {
     try {
-      execSync('pkill -9 -f "podcastcraft-ai" || true', { stdio: 'ignore' });
-      execSync('pkill -9 -f "PodcastCraft AI" || true', { stdio: 'ignore' });
-      execSync('fuser -k 3001/tcp || true', { stdio: 'ignore' });
-    } catch (_) {}
+      const portPidsOutput = execSync('lsof -ti :3001 -sTCP:LISTEN 2>/dev/null || true', { encoding: 'utf8' }).trim();
+      if (portPidsOutput) {
+        const portPids = portPidsOutput.split('\n').map(s => parseInt(s.trim(), 10)).filter(Boolean);
+        for (const p of portPids) {
+          if (protectedPids.has(p)) {
+            console.log(`[Cleanup Puerto 3001] PID ${p} en puerto 3001 pertenece a protectedPids. Omitiendo.`);
+            continue;
+          }
+
+          let shouldKill = false;
+          if (pid) {
+            try {
+              const pgidOut = execSync(`ps -o pgid= -p ${p} 2>/dev/null || true`, { encoding: 'utf8' }).trim();
+              if (parseInt(pgidOut, 10) === pgid) {
+                shouldKill = true;
+              }
+            } catch (_) {}
+
+            if (!shouldKill && isDescendantOf(p, pid)) {
+              shouldKill = true;
+            }
+          }
+
+          if (shouldKill) {
+            console.log(`[Cleanup Puerto 3001] PID ${p} pertenece al grupo/descendiente de la app. Terminando con SIGKILL...`);
+            try {
+              process.kill(p, 'SIGKILL');
+            } catch (_) {}
+          } else {
+            console.log(`[Cleanup Puerto 3001] PID ${p} no pertenece al árbol de la app de prueba. No se toca.`);
+          }
+        }
+      }
+    } catch (portErr) {
+      console.warn(`[Cleanup Warning] Advertencia al verificar puerto 3001: ${portErr.message}`);
+    }
   }
 
-  console.log('[Cleanup] Limpieza de procesos completada.');
+  console.log('[Cleanup] Limpieza de procesos finalizada.');
 }
 
 async function main() {
   const opts = parseArgs();
+  const target = opts.target || 'unknown';
+
   console.log('=== PodcastCraft AI — Prueba de Humo de Producción (Smoke Test) ===');
   console.log(`Fecha: ${new Date().toISOString()}`);
   console.log(`Plataforma: ${process.platform} (${process.arch})`);
-  console.log(`Target: ${opts.target}`);
+  console.log(`Target: ${target}`);
   console.log(`Ruta ejecutable: ${opts.appPath}`);
 
   if (!opts.appPath || !fs.existsSync(opts.appPath)) {
@@ -273,6 +414,7 @@ async function main() {
   console.log(`[Temp] Exportación: ${tempExport}`);
 
   let child = null;
+  let testPassed = false;
   const results = {
     healthOk: false,
     healthElapsedMs: 0,
@@ -554,7 +696,7 @@ async function main() {
       throw new Error('La carpeta tests/ fue indebidamente incluida en el paquete de producción');
     }
 
-    results.success = (
+    testPassed = (
       results.healthOk &&
       results.accountCreated &&
       results.recoveryCodeLength === 12 &&
@@ -567,41 +709,55 @@ async function main() {
     );
 
     console.log('\n======================================================');
-    console.log('RESULTADO PRUEBA DE HUMO (SMOKE TEST): EXITOSA');
-    console.log(`Target: ${opts.target}`);
+    console.log(`RESULTADO PRUEBA DE HUMO (SMOKE TEST): ${testPassed ? 'EXITOSA' : 'FALLIDA'}`);
+    console.log(`Target: ${target}`);
     console.log(`Tiempo arranque /health: ${results.healthElapsedMs} ms`);
     console.log(`Código de recuperación: ${results.recoveryCodeLength} caracteres`);
     console.log(`MP3 exportado: ${results.exportBytes} bytes, ${results.exportDurationSec} s, ${results.exportBitrateKbps} kbps`);
     console.log(`Errores decodificación: ${results.exportDecodeErrors}`);
     console.log(`backend/.env con GEMINI_API_KEY: ${results.envKeyDefined}`);
     console.log(`tests/ ausente: ${results.testsDirectoryAbsent}`);
-    console.log('======================================================\n');
+    console.log('======================================================');
+    console.log(`SMOKE_RESULT=${testPassed ? 'PASS' : 'FAIL'} target=${target}\n`);
+    flushOutput();
+  } catch (err) {
+    testPassed = false;
+    console.error(`\n[ERROR] Fallo en la prueba de humo: ${err.message}`);
+    console.log('\n======================================================');
+    console.log('RESULTADO PRUEBA DE HUMO (SMOKE TEST): FALLIDA');
+    console.log(`Target: ${target}`);
+    console.log(`Error: ${err.message}`);
+    console.log('======================================================');
+    console.log(`SMOKE_RESULT=FAIL target=${target}\n`);
+    flushOutput();
   } finally {
-    // 8. Cierre robusto de procesos y limpieza
-    await cleanupProcesses(child, opts);
+    // 8. Cierre robusto de procesos y limpieza sin afectar el resultado de la prueba
+    try {
+      await cleanupProcesses(child, opts);
+    } catch (cleanErr) {
+      console.warn(`[Cleanup Warning] Advertencia en cleanupProcesses: ${cleanErr.message}`);
+    }
 
     try {
       fs.rmSync(tempBase, { recursive: true, force: true });
-    } catch (_) {}
+    } catch (rmErr) {
+      console.warn(`[Cleanup Warning] Advertencia al remover temporales: ${rmErr.message}`);
+    }
+
+    flushOutput();
   }
 
-  const target = opts.target || 'unknown';
-  if (results.success) {
-    console.log(`SMOKE_RESULT=PASS target=${target}`);
-    process.exit(0);
-  } else {
-    console.log(`SMOKE_RESULT=FAIL target=${target}`);
-    process.exit(1);
-  }
+  process.exit(testPassed ? 0 : 1);
 }
 
-main().catch(async (err) => {
-  console.error('\n[FATAL] Error en prueba de humo:', err.message);
+main().catch((err) => {
+  console.error('\n[FATAL] Error no controlado en ejecución principal:', err.message);
   let target = 'unknown';
   try {
     const opts = parseArgs();
     target = opts.target || 'unknown';
   } catch (_) {}
-  console.log(`SMOKE_RESULT=FAIL target=${target}`);
+  console.log(`SMOKE_RESULT=FAIL target=${target}\n`);
+  flushOutput();
   process.exit(1);
 });
