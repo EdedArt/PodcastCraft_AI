@@ -11,10 +11,10 @@
     "test": "node tests/run_tests.js",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
-    "build:mac:arm64": "electron-builder --mac --arm64",
-    "build:mac:x64": "electron-builder --mac --x64",
+    "build:mac:arm64": "electron-builder --mac --arm64 --publish never",
+    "build:mac:x64": "electron-builder --mac --x64 --publish never",
     "build:linux": "electron-builder --linux",
-    "build:linux:x64": "electron-builder --linux --x64",
+    "build:linux:x64": "electron-builder --linux --x64 --publish never",
     "build:all": "electron-builder -mwl"
   },
   "devDependencies": {
