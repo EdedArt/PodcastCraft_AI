@@ -231,6 +231,10 @@ async function main() {
       } catch (_) {}
     }
 
+    try {
+      fs.chmodSync(opts.appPath, 0o755);
+    } catch (_) {}
+
     // 3. Paso 1: Lanzar la app empaquetada y esperar /health
     console.log('[Paso 1/5] Lanzando aplicación empaquetada...');
     const launchArgs = [

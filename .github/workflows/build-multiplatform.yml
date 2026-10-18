@@ -68,10 +68,7 @@ jobs:
           fi
           echo "::add-mask::$GEMINI_SECRET"
           mkdir -p backend
-          cat <<EOF > backend/.env
-          GEMINI_API_KEY=$GEMINI_SECRET
-          GEMINI_MODEL=gemini-2.0-flash
-          EOF
+          printf "GEMINI_API_KEY=%s\nGEMINI_MODEL=gemini-2.0-flash\n" "$GEMINI_SECRET" > backend/.env
           chmod 600 backend/.env
           echo "backend/.env configurado correctamente (clave enmascarada)."
 
@@ -97,15 +94,15 @@ jobs:
         run: |
           echo "=== Verificando archivos generados en dist/ ==="
           ls -la dist/
-          APPIMAGE=$(ls dist/PodcastCraft-AI-*-linux-x64.AppImage | head -n 1)
-          DEB=$(ls dist/PodcastCraft-AI-*-linux-x64.deb | head -n 1)
+          APPIMAGE="dist/PodcastCraft-AI-1.1.0-linux-x64.AppImage"
+          DEB="dist/PodcastCraft-AI-1.1.0-linux-x64.deb"
 
-          if [ ! -s "$APPIMAGE" ]; then
+          if [ ! -f "$APPIMAGE" ] || [ ! -s "$APPIMAGE" ]; then
             echo "::error::El archivo AppImage no existe o pesa 0 bytes: $APPIMAGE"
             exit 1
           fi
 
-          if [ ! -s "$DEB" ]; then
+          if [ ! -f "$DEB" ] || [ ! -s "$DEB" ]; then
             echo "::error::El archivo .deb no existe o pesa 0 bytes: $DEB"
             exit 1
           fi
@@ -125,7 +122,7 @@ jobs:
 
           # Extraer AppImage para inspeccionar binarios internos
           cd dist
-          APPIMAGE_FILE=$(ls PodcastCraft-AI-*-linux-x64.AppImage | head -n 1)
+          APPIMAGE_FILE="PodcastCraft-AI-1.1.0-linux-x64.AppImage"
           chmod +x "$APPIMAGE_FILE"
           ./"$APPIMAGE_FILE" --appimage-extract
           cd ..
@@ -149,12 +146,13 @@ jobs:
             exit 1
           fi
 
-          echo "Arquitectura x64 confirmada en ejecutable y FFmpeg."
+          dpkg-deb -I dist/PodcastCraft-AI-1.1.0-linux-x64.deb | grep "Architecture: amd64"
+          echo "Arquitectura x64 confirmada en ejecutable, FFmpeg y metadatos de .deb."
 
       - name: Smoke Test 1 — AppImage (Packaged Binary)
         run: |
           echo "=== Ejecutando Prueba de Humo en AppImage ==="
-          APPIMAGE_FILE=$(ls dist/PodcastCraft-AI-*-linux-x64.AppImage | head -n 1)
+          APPIMAGE_FILE="dist/PodcastCraft-AI-1.1.0-linux-x64.AppImage"
           xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" \
             node .github/scripts/smoke-test.js \
               --app-path "$APPIMAGE_FILE" \
@@ -166,7 +164,7 @@ jobs:
       - name: Smoke Test 2 — Debian Package (.deb installed)
         run: |
           echo "=== Instalando y ejecutando Prueba de Humo en paquete .deb ==="
-          DEB_FILE=$(ls dist/PodcastCraft-AI-*-linux-x64.deb | head -n 1)
+          DEB_FILE="dist/PodcastCraft-AI-1.1.0-linux-x64.deb"
           sudo dpkg -i "$DEB_FILE" || sudo apt-get install -f -y
 
           INSTALLED_BIN=""
@@ -189,13 +187,16 @@ jobs:
               --app-path "$INSTALLED_BIN" \
               --no-sandbox
 
+          echo "Desinstalando paquete .deb tras prueba exitosa..."
+          sudo dpkg -r podcastcraft-ai || true
+
       - name: Upload Linux Installers Artifact
         uses: actions/upload-artifact@v4
         with:
           name: podcastcraft-linux-x64
           path: |
-            dist/PodcastCraft-AI-*-linux-x64.AppImage
-            dist/PodcastCraft-AI-*-linux-x64.deb
+            dist/PodcastCraft-AI-1.1.0-linux-x64.AppImage
+            dist/PodcastCraft-AI-1.1.0-linux-x64.deb
           if-no-files-found: error
           retention-days: 14
 
@@ -259,10 +260,7 @@ jobs:
           fi
           echo "::add-mask::$GEMINI_SECRET"
           mkdir -p backend
-          cat <<EOF > backend/.env
-          GEMINI_API_KEY=$GEMINI_SECRET
-          GEMINI_MODEL=gemini-2.0-flash
-          EOF
+          printf "GEMINI_API_KEY=%s\nGEMINI_MODEL=gemini-2.0-flash\n" "$GEMINI_SECRET" > backend/.env
           chmod 600 backend/.env
           echo "backend/.env configurado correctamente (clave enmascarada)."
 
@@ -288,9 +286,9 @@ jobs:
         run: |
           echo "=== Verificando archivos generados en dist/ ==="
           ls -la dist/
-          DMG_FILE=$(ls dist/PodcastCraft-AI-*-mac-arm64.dmg | head -n 1)
+          DMG_FILE="dist/PodcastCraft-AI-1.1.0-mac-arm64.dmg"
 
-          if [ ! -s "$DMG_FILE" ]; then
+          if [ ! -f "$DMG_FILE" ] || [ ! -s "$DMG_FILE" ]; then
             echo "::error::El archivo DMG arm64 no existe o pesa 0 bytes: $DMG_FILE"
             exit 1
           fi
@@ -307,24 +305,14 @@ jobs:
             exit 1
           fi
 
-          DMG_FILE=$(ls dist/PodcastCraft-AI-*-mac-arm64.dmg | head -n 1)
-          MOUNT_OUTPUT=$(hdiutil attach "$DMG_FILE" -nobrowse -readonly || true)
-          MOUNT_DIR=$(echo "$MOUNT_OUTPUT" | grep -E -o '/Volumes/.*' | tail -n 1)
-          echo "Punto de montaje reportado: $MOUNT_DIR"
-
-          if [ -n "$MOUNT_DIR" ] && [ -d "$MOUNT_DIR/PodcastCraft AI.app" ]; then
-            MAIN_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
-            FFMPEG_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/Resources/backend/node_modules/ffmpeg-static/ffmpeg"
-            rm -rf "/tmp/PodcastCraft-AI-arm64.app"
-            cp -R "$MOUNT_DIR/PodcastCraft AI.app" "/tmp/PodcastCraft-AI-arm64.app"
-            hdiutil detach "$MOUNT_DIR" -force || true
-          else
-            echo "Utilizando binario empaquetado en dist/mac-arm64/"
-            MAIN_BIN="dist/mac-arm64/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
-            FFMPEG_BIN="dist/mac-arm64/PodcastCraft AI.app/Contents/Resources/backend/node_modules/ffmpeg-static/ffmpeg"
-            rm -rf "/tmp/PodcastCraft-AI-arm64.app"
-            cp -R "dist/mac-arm64/PodcastCraft AI.app" "/tmp/PodcastCraft-AI-arm64.app"
+          APP_DIR="dist/mac-arm64/PodcastCraft AI.app"
+          if [ ! -d "$APP_DIR" ]; then
+            echo "::error::No se encontró el bundle de aplicación en $APP_DIR"
+            exit 1
           fi
+
+          MAIN_BIN="$APP_DIR/Contents/MacOS/PodcastCraft AI"
+          FFMPEG_BIN="$APP_DIR/Contents/Resources/backend/node_modules/ffmpeg-static/ffmpeg"
 
           MAIN_FILE_DESC=$(file "$MAIN_BIN")
           FFMPEG_FILE_DESC=$(file "$FFMPEG_BIN")
@@ -348,13 +336,13 @@ jobs:
         run: |
           echo "=== Ejecutando Prueba de Humo en macOS arm64 ==="
           node .github/scripts/smoke-test.js \
-            --app-path "/tmp/PodcastCraft-AI-arm64.app/Contents/MacOS/PodcastCraft AI"
+            --app-path "dist/mac-arm64/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
 
       - name: Upload macOS arm64 Installer Artifact
         uses: actions/upload-artifact@v4
         with:
           name: podcastcraft-macos-arm64
-          path: dist/PodcastCraft-AI-*-mac-arm64.dmg
+          path: dist/PodcastCraft-AI-1.1.0-mac-arm64.dmg
           if-no-files-found: error
           retention-days: 14
 
@@ -417,10 +405,7 @@ jobs:
           fi
           echo "::add-mask::$GEMINI_SECRET"
           mkdir -p backend
-          cat <<EOF > backend/.env
-          GEMINI_API_KEY=$GEMINI_SECRET
-          GEMINI_MODEL=gemini-2.0-flash
-          EOF
+          printf "GEMINI_API_KEY=%s\nGEMINI_MODEL=gemini-2.0-flash\n" "$GEMINI_SECRET" > backend/.env
           chmod 600 backend/.env
           echo "backend/.env configurado correctamente (clave enmascarada)."
 
@@ -446,9 +431,9 @@ jobs:
         run: |
           echo "=== Verificando archivos generados en dist/ ==="
           ls -la dist/
-          DMG_FILE=$(ls dist/PodcastCraft-AI-*-mac-x64.dmg | head -n 1)
+          DMG_FILE="dist/PodcastCraft-AI-1.1.0-mac-x64.dmg"
 
-          if [ ! -s "$DMG_FILE" ]; then
+          if [ ! -f "$DMG_FILE" ] || [ ! -s "$DMG_FILE" ]; then
             echo "::error::El archivo DMG x64 no existe o pesa 0 bytes: $DMG_FILE"
             exit 1
           fi
@@ -465,24 +450,14 @@ jobs:
             exit 1
           fi
 
-          DMG_FILE=$(ls dist/PodcastCraft-AI-*-mac-x64.dmg | head -n 1)
-          MOUNT_OUTPUT=$(hdiutil attach "$DMG_FILE" -nobrowse -readonly || true)
-          MOUNT_DIR=$(echo "$MOUNT_OUTPUT" | grep -E -o '/Volumes/.*' | tail -n 1)
-          echo "Punto de montaje reportado: $MOUNT_DIR"
-
-          if [ -n "$MOUNT_DIR" ] && [ -d "$MOUNT_DIR/PodcastCraft AI.app" ]; then
-            MAIN_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
-            FFMPEG_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/Resources/backend/node_modules/ffmpeg-static/ffmpeg"
-            rm -rf "/tmp/PodcastCraft-AI-x64.app"
-            cp -R "$MOUNT_DIR/PodcastCraft AI.app" "/tmp/PodcastCraft-AI-x64.app"
-            hdiutil detach "$MOUNT_DIR" -force || true
-          else
-            echo "Utilizando binario empaquetado en dist/mac/"
-            MAIN_BIN="dist/mac/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
-            FFMPEG_BIN="dist/mac/PodcastCraft AI.app/Contents/Resources/backend/node_modules/ffmpeg-static/ffmpeg"
-            rm -rf "/tmp/PodcastCraft-AI-x64.app"
-            cp -R "dist/mac/PodcastCraft AI.app" "/tmp/PodcastCraft-AI-x64.app"
+          APP_DIR="dist/mac/PodcastCraft AI.app"
+          if [ ! -d "$APP_DIR" ]; then
+            echo "::error::No se encontró el bundle de aplicación en $APP_DIR"
+            exit 1
           fi
+
+          MAIN_BIN="$APP_DIR/Contents/MacOS/PodcastCraft AI"
+          FFMPEG_BIN="$APP_DIR/Contents/Resources/backend/node_modules/ffmpeg-static/ffmpeg"
 
           MAIN_FILE_DESC=$(file "$MAIN_BIN")
           FFMPEG_FILE_DESC=$(file "$FFMPEG_BIN")
@@ -506,13 +481,13 @@ jobs:
         run: |
           echo "=== Ejecutando Prueba de Humo en macOS Intel ==="
           node .github/scripts/smoke-test.js \
-            --app-path "/tmp/PodcastCraft-AI-x64.app/Contents/MacOS/PodcastCraft AI"
+            --app-path "dist/mac/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
 
       - name: Upload macOS x64 Installer Artifact
         uses: actions/upload-artifact@v4
         with:
           name: podcastcraft-macos-x64
-          path: dist/PodcastCraft-AI-*-mac-x64.dmg
+          path: dist/PodcastCraft-AI-1.1.0-mac-x64.dmg
           if-no-files-found: error
           retention-days: 14
 
