@@ -12,7 +12,8 @@ function parseArgs() {
     ffmpegPath: '',
     envPath: '',
     noSandbox: false,
-    timeoutMs: 35000
+    timeoutMs: 35000,
+    target: ''
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -29,13 +30,25 @@ function parseArgs() {
       options.noSandbox = true;
     } else if (arg === '--timeout' && i + 1 < args.length) {
       options.timeoutMs = parseInt(args[++i], 10);
+    } else if (arg === '--target' && i + 1 < args.length) {
+      options.target = args[++i];
+    }
+  }
+
+  if (!options.target) {
+    if (process.platform === 'darwin') {
+      options.target = process.arch === 'arm64' ? 'mac-arm64' : 'mac-x64';
+    } else if (process.platform === 'linux') {
+      options.target = (options.appPath && options.appPath.endsWith('.deb')) ? 'deb' : 'appimage';
+    } else {
+      options.target = 'win';
     }
   }
 
   return options;
 }
 
-function sendRequest(method, endpoint, body = null, headers = {}) {
+function sendRequest(method, endpoint, body = null, headers = {}, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     const url = new URL(endpoint, 'http://127.0.0.1:3001');
     const reqHeaders = { 'Accept': 'application/json', ...headers };
@@ -53,7 +66,7 @@ function sendRequest(method, endpoint, body = null, headers = {}) {
       reqHeaders['Content-Length'] = Buffer.byteLength(payload);
     }
 
-    const req = http.request(url, { method, headers: reqHeaders, timeout: 10000 }, (res) => {
+    const req = http.request(url, { method, headers: reqHeaders, timeout: timeoutMs }, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
@@ -70,7 +83,7 @@ function sendRequest(method, endpoint, body = null, headers = {}) {
     req.on('error', reject);
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error(`Timeout HTTP ${method} ${endpoint}`));
+      reject(new Error(`Timeout HTTP (${timeoutMs}ms) ${method} ${endpoint}`));
     });
 
     if (payload) {
@@ -80,7 +93,7 @@ function sendRequest(method, endpoint, body = null, headers = {}) {
   });
 }
 
-function sendMultipartAudio(filename, buffer) {
+function sendMultipartAudio(filename, buffer, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     const boundary = '----PodcastCraftSmokeBoundary' + Date.now();
     const CRLF = '\r\n';
@@ -103,7 +116,7 @@ function sendMultipartAudio(filename, buffer) {
         'Content-Length': payload.length,
         'Accept': 'application/json'
       },
-      timeout: 10000
+      timeout: timeoutMs
     }, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
@@ -121,7 +134,7 @@ function sendMultipartAudio(filename, buffer) {
     req.on('error', reject);
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error('Timeout subiendo audio multipart'));
+      reject(new Error(`Timeout (${timeoutMs}ms) subiendo audio multipart`));
     });
 
     req.write(payload);
@@ -137,11 +150,108 @@ function generateSineWaveMp3(ffmpegExe, frequencyHz, durationSec, outputPath) {
   }
 }
 
+async function cleanupProcesses(child, opts) {
+  const isWindows = process.platform === 'win32';
+  const pid = child ? child.pid : null;
+
+  if (pid) {
+    console.log(`[Cleanup] Terminando proceso de la aplicación (PID: ${pid})...`);
+
+    // 1. Destruir y desreferenciar streams stdio para liberar el event loop de Node
+    try {
+      if (child.stdout && typeof child.stdout.destroy === 'function') {
+        child.stdout.destroy();
+      }
+    } catch (_) {}
+    try {
+      if (child.stderr && typeof child.stderr.destroy === 'function') {
+        child.stderr.destroy();
+      }
+    } catch (_) {}
+    try {
+      if (typeof child.unref === 'function') {
+        child.unref();
+      }
+    } catch (_) {}
+
+    // 2. Enviar SIGTERM al grupo (POSIX) o árbol (Windows)
+    if (isWindows) {
+      try {
+        execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
+      } catch (_) {}
+    } else {
+      try {
+        // Enviar SIGTERM a todo el grupo de procesos (-pid)
+        process.kill(-pid, 'SIGTERM');
+      } catch (e1) {
+        try {
+          process.kill(pid, 'SIGTERM');
+        } catch (_) {}
+      }
+
+      // 3. Esperar hasta 10 segundos a que el proceso y grupo terminen
+      const deadline = Date.now() + 10000;
+      let alive = true;
+      while (Date.now() < deadline) {
+        try {
+          process.kill(pid, 0); // Comprueba existencia de proceso
+          await new Promise(r => setTimeout(r, 400));
+        } catch (err) {
+          // ESRCH: el proceso ya no existe
+          alive = false;
+          break;
+        }
+      }
+
+      // 4. Si sigue vivo tras 10 segundos, forzar SIGKILL al grupo de procesos
+      if (alive) {
+        console.log(`[Cleanup] Proceso ${pid} sigue activo tras 10s. Forzando SIGKILL al grupo de procesos...`);
+        try {
+          process.kill(-pid, 'SIGKILL');
+        } catch (e2) {
+          try {
+            process.kill(pid, 'SIGKILL');
+          } catch (_) {}
+        }
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+  }
+
+  // 5. Barrido específico para macOS: matar procesos cuyo ejecutable esté dentro del .app de la prueba
+  if (process.platform === 'darwin') {
+    try {
+      let appBundle = '';
+      if (opts && opts.appPath && opts.appPath.includes('.app')) {
+        appBundle = opts.appPath.substring(0, opts.appPath.indexOf('.app') + 4);
+      }
+      if (appBundle) {
+        console.log(`[Cleanup macOS] Terminando procesos residuales en bundle: "${appBundle}"...`);
+        execSync(`pkill -9 -f "${appBundle}" || true`, { stdio: 'ignore' });
+      }
+      execSync('pkill -9 -f "PodcastCraft AI" || true', { stdio: 'ignore' });
+      execSync('lsof -ti :3001 | xargs kill -9 2>/dev/null || true', { stdio: 'ignore' });
+    } catch (_) {}
+  }
+
+  // 6. Barrido para Linux: matar procesos de la app y liberar puerto 3001
+  if (process.platform === 'linux') {
+    try {
+      execSync('pkill -9 -f "podcastcraft-ai" || true', { stdio: 'ignore' });
+      execSync('pkill -9 -f "PodcastCraft AI" || true', { stdio: 'ignore' });
+      execSync('fuser -k 3001/tcp || true', { stdio: 'ignore' });
+    } catch (_) {}
+  }
+
+  console.log('[Cleanup] Limpieza de procesos completada.');
+}
+
 async function main() {
   const opts = parseArgs();
   console.log('=== PodcastCraft AI — Prueba de Humo de Producción (Smoke Test) ===');
   console.log(`Fecha: ${new Date().toISOString()}`);
   console.log(`Plataforma: ${process.platform} (${process.arch})`);
+  console.log(`Target: ${opts.target}`);
   console.log(`Ruta ejecutable: ${opts.appPath}`);
 
   if (!opts.appPath || !fs.existsSync(opts.appPath)) {
@@ -190,7 +300,11 @@ async function main() {
           : opts.appPath;
         resourcesDir = path.join(appBundle, 'Contents', 'Resources');
       } else {
-        const execDir = path.dirname(opts.appPath);
+        let realAppPath = opts.appPath;
+        try {
+          realAppPath = fs.realpathSync(opts.appPath);
+        } catch (_) {}
+        const execDir = path.dirname(realAppPath);
         if (fs.existsSync(path.join(execDir, 'resources'))) {
           resourcesDir = path.join(execDir, 'resources');
         } else if (fs.existsSync(path.join(execDir, '..', 'resources'))) {
@@ -235,8 +349,8 @@ async function main() {
       fs.chmodSync(opts.appPath, 0o755);
     } catch (_) {}
 
-    // 3. Paso 1: Lanzar la app empaquetada y esperar /health
-    console.log('[Paso 1/5] Lanzando aplicación empaquetada...');
+    // 3. Paso 1: Lanzar la app empaquetada en su propio grupo de procesos y esperar /health
+    console.log('[Paso 1/5] Lanzando aplicación empaquetada en grupo de procesos dedicado...');
     const launchArgs = [
       `--user-data-dir=${tempUserData}`
     ];
@@ -254,10 +368,12 @@ async function main() {
       ELECTRON_ENABLE_LOGGING: '1'
     };
 
+    const isWindows = process.platform === 'win32';
     const startTime = Date.now();
     child = spawn(opts.appPath, launchArgs, {
       env: launchEnv,
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: !isWindows // En POSIX, se crea un grupo de procesos independiente (PGID === child.pid)
     });
 
     child.stdout.on('data', (d) => {
@@ -278,7 +394,7 @@ async function main() {
     const healthDeadline = Date.now() + opts.timeoutMs;
     while (Date.now() < healthDeadline) {
       try {
-        const res = await sendRequest('GET', '/health');
+        const res = await sendRequest('GET', '/health', null, {}, 5000);
         if (res.status === 200 && res.body && res.body.status === 'ok') {
           results.healthOk = true;
           results.healthElapsedMs = Date.now() - startTime;
@@ -300,7 +416,7 @@ async function main() {
     const setupRes = await sendRequest('POST', '/api/auth/setup', {
       username: 'smoke_user_phase28',
       password: 'SmokePassword2026!'
-    });
+    }, {}, 10000);
 
     if (setupRes.status !== 201 || !setupRes.body || !setupRes.body.success) {
       throw new Error(`Fallo en creación de cuenta: HTTP ${setupRes.status} — ${JSON.stringify(setupRes.body)}`);
@@ -328,8 +444,8 @@ async function main() {
     generateSineWaveMp3(ffmpegExe, 880, 4, tone2Path);
 
     console.log('[Paso 3/5] Subiendo tonos a POST /api/audio...');
-    const up1 = await sendMultipartAudio('tone_440.mp3', fs.readFileSync(tone1Path));
-    const up2 = await sendMultipartAudio('tone_880.mp3', fs.readFileSync(tone2Path));
+    const up1 = await sendMultipartAudio('tone_440.mp3', fs.readFileSync(tone1Path), 15000);
+    const up2 = await sendMultipartAudio('tone_880.mp3', fs.readFileSync(tone2Path), 15000);
 
     if (up1.status !== 201 || !up1.body || !up1.body.id) {
       throw new Error(`Fallo subiendo tono 1: status ${up1.status}`);
@@ -360,7 +476,7 @@ async function main() {
 
     console.log('[Paso 3/5] Solicitando mezcla multipista a POST /api/export...');
     const exportStart = Date.now();
-    const exportRes = await sendRequest('POST', '/api/export', exportPayload);
+    const exportRes = await sendRequest('POST', '/api/export', exportPayload, {}, 35000);
     const exportDurationMs = Date.now() - exportStart;
 
     if (exportRes.status !== 200 || !fs.existsSync(destinationMp3)) {
@@ -452,6 +568,7 @@ async function main() {
 
     console.log('\n======================================================');
     console.log('RESULTADO PRUEBA DE HUMO (SMOKE TEST): EXITOSA');
+    console.log(`Target: ${opts.target}`);
     console.log(`Tiempo arranque /health: ${results.healthElapsedMs} ms`);
     console.log(`Código de recuperación: ${results.recoveryCodeLength} caracteres`);
     console.log(`MP3 exportado: ${results.exportBytes} bytes, ${results.exportDurationSec} s, ${results.exportBitrateKbps} kbps`);
@@ -460,29 +577,31 @@ async function main() {
     console.log(`tests/ ausente: ${results.testsDirectoryAbsent}`);
     console.log('======================================================\n');
   } finally {
-    // 8. Cierre de procesos y limpieza
-    if (child) {
-      console.log('[Cleanup] Terminando proceso de la aplicación...');
-      try {
-        child.kill('SIGTERM');
-      } catch (_) {}
-      await new Promise(r => setTimeout(r, 1500));
-      try {
-        if (!child.killed) child.kill('SIGKILL');
-      } catch (_) {}
-    }
+    // 8. Cierre robusto de procesos y limpieza
+    await cleanupProcesses(child, opts);
 
     try {
       fs.rmSync(tempBase, { recursive: true, force: true });
     } catch (_) {}
   }
 
-  if (!results.success) {
+  const target = opts.target || 'unknown';
+  if (results.success) {
+    console.log(`SMOKE_RESULT=PASS target=${target}`);
+    process.exit(0);
+  } else {
+    console.log(`SMOKE_RESULT=FAIL target=${target}`);
     process.exit(1);
   }
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error('\n[FATAL] Error en prueba de humo:', err.message);
+  let target = 'unknown';
+  try {
+    const opts = parseArgs();
+    target = opts.target || 'unknown';
+  } catch (_) {}
+  console.log(`SMOKE_RESULT=FAIL target=${target}`);
   process.exit(1);
 });
