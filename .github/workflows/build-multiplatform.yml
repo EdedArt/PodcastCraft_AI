@@ -1,0 +1,501 @@
+name: Build Multiplatform
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ci/multiplatform-build
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux-x64:
+    name: Linux x64 (AppImage & deb)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: System Architecture and Environment Info
+        run: |
+          echo "=== Linux Runner Info ==="
+          uname -a
+          uname -m
+          node -v || true
+          npm -v || true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb \
+            libfuse2 \
+            libnss3 \
+            libatk-bridge2.0-0 \
+            libgtk-3-0 \
+            libxss1 \
+            libasound2t64 \
+            file \
+            dpkg
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install backend dependencies (native ffmpeg-static for Linux x64)
+        run: |
+          cd backend
+          npm ci
+          cd ..
+
+      - name: Validate GEMINI_API_KEY secret and write backend/.env
+        env:
+          GEMINI_SECRET: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -z "$GEMINI_SECRET" ]; then
+            echo "::error::El secret GEMINI_API_KEY no está configurado o está vacío en el repositorio."
+            exit 1
+          fi
+          echo "::add-mask::$GEMINI_SECRET"
+          mkdir -p backend
+          cat <<EOF > backend/.env
+          GEMINI_API_KEY=$GEMINI_SECRET
+          GEMINI_MODEL=gemini-2.0-flash
+          EOF
+          chmod 600 backend/.env
+          echo "backend/.env configurado correctamente (clave enmascarada)."
+
+      - name: CI Compatibility & Static Syntax Check
+        run: |
+          echo "Verificando sintaxis de scripts de producción..."
+          node --check electron/main.js
+          node --check electron/preload.js
+          node --check backend/src/server.js
+          node --check backend/src/storage.js
+          node --check backend/src/routes/auth.js
+          node --check backend/src/routes/audio.js
+          node --check backend/src/routes/export.js
+          node --check backend/src/utils/audioMixer.js
+          node --check backend/src/utils/audioTrimmer.js
+          node --check .github/scripts/smoke-test.js
+          echo "Sintaxis 100% verificada."
+
+      - name: Build Linux x64 Packages (AppImage & deb)
+        run: npm run build:linux:x64
+
+      - name: Verify build artifacts exist and are non-empty
+        run: |
+          echo "=== Verificando archivos generados en dist/ ==="
+          ls -la dist/
+          APPIMAGE=$(ls dist/PodcastCraft-AI-*-linux-x64.AppImage | head -n 1)
+          DEB=$(ls dist/PodcastCraft-AI-*-linux-x64.deb | head -n 1)
+
+          if [ ! -s "$APPIMAGE" ]; then
+            echo "::error::El archivo AppImage no existe o pesa 0 bytes: $APPIMAGE"
+            exit 1
+          fi
+
+          if [ ! -s "$DEB" ]; then
+            echo "::error::El archivo .deb no existe o pesa 0 bytes: $DEB"
+            exit 1
+          fi
+
+          echo "AppImage verificado: $APPIMAGE ($(stat -c%s "$APPIMAGE") bytes)"
+          echo ".deb verificado: $DEB ($(stat -c%s "$DEB") bytes)"
+
+      - name: Strict Architecture Verification (Linux x64)
+        run: |
+          echo "=== Verificación estricta de arquitectura x64 ==="
+          RUNNER_ARCH=$(uname -m)
+          echo "Arquitectura del runner: $RUNNER_ARCH"
+          if [ "$RUNNER_ARCH" != "x86_64" ]; then
+            echo "::error::El runner no es x86_64 (es $RUNNER_ARCH)"
+            exit 1
+          fi
+
+          # Extraer AppImage para inspeccionar binarios internos
+          cd dist
+          APPIMAGE_FILE=$(ls PodcastCraft-AI-*-linux-x64.AppImage | head -n 1)
+          chmod +x "$APPIMAGE_FILE"
+          ./"$APPIMAGE_FILE" --appimage-extract
+          cd ..
+
+          MAIN_BIN="dist/squashfs-root/podcastcraft-ai"
+          FFMPEG_BIN="dist/squashfs-root/resources/backend/node_modules/ffmpeg-static/ffmpeg"
+
+          MAIN_FILE_DESC=$(file "$MAIN_BIN")
+          FFMPEG_FILE_DESC=$(file "$FFMPEG_BIN")
+
+          echo "Binario principal: $MAIN_FILE_DESC"
+          echo "Binario FFmpeg: $FFMPEG_FILE_DESC"
+
+          if ! echo "$MAIN_FILE_DESC" | grep -q "x86-64"; then
+            echo "::error::El binario de Electron no es x86-64: $MAIN_FILE_DESC"
+            exit 1
+          fi
+
+          if ! echo "$FFMPEG_FILE_DESC" | grep -q "x86-64"; then
+            echo "::error::El binario de FFmpeg no es x86-64: $FFMPEG_FILE_DESC"
+            exit 1
+          fi
+
+          echo "Arquitectura x64 confirmada en ejecutable y FFmpeg."
+
+      - name: Smoke Test 1 — AppImage (Packaged Binary)
+        run: |
+          echo "=== Ejecutando Prueba de Humo en AppImage ==="
+          APPIMAGE_FILE=$(ls dist/PodcastCraft-AI-*-linux-x64.AppImage | head -n 1)
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" \
+            node .github/scripts/smoke-test.js \
+              --app-path "$APPIMAGE_FILE" \
+              --resources-path "dist/squashfs-root/resources" \
+              --ffmpeg-path "dist/squashfs-root/resources/backend/node_modules/ffmpeg-static/ffmpeg" \
+              --env-path "dist/squashfs-root/resources/backend/.env" \
+              --no-sandbox
+
+      - name: Smoke Test 2 — Debian Package (.deb installed)
+        run: |
+          echo "=== Instalando y ejecutando Prueba de Humo en paquete .deb ==="
+          DEB_FILE=$(ls dist/PodcastCraft-AI-*-linux-x64.deb | head -n 1)
+          sudo dpkg -i "$DEB_FILE" || sudo apt-get install -f -y
+
+          INSTALLED_BIN="/opt/PodcastCraft AI/podcastcraft-ai"
+          if [ ! -f "$INSTALLED_BIN" ]; then
+            INSTALLED_BIN=$(which podcastcraft-ai || echo "")
+          fi
+
+          echo "Ruta de binario instalado: $INSTALLED_BIN"
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" \
+            node .github/scripts/smoke-test.js \
+              --app-path "$INSTALLED_BIN" \
+              --no-sandbox
+
+      - name: Upload Linux Installers Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: podcastcraft-linux-x64
+          path: |
+            dist/PodcastCraft-AI-*-linux-x64.AppImage
+            dist/PodcastCraft-AI-*-linux-x64.deb
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Save Diagnostic Logs (on failure or always)
+        if: always()
+        run: |
+          mkdir -p logs-linux
+          dmesg | tail -n 100 > logs-linux/dmesg_tail.txt 2>&1 || true
+          dpkg -l | grep -iE 'podcastcraft|fuse|electron' > logs-linux/installed_pkgs.txt 2>&1 || true
+
+      - name: Upload Linux Diagnostic Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: podcastcraft-linux-x64-diagnostics
+          path: logs-linux/
+          retention-days: 7
+
+  build-macos-arm64:
+    name: macOS Apple Silicon (arm64 dmg)
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: System Architecture and Environment Info
+        run: |
+          echo "=== macOS Apple Silicon Runner Info ==="
+          sw_vers
+          uname -a
+          uname -m
+          node -v || true
+          npm -v || true
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install backend dependencies (native ffmpeg-static for macOS arm64)
+        run: |
+          cd backend
+          npm ci
+          cd ..
+
+      - name: Validate GEMINI_API_KEY secret and write backend/.env
+        env:
+          GEMINI_SECRET: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -z "$GEMINI_SECRET" ]; then
+            echo "::error::El secret GEMINI_API_KEY no está configurado o está vacío en el repositorio."
+            exit 1
+          fi
+          echo "::add-mask::$GEMINI_SECRET"
+          mkdir -p backend
+          cat <<EOF > backend/.env
+          GEMINI_API_KEY=$GEMINI_SECRET
+          GEMINI_MODEL=gemini-2.0-flash
+          EOF
+          chmod 600 backend/.env
+          echo "backend/.env configurado correctamente (clave enmascarada)."
+
+      - name: CI Compatibility & Static Syntax Check
+        run: |
+          echo "Verificando sintaxis de scripts de producción..."
+          node --check electron/main.js
+          node --check electron/preload.js
+          node --check backend/src/server.js
+          node --check backend/src/storage.js
+          node --check backend/src/routes/auth.js
+          node --check backend/src/routes/audio.js
+          node --check backend/src/routes/export.js
+          node --check backend/src/utils/audioMixer.js
+          node --check backend/src/utils/audioTrimmer.js
+          node --check .github/scripts/smoke-test.js
+          echo "Sintaxis 100% verificada."
+
+      - name: Build macOS Apple Silicon DMG
+        run: npm run build:mac:arm64
+
+      - name: Verify build artifact exists and is non-empty
+        run: |
+          echo "=== Verificando archivos generados en dist/ ==="
+          ls -la dist/
+          DMG_FILE=$(ls dist/PodcastCraft-AI-*-mac-arm64.dmg | head -n 1)
+
+          if [ ! -s "$DMG_FILE" ]; then
+            echo "::error::El archivo DMG arm64 no existe o pesa 0 bytes: $DMG_FILE"
+            exit 1
+          fi
+
+          echo "DMG arm64 verificado: $DMG_FILE ($(stat -f%z "$DMG_FILE") bytes)"
+
+      - name: Strict Architecture Verification (macOS arm64)
+        run: |
+          echo "=== Verificación estricta de arquitectura arm64 ==="
+          RUNNER_ARCH=$(uname -m)
+          echo "Arquitectura del runner: $RUNNER_ARCH"
+          if [ "$RUNNER_ARCH" != "arm64" ]; then
+            echo "::error::El runner no es arm64 (es $RUNNER_ARCH)"
+            exit 1
+          fi
+
+          DMG_FILE=$(ls dist/PodcastCraft-AI-*-mac-arm64.dmg | head -n 1)
+          MOUNT_DIR="/tmp/pc_mount_arm64"
+          mkdir -p "$MOUNT_DIR"
+          hdiutil attach "$DMG_FILE" -mountpoint "$MOUNT_DIR" -nobrowse -quiet
+
+          MAIN_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
+          FFMPEG_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/Resources/backend/node_modules/ffmpeg-static/ffmpeg"
+
+          MAIN_FILE_DESC=$(file "$MAIN_BIN")
+          FFMPEG_FILE_DESC=$(file "$FFMPEG_BIN")
+
+          echo "Binario principal: $MAIN_FILE_DESC"
+          echo "Binario FFmpeg: $FFMPEG_FILE_DESC"
+
+          # Copiar la app a carpeta temporal para la prueba de humo antes de desmontar
+          rm -rf "/tmp/PodcastCraft-AI-arm64.app"
+          cp -R "$MOUNT_DIR/PodcastCraft AI.app" "/tmp/PodcastCraft-AI-arm64.app"
+          hdiutil detach "$MOUNT_DIR" -force
+
+          if ! echo "$MAIN_FILE_DESC" | grep -q "arm64"; then
+            echo "::error::El ejecutable de Electron no es arm64: $MAIN_FILE_DESC"
+            exit 1
+          fi
+
+          if ! echo "$FFMPEG_FILE_DESC" | grep -q "arm64"; then
+            echo "::error::El binario de FFmpeg no es arm64: $FFMPEG_FILE_DESC"
+            exit 1
+          fi
+
+          echo "Arquitectura arm64 confirmada en ejecutable y FFmpeg."
+
+      - name: Smoke Test — macOS Apple Silicon (Packaged App)
+        run: |
+          echo "=== Ejecutando Prueba de Humo en macOS arm64 ==="
+          node .github/scripts/smoke-test.js \
+            --app-path "/tmp/PodcastCraft-AI-arm64.app/Contents/MacOS/PodcastCraft AI"
+
+      - name: Upload macOS arm64 Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: podcastcraft-macos-arm64
+          path: dist/PodcastCraft-AI-*-mac-arm64.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Save Diagnostic Logs (on failure or always)
+        if: always()
+        run: |
+          mkdir -p logs-mac-arm64
+          syslog -k Sender PodcastCraft > logs-mac-arm64/syslog_podcastcraft.txt 2>&1 || true
+
+      - name: Upload macOS arm64 Diagnostic Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: podcastcraft-macos-arm64-diagnostics
+          path: logs-mac-arm64/
+          retention-days: 7
+
+  build-macos-x64:
+    name: macOS Intel (x64 dmg)
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: System Architecture and Environment Info
+        run: |
+          echo "=== macOS Intel Runner Info ==="
+          sw_vers
+          uname -a
+          uname -m
+          node -v || true
+          npm -v || true
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install backend dependencies (native ffmpeg-static for macOS x64)
+        run: |
+          cd backend
+          npm ci
+          cd ..
+
+      - name: Validate GEMINI_API_KEY secret and write backend/.env
+        env:
+          GEMINI_SECRET: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -z "$GEMINI_SECRET" ]; then
+            echo "::error::El secret GEMINI_API_KEY no está configurado o está vacío en el repositorio."
+            exit 1
+          fi
+          echo "::add-mask::$GEMINI_SECRET"
+          mkdir -p backend
+          cat <<EOF > backend/.env
+          GEMINI_API_KEY=$GEMINI_SECRET
+          GEMINI_MODEL=gemini-2.0-flash
+          EOF
+          chmod 600 backend/.env
+          echo "backend/.env configurado correctamente (clave enmascarada)."
+
+      - name: CI Compatibility & Static Syntax Check
+        run: |
+          echo "Verificando sintaxis de scripts de producción..."
+          node --check electron/main.js
+          node --check electron/preload.js
+          node --check backend/src/server.js
+          node --check backend/src/storage.js
+          node --check backend/src/routes/auth.js
+          node --check backend/src/routes/audio.js
+          node --check backend/src/routes/export.js
+          node --check backend/src/utils/audioMixer.js
+          node --check backend/src/utils/audioTrimmer.js
+          node --check .github/scripts/smoke-test.js
+          echo "Sintaxis 100% verificada."
+
+      - name: Build macOS Intel DMG
+        run: npm run build:mac:x64
+
+      - name: Verify build artifact exists and is non-empty
+        run: |
+          echo "=== Verificando archivos generados en dist/ ==="
+          ls -la dist/
+          DMG_FILE=$(ls dist/PodcastCraft-AI-*-mac-x64.dmg | head -n 1)
+
+          if [ ! -s "$DMG_FILE" ]; then
+            echo "::error::El archivo DMG x64 no existe o pesa 0 bytes: $DMG_FILE"
+            exit 1
+          fi
+
+          echo "DMG x64 verificado: $DMG_FILE ($(stat -f%z "$DMG_FILE") bytes)"
+
+      - name: Strict Architecture Verification (macOS x64)
+        run: |
+          echo "=== Verificación estricta de arquitectura Intel x64 ==="
+          RUNNER_ARCH=$(uname -m)
+          echo "Arquitectura del runner: $RUNNER_ARCH"
+          if [ "$RUNNER_ARCH" != "x86_64" ]; then
+            echo "::error::El runner no es x86_64 (es $RUNNER_ARCH)"
+            exit 1
+          fi
+
+          DMG_FILE=$(ls dist/PodcastCraft-AI-*-mac-x64.dmg | head -n 1)
+          MOUNT_DIR="/tmp/pc_mount_x64"
+          mkdir -p "$MOUNT_DIR"
+          hdiutil attach "$DMG_FILE" -mountpoint "$MOUNT_DIR" -nobrowse -quiet
+
+          MAIN_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
+          FFMPEG_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/Resources/backend/node_modules/ffmpeg-static/ffmpeg"
+
+          MAIN_FILE_DESC=$(file "$MAIN_BIN")
+          FFMPEG_FILE_DESC=$(file "$FFMPEG_BIN")
+
+          echo "Binario principal: $MAIN_FILE_DESC"
+          echo "Binario FFmpeg: $FFMPEG_FILE_DESC"
+
+          # Copiar la app a carpeta temporal para la prueba de humo antes de desmontar
+          rm -rf "/tmp/PodcastCraft-AI-x64.app"
+          cp -R "$MOUNT_DIR/PodcastCraft AI.app" "/tmp/PodcastCraft-AI-x64.app"
+          hdiutil detach "$MOUNT_DIR" -force
+
+          if ! echo "$MAIN_FILE_DESC" | grep -q "x86_64"; then
+            echo "::error::El ejecutable de Electron no es x86_64: $MAIN_FILE_DESC"
+            exit 1
+          fi
+
+          if ! echo "$FFMPEG_FILE_DESC" | grep -q "x86_64"; then
+            echo "::error::El binario de FFmpeg no es x86_64: $FFMPEG_FILE_DESC"
+            exit 1
+          fi
+
+          echo "Arquitectura Intel x64 confirmada en ejecutable y FFmpeg."
+
+      - name: Smoke Test — macOS Intel (Packaged App)
+        run: |
+          echo "=== Ejecutando Prueba de Humo en macOS Intel ==="
+          node .github/scripts/smoke-test.js \
+            --app-path "/tmp/PodcastCraft-AI-x64.app/Contents/MacOS/PodcastCraft AI"
+
+      - name: Upload macOS x64 Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: podcastcraft-macos-x64
+          path: dist/PodcastCraft-AI-*-mac-x64.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Save Diagnostic Logs (on failure or always)
+        if: always()
+        run: |
+          mkdir -p logs-mac-x64
+          syslog -k Sender PodcastCraft > logs-mac-x64/syslog_podcastcraft.txt 2>&1 || true
+
+      - name: Upload macOS x64 Diagnostic Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: podcastcraft-macos-x64-diagnostics
+          path: logs-mac-x64/
+          retention-days: 7
