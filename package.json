@@ -3,6 +3,7 @@
   "version": "1.1.0",
   "description": "PodcastCraft AI",
   "author": "PodcastCraft AI Team",
+  "homepage": "https://github.com/EdedArt/PodcastCraft_AI",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -10,7 +11,10 @@
     "test": "node tests/run_tests.js",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
+    "build:mac:arm64": "electron-builder --mac --arm64",
+    "build:mac:x64": "electron-builder --mac --x64",
     "build:linux": "electron-builder --linux",
+    "build:linux:x64": "electron-builder --linux --x64",
     "build:all": "electron-builder -mwl"
   },
   "devDependencies": {
@@ -51,10 +55,26 @@
       "createStartMenuShortcut": true
     },
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "category": "public.app-category.music",
+      "identity": null,
+      "artifactName": "PodcastCraft-AI-${version}-mac-${arch}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "PodcastCraft-AI-${version}-mac-${arch}.${ext}"
     },
     "linux": {
-      "target": "AppImage"
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "AudioVideo",
+      "artifactName": "PodcastCraft-AI-${version}-linux-x64.${ext}"
+    },
+    "deb": {
+      "maintainer": "PodcastCraft AI Team <team@podcastcraft.ai>",
+      "packageCategory": "sound",
+      "priority": "optional"
     }
   }
 }
