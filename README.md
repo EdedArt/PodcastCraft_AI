@@ -91,8 +91,8 @@ Los instaladores de Linux y macOS se compilan mediante el workflow automatizado 
 ---
 
 ### ⚠️ Alcance Real y Advertencia de Seguridad de la Clave de IA
-1. **Validación en CI vs Entorno Real:** Las compilaciones de Linux y macOS disponen exclusivamente de **pruebas automatizadas de humo en los runners de GitHub Actions** (arranque del backend embebido, respuesta de `/health`, registro de cuenta, mezcla con FFmpeg empaquetado, integridad de decodificación y empaquetado seguro). No se afirma compatibilidad humana ni física exhaustiva en todas las distribuciones o versiones de macOS.
-2. **Atajos de Teclado en macOS:** Los atajos de edición y transporte están actualmente mapeados con la tecla `Ctrl` (estándar de Windows/Linux) y no han sido adaptados aún a la tecla `Cmd` (`⌘`), al igual que la tecla para eliminar clips (`Delete` en lugar de `Backspace`).
+1. **Validación en CI vs Entorno Real:** Las compilaciones y paquetes de Linux (.AppImage, .deb) y macOS (.dmg arm64 e Intel) disponen exclusivamente de **pruebas automatizadas de humo en los runners de GitHub Actions** (arranque del backend embebido, respuesta de `/health`, registro de cuenta, mezcla nativa con FFmpeg empaquetado, integridad de decodificación, empaquetado seguro y cierre limpio con señales). No se dispone de validación humana ni verificación en hardware físico Mac ni en distribuciones físicas diversas de Linux.
+2. **Atajos de Teclado Adaptados por Plataforma:** Los atajos del editor y timeline se adaptan automáticamente a la plataforma en ejecución (`Ctrl+Z` y `Supr` en Windows y Linux; `⌘Z` y `⌫` / `Delete` en macOS), con protección estricta de foco en campos de edición de texto y etiquetas dinámicas en la interfaz.
 3. **Seguridad de la clave de Gemini (`GEMINI_API_KEY`):**
    - Para que la funcionalidad de Inteligencia Artificial opere en las aplicaciones empaquetadas, la clave de API viaja configurada dentro del archivo `backend/.env` del paquete de producción.
    - **La clave NO está encriptada contra ingeniería inversa:** cualquier usuario con acceso al instalador o paquete puede extraer el archivo `.env` o inspeccionar el código fuente.
@@ -758,22 +758,26 @@ Para cumplir con los más altos estándares cromáticos en ambos temas:
 
 Esta fase cierra la construcción funcional de la estación de trabajo digital antes de la fase de empaquetado nativo con Electron, implementando un sistema de atajos de teclado estándar de la industria, un motor de reversión histórica (*Undo*) acotado y una auditoría rigurosa de consistencia cromática, accesibilidad e internacionalización.
 
-### 9.1 Tabla Completa de Atajos de Teclado
+### 9.1 Tabla Completa de Atajos de Teclado por Plataforma
 
-| Atajo | Acción DAW / Timeline | Ámbito / Contexto |
-|---|---|---|
-| **`Espacio`** | Reproducir / Pausar reproducción de audio | Global (excepto en inputs) |
-| **`J`** | Retroceder 5 segundos en el tiempo de reproducción | Global (excepto en inputs) |
-| **`L`** | Avanzar 5 segundos en el tiempo de reproducción | Global (excepto en inputs) |
-| **`M`** | Silenciar / Activar sonido (*Mute* / *Unmute*) | Global (excepto en inputs) |
-| **`Ctrl+Z`** / **`Cmd+Z`** | Deshacer la última acción estructural del timeline | Global (en inputs delega al undo nativo del navegador) |
-| **`Delete`** / **`Backspace`** | Eliminar clip seleccionado en el timeline | Timeline / Global (con clip seleccionado) |
-| **`Delete`** / **`Backspace`** | Alternar marcado de palabra para borrado | En foco sobre ficha de transcripción (`#ai-transcript`) |
-| **`ArrowLeft`** / **`ArrowRight`** | Scrubbing continuo manual (±5s) | En foco sobre la regla de tiempo (`#timeline-ruler`) |
-| **`Enter`** / **`Espacio`** | Alternar marcado de ficha de palabra | En foco sobre ficha de transcripción (`#ai-transcript`) |
+| Atajo (Windows / Linux) | Atajo (macOS) | Acción DAW / Timeline | Ámbito y Guardia de Foco |
+|---|---|---|---|
+| **`Espacio`** | **`Espacio`** | Reproducir / Pausar reproducción de audio | Global (excepto en campos de texto) |
+| **`J`** | **`J`** | Retroceder 5 segundos en el tiempo de reproducción | Global (excepto en campos de texto) |
+| **`L`** | **`L`** | Avanzar 5 segundos en el tiempo de reproducción | Global (excepto en campos de texto) |
+| **`M`** | **`M`** | Silenciar / Activar sonido (*Mute* / *Unmute*) | Global (excepto en campos de texto) |
+| **`S`** | **`S`** | Dividir clip seleccionado en la posición del playhead (*Split*) | Timeline / Global (excepto en campos de texto) |
+| **`Ctrl+Z`** | **`⌘Z`** (`Cmd+Z`) | Deshacer la última acción estructural del timeline | Global (en campos de texto delega al deshacer nativo) |
+| **`Supr`** (`Delete`) | **`⌫`** (`Backspace`) o **`Delete`** | Eliminar clip cerrando el hueco (*Ripple Delete*) | Con clip seleccionado (en campos de texto borra caracteres sin borrar clips) |
+| **`Shift + Supr`** | **`Shift + ⌫`** o **`Shift + Delete`** | Eliminar clip conservando el hueco (*Delete*) | Con clip seleccionado (en campos de texto borra caracteres) |
+| **`Escape`** | **`Escape`** | Deseleccionar clip activo del timeline | Timeline / Global (excepto en campos de texto) |
+| **`ArrowLeft`** / **`ArrowRight`** | **`ArrowLeft`** / **`ArrowRight`** | Scrubbing continuo manual (±5s) | En foco sobre la regla de tiempo (`#timeline-ruler`) |
+| **`Supr`** (`Delete`) | **`⌫`** (`Backspace`) o **`Delete`** | Alternar marcado de palabra para borrado | En foco sobre ficha de transcripción (`#ai-transcript`) |
+| **`Enter`** / **`Espacio`** | **`Enter`** / **`Espacio`** | Alternar marcado de ficha de palabra | En foco sobre ficha de transcripción (`#ai-transcript`) |
 
 > [!IMPORTANT]
-> **Guardia de Foco Contextual:** Todos los atajos de teclado DAW respetan estrictamente la interacción con campos de texto (`<input>`, `<textarea>`, `contentEditable`). Si el usuario escribe en un campo de texto (por ejemplo el título del proyecto), presionar `J`, `L`, `M` o `Espacio` escribe el carácter correspondiente sin disparar eventos de transporte. `Ctrl+Z` dentro de un campo de texto permite que el navegador ejecute su operación nativa de deshacer sobre el texto editado sin alterar el timeline.
+> **Guardia de Foco Contextual y Seguridad de Edición:**
+> Todos los atajos de teclado DAW respetan estrictamente la interacción con campos editables (`<input>`, `<textarea>`, `<select>`, `contentEditable`). Si el usuario escribe o edita en un campo de texto (por ejemplo el login, registro, campos de volumen o títulos), presionar `J`, `L`, `M`, `S`, `Espacio` o `Backspace` opera nativamente sobre el texto sin alterar el timeline ni borrar clips. En Windows y Linux, la tecla `Backspace` fuera de campos de texto NO borra clips (solo `Supr`/`Delete`). En macOS, `Backspace` actúa como la tecla de borrado de clips en el timeline cerrando hueco, y con `Shift` conservándolo, mientras que dentro de inputs borra caracteres de texto sin interferencias.
 
 ### 9.2 Arquitectura y Alcance del Deshacer (*Undo*)
 
