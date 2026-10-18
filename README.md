@@ -12,12 +12,91 @@ Este repositorio contiene la **Versión Oficial v1.1.0 (Fase 27 - Release Final 
 
 > 🔗 **Último Release Oficial:** [GitHub Releases — PodcastCraft AI v1.1.0](https://github.com/EdedArt/PodcastCraft_AI/releases/latest)
 
+### 🪟 Windows (x64) — Release Oficial de Producción
 1. **Descarga:** Descarga el instalador ejecutable oficial [`PodcastCraft AI.exe`](https://github.com/EdedArt/PodcastCraft_AI/releases/latest) (105.6 MB).
 2. **Instalación:** Ejecuta el archivo descargado para iniciar el asistente de instalación de Windows. Por defecto se instala en modo de usuario (`%LOCALAPPDATA%\Programs\PodcastCraft AI`) sin requerir privilegios de administrador.
 3. **Advertencia de Windows SmartScreen:** Dado que el ejecutable es un proyecto de código abierto independiente que no dispone de un certificado digital corporativo de pago (EV Certificate), Windows Defender SmartScreen mostrará la ventana preventiva *"Windows protegió su equipo"*:
    - Haz clic en el enlace **"Más información"**.
    - Haz clic en el botón **"Ejecutar de todas formas"**.
    - La aplicación se instalará, creará los accesos directos en el Escritorio y Menú Inicio, y quedará lista para usar.
+
+---
+
+### 🐧 Linux (x64) — Compilación Multiplataforma (GitHub Actions)
+Los instaladores para distribuciones GNU/Linux de 64 bits son generados automáticamente en el workflow de CI en dos formatos:
+
+1. **Paquete AppImage (`.AppImage`):**
+   - Descarga el archivo `PodcastCraft-AI-1.1.0-linux-x64.AppImage` desde los Artifacts de GitHub Actions.
+   - Otorga permisos de ejecución desde la terminal:
+     ```bash
+     chmod +x PodcastCraft-AI-1.1.0-linux-x64.AppImage
+     ```
+   - Ejecuta la aplicación:
+     ```bash
+     ./PodcastCraft-AI-1.1.0-linux-x64.AppImage
+     ```
+   - **Nota sobre dependencias FUSE:** En distribuciones modernas (como Ubuntu 22.04 o Ubuntu 24.04), si el sistema no incluye `libfuse2`, instálalo con:
+     ```bash
+     sudo apt install -y libfuse2t64 || sudo apt install -y libfuse2
+     ```
+   - *Alternativa sin FUSE:* Puedes ejecutar la AppImage mediante extracción directa en memoria ejecutando:
+     ```bash
+     APPIMAGE_EXTRACT_AND_RUN=1 ./PodcastCraft-AI-1.1.0-linux-x64.AppImage
+     ```
+
+2. **Paquete Debian (`.deb`):**
+   - Descarga `PodcastCraft-AI-1.1.0-linux-x64.deb`.
+   - Instala el paquete y sus dependencias con APT:
+     ```bash
+     sudo apt install ./PodcastCraft-AI-1.1.0-linux-x64.deb
+     ```
+   - O mediante dpkg:
+     ```bash
+     sudo dpkg -i PodcastCraft-AI-1.1.0-linux-x64.deb
+     ```
+
+---
+
+### 🍏 macOS — Compilación Multiplataforma (GitHub Actions)
+Se generan dos paquetes `.dmg` independientes según la arquitectura del procesador:
+
+1. **Elección del paquete según el chip:**
+   - **Apple Silicon (M1 / M2 / M3 / M4 / arm64):** Descarga `PodcastCraft-AI-1.1.0-mac-arm64.dmg`.
+   - **Intel (x86_64):** Descarga `PodcastCraft-AI-1.1.0-mac-x64.dmg`.
+2. **Instalación:**
+   - Abre el archivo `.dmg` descargado y arrastra el icono de **PodcastCraft AI** a la carpeta **Aplicaciones** (`/Applications`).
+3. **Advertencia de Apple Gatekeeper (App sin firma ni notarización corporativa):**
+   - Al no contar con un certificado de desarrollador de Apple Developer Program de pago ($99 USD/año), macOS bloqueará la apertura directa indicando que la app *"proviene de un desarrollador no identificado"* o *"está dañada y no se puede abrir"*.
+   - **Para abrirla:**
+     - Haz **clic derecho** (o `Control + clic`) sobre **PodcastCraft AI** en `/Applications` y selecciona **"Abrir"** en el menú contextual. Luego pulsa **"Abrir"** en el diálogo de confirmación.
+     - O bien, ve a **Ajustes del Sistema $\rightarrow$ Privacidad y seguridad**, desplázate hacia abajo hasta la sección de seguridad y haz clic en **"Abrir de todos modos"**.
+     - Alternativa desde Terminal (remover cuarentena):
+       ```bash
+       xattr -cr "/Applications/PodcastCraft AI.app"
+       ```
+
+---
+
+### ⚙️ Generación de Instaladores y Descarga de Artifacts en GitHub Actions
+Los instaladores de Linux y macOS se compilan mediante el workflow automatizado **"Build Multiplatform"**:
+1. En el repositorio de GitHub, dirígete a la pestaña **Actions**.
+2. En la barra lateral izquierda, selecciona el workflow **"Build Multiplatform"**.
+3. Haz clic en **"Run workflow"**, selecciona la rama deseada (p. ej. `ci/multiplatform-build`) y pulsa el botón verde **"Run workflow"** (también se dispara automáticamente al hacer push a dicha rama).
+4. Una vez finalizada la ejecución de los tres jobs (`ubuntu-24.04`, `macos-15` y `macos-15-intel`), desplázate a la sección **Artifacts** en el resumen de la corrida:
+   - `podcastcraft-linux-x64`: Contiene `PodcastCraft-AI-1.1.0-linux-x64.AppImage` y `PodcastCraft-AI-1.1.0-linux-x64.deb`.
+   - `podcastcraft-macos-arm64`: Contiene `PodcastCraft-AI-1.1.0-mac-arm64.dmg`.
+   - `podcastcraft-macos-x64`: Contiene `PodcastCraft-AI-1.1.0-mac-x64.dmg`.
+   - *Los paquetes generados se conservan durante 14 días.*
+
+---
+
+### ⚠️ Alcance Real y Advertencia de Seguridad de la Clave de IA
+1. **Validación en CI vs Entorno Real:** Las compilaciones de Linux y macOS disponen exclusivamente de **pruebas automatizadas de humo en los runners de GitHub Actions** (arranque del backend embebido, respuesta de `/health`, registro de cuenta, mezcla con FFmpeg empaquetado, integridad de decodificación y empaquetado seguro). No se afirma compatibilidad humana ni física exhaustiva en todas las distribuciones o versiones de macOS.
+2. **Atajos de Teclado en macOS:** Los atajos de edición y transporte están actualmente mapeados con la tecla `Ctrl` (estándar de Windows/Linux) y no han sido adaptados aún a la tecla `Cmd` (`⌘`), al igual que la tecla para eliminar clips (`Delete` en lugar de `Backspace`).
+3. **Seguridad de la clave de Gemini (`GEMINI_API_KEY`):**
+   - Para que la funcionalidad de Inteligencia Artificial opere en las aplicaciones empaquetadas, la clave de API viaja configurada dentro del archivo `backend/.env` del paquete de producción.
+   - **La clave NO está encriptada contra ingeniería inversa:** cualquier usuario con acceso al instalador o paquete puede extraer el archivo `.env` o inspeccionar el código fuente.
+   - Dado que los artifacts de un repositorio público de GitHub pueden ser descargados por otros usuarios, **se recomienda enfáticamente configurar límites de cuota estrictos (cuota de gasto $0 o límite diario de solicitudes)** para esa clave en la consola de Google AI Studio / Google Cloud.
 
 ---
 
