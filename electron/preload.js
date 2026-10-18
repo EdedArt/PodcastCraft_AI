@@ -1,9 +1,15 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 // Exposición mínima y segura de utilidades hacia el renderer
+// En entorno de prueba/desarrollo (no empaquetado), permite simular la plataforma mediante variable de entorno
+const isPackagedApp = Boolean(process.resourcesPath && process.resourcesPath.includes('resources') && !process.resourcesPath.includes('node_modules'));
+const effectivePlatform = (!isPackagedApp && process.env.PODCASTCRAFT_SIMULATE_PLATFORM)
+  ? process.env.PODCASTCRAFT_SIMULATE_PLATFORM
+  : process.platform;
+
 contextBridge.exposeInMainWorld('electronAPI', {
   isElectron: true,
-  platform: process.platform,
+  platform: effectivePlatform,
   showSaveExportDialog: async (options) => {
     return await ipcRenderer.invoke('show-save-export-dialog', options);
   },

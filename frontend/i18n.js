@@ -88,9 +88,9 @@ const I18N = {
     'timeline.title': 'Línea de tiempo',
     'timeline.addTrackAria': 'Agregar nuevo carril',
     'timeline.addTrackTitle': 'Agregar nuevo carril',
-    'timeline.undoAria': 'Deshacer última acción en la línea de tiempo (Ctrl+Z)',
-    'timeline.undoTitle': 'Deshacer (Ctrl+Z)',
-    'timeline.undoToast': 'Acción deshecha (Ctrl+Z)',
+    'timeline.undoAria': 'Deshacer última acción en la línea de tiempo ({shortcut})',
+    'timeline.undoTitle': 'Deshacer ({shortcut})',
+    'timeline.undoToast': 'Acción deshecha ({shortcut})',
     'timeline.zoomLabel': 'Zoom',
     'timeline.zoomSliderAria': 'Nivel de zoom de la línea de tiempo',
     'timeline.zoomSliderTitle': 'Nivel de zoom',
@@ -119,8 +119,8 @@ const I18N = {
     'clipToolbar.splitAria': 'Dividir en la línea de tiempo (S)',
     'clipToolbar.splitTitle': 'Dividir en la línea de tiempo (S)',
     'clipToolbar.deleteBtn': 'Eliminar',
-    'clipToolbar.deleteAria': 'Eliminar (Supr) — Shift: sin cerrar hueco',
-    'clipToolbar.deleteTitle': 'Eliminar (Supr) — Shift: sin cerrar hueco',
+    'clipToolbar.deleteAria': 'Eliminar ({shortcut}) — Shift: sin cerrar hueco',
+    'clipToolbar.deleteTitle': 'Eliminar ({shortcut}) — Shift: sin cerrar hueco',
     'clipToolbar.splitOutsideNotice': 'Coloca la línea de tiempo dentro del clip',
 
     // Espacio de Trabajo y Ajustes
@@ -305,9 +305,9 @@ const I18N = {
     'timeline.title': 'Timeline',
     'timeline.addTrackAria': 'Add new track',
     'timeline.addTrackTitle': 'Add new track',
-    'timeline.undoAria': 'Undo last action on timeline (Ctrl+Z)',
-    'timeline.undoTitle': 'Undo (Ctrl+Z)',
-    'timeline.undoToast': 'Action undone (Ctrl+Z)',
+    'timeline.undoAria': 'Undo last action on timeline ({shortcut})',
+    'timeline.undoTitle': 'Undo ({shortcut})',
+    'timeline.undoToast': 'Action undone ({shortcut})',
     'timeline.zoomLabel': 'Zoom',
     'timeline.zoomSliderAria': 'Timeline zoom level',
     'timeline.zoomSliderTitle': 'Zoom level',
@@ -336,8 +336,8 @@ const I18N = {
     'clipToolbar.splitAria': 'Split at playhead (S)',
     'clipToolbar.splitTitle': 'Split at playhead (S)',
     'clipToolbar.deleteBtn': 'Delete',
-    'clipToolbar.deleteAria': 'Delete (Del) — Shift: keep gap',
-    'clipToolbar.deleteTitle': 'Delete (Del) — Shift: keep gap',
+    'clipToolbar.deleteAria': 'Delete ({shortcut}) — Shift: keep gap',
+    'clipToolbar.deleteTitle': 'Delete ({shortcut}) — Shift: keep gap',
     'clipToolbar.splitOutsideNotice': 'Place the playhead inside the clip',
 
     // Espacio de Trabajo y Ajustes
@@ -471,8 +471,16 @@ function setLanguage(lang) {
   document.documentElement.setAttribute('lang', finalLang);
 }
 
+function getIsMacPlatform() {
+  const plat = (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.platform) ||
+    (typeof navigator !== 'undefined' && ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform)) ||
+    '';
+  return /mac|darwin/i.test(plat);
+}
+
 /**
  * Traduce una clave al idioma activo con doble fallback e interpolación de variables {param}.
+ * Resuelve automáticamente atajos de teclado adaptados ({shortcut}) según plataforma (macOS vs Win/Linux).
  * @param {string} key
  * @param {Record<string, string | number>} [params]
  * @returns {string}
@@ -480,6 +488,16 @@ function setLanguage(lang) {
 function t(key, params) {
   const lang = getCurrentLanguage();
   let str = (I18N[lang] && I18N[lang][key]) || (I18N.es && I18N.es[key]) || key;
+  const isMac = getIsMacPlatform();
+
+  if (typeof str === 'string' && str.includes('{shortcut}')) {
+    const isUndo = key.startsWith('timeline.undo');
+    const defaultShortcut = isUndo
+      ? (isMac ? '⌘Z' : 'Ctrl+Z')
+      : (isMac ? '⌫' : (lang === 'es' ? 'Supr' : 'Del'));
+    str = str.replace(/\{shortcut\}/g, defaultShortcut);
+  }
+
   if (params && typeof params === 'object') {
     for (const [k, v] of Object.entries(params)) {
       str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
@@ -579,3 +597,11 @@ window.getCurrentLanguage = getCurrentLanguage;
 window.setLanguage = setLanguage;
 window.t = t;
 window.applyTranslations = applyTranslations;
+window.getIsMacPlatform = getIsMacPlatform;
+window.i18n = {
+  t,
+  setLanguage,
+  getCurrentLanguage,
+  applyTranslations,
+  getIsMacPlatform
+};

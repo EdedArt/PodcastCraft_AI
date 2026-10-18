@@ -5637,38 +5637,54 @@ function bindTimelineEvents() {
 
   // 6. Atajos de teclado globales (Sprint 4 — 6, Fase 15, Fase 16, Fase 24)
   document.addEventListener('keydown', (e) => {
-    // Escape: cancela arrastre de clip en curso (Fase 24)
-    if (e.key === 'Escape' && activeClipDrag) {
-      if (activeClipDrag.clipEl && activeClipDrag.clipEl.hasPointerCapture && activeClipDrag.clipEl.hasPointerCapture(activeClipDrag.pointerId)) {
-        try {
-          activeClipDrag.clipEl.releasePointerCapture(activeClipDrag.pointerId);
-        } catch (_) {}
-      }
-      document.body.classList.remove('is-clip-dragging');
-      if (activeClipDrag.clipEl) {
-        activeClipDrag.clipEl.classList.remove('is-dragging-clip');
-        activeClipDrag.clipEl.style.left = Math.round(timeToPixels(activeClipDrag.initialClipStart)) + 'px';
-      }
-      $$('.timeline-lane').forEach((l) => l.classList.remove('lane-dragover'));
-      if (activeClipDrag.snapshotTaken) {
-        undoStack.pop();
-        if (typeof updateUndoButtonState === 'function') {
-          updateUndoButtonState();
+    // Guardia de campo editable: si el usuario está en un input, textarea, select o contentEditable
+    const activeEl = document.activeElement;
+    const targetEl = e.target;
+    const isTagEditable = (el) => Boolean(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable));
+    const isEditable = isTagEditable(activeEl) || isTagEditable(targetEl);
+
+    // Escape: cancela arrastre de clip en curso (Fase 24) o deselecciona el clip activo
+    if (e.key === 'Escape') {
+      if (activeClipDrag) {
+        if (activeClipDrag.clipEl && activeClipDrag.clipEl.hasPointerCapture && activeClipDrag.clipEl.hasPointerCapture(activeClipDrag.pointerId)) {
+          try {
+            activeClipDrag.clipEl.releasePointerCapture(activeClipDrag.pointerId);
+          } catch (_) {}
         }
+        document.body.classList.remove('is-clip-dragging');
+        if (activeClipDrag.clipEl) {
+          activeClipDrag.clipEl.classList.remove('is-dragging-clip');
+          activeClipDrag.clipEl.style.left = Math.round(timeToPixels(activeClipDrag.initialClipStart)) + 'px';
+        }
+        $$('.timeline-lane').forEach((l) => l.classList.remove('lane-dragover'));
+        if (activeClipDrag.snapshotTaken) {
+          undoStack.pop();
+          if (typeof updateUndoButtonState === 'function') {
+            updateUndoButtonState();
+          }
+        }
+        activeClipDrag = null;
+        renderTimelineTracks();
+        return;
+      } else if (state.selection?.clipId && !isEditable) {
+        e.preventDefault();
+        setState({ selection: { clipId: null } });
+        return;
       }
-      activeClipDrag = null;
-      renderTimelineTracks();
-      return;
     }
 
-    // Guardia de campo editable: si el usuario está en un input, textarea o contentEditable
-    const activeTag = document.activeElement ? document.activeElement.tagName : '';
-    const isEditable = activeTag === 'INPUT' || activeTag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable);
+    const isMacPlatform = (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.platform)
+      ? /mac|darwin/i.test(window.electronAPI.platform)
+      : (typeof navigator !== 'undefined' && /mac|darwin/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || ''));
 
-    // Atajo: Ctrl+Z / Cmd+Z para deshacer acción estructural del timeline (Fase 16)
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+    // Atajo: Deshacer acción estructural del timeline (Ctrl+Z en Win/Linux, Cmd+Z en macOS)
+    const isUndoShortcut = isMacPlatform
+      ? (e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'z' || e.key === 'Z') && !e.shiftKey)
+      : (e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'z' || e.key === 'Z') && !e.shiftKey);
+
+    if (isUndoShortcut) {
       if (isEditable) {
-        // En campos de texto, dejar pasar el undo nativo del navegador
+        // En campos de texto, dejar pasar el undo nativo del navegador/sistema
         return;
       }
       e.preventDefault();
@@ -5676,7 +5692,7 @@ function bindTimelineEvents() {
       return;
     }
 
-    // Para el resto de los atajos, si el foco está en un campo editable, ignorar
+    // Para el resto de los atajos, si el foco está en un campo editable, ignorar estrictamente
     if (isEditable) {
       return;
     }
@@ -5699,8 +5715,15 @@ function bindTimelineEvents() {
       return;
     }
 
-    // Atajo: Delete / Backspace para eliminar clip seleccionado del timeline (Fase 24: ripple por defecto, Shift: sin cerrar hueco)
-    if ((e.key === 'Delete' || e.key === 'Backspace') && state.selection?.clipId) {
+    // Atajo: Eliminar clip seleccionado del timeline (Fase 24 / Fase 29)
+    // En Win/Linux: Delete (Supr). Backspace NO elimina clips.
+    // En macOS: Backspace (Supr en Mac) y Delete eliminan el clip.
+    // Shift: conserva el hueco; sin Shift: ripple delete cerrando el hueco.
+    const isDeleteShortcut = isMacPlatform
+      ? (e.key === 'Backspace' || e.key === 'Delete')
+      : (e.key === 'Delete');
+
+    if (isDeleteShortcut && !e.ctrlKey && !e.metaKey && !e.altKey && state.selection?.clipId) {
       e.preventDefault();
       deleteSelectedClip({ ripple: !e.shiftKey });
       return;
