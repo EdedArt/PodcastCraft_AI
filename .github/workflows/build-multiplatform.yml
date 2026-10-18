@@ -31,20 +31,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             xvfb \
-            libfuse2 \
             libnss3 \
             libatk-bridge2.0-0 \
             libgtk-3-0 \
             libxss1 \
-            libasound2t64 \
             file \
             dpkg
+          sudo apt-get install -y --no-install-recommends libasound2t64 || sudo apt-get install -y --no-install-recommends libasound2 || true
+          sudo apt-get install -y --no-install-recommends libfuse2t64 || sudo apt-get install -y --no-install-recommends libfuse2 || true
 
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
 
       - name: Install root dependencies
         run: npm ci
@@ -166,12 +169,21 @@ jobs:
           DEB_FILE=$(ls dist/PodcastCraft-AI-*-linux-x64.deb | head -n 1)
           sudo dpkg -i "$DEB_FILE" || sudo apt-get install -f -y
 
-          INSTALLED_BIN="/opt/PodcastCraft AI/podcastcraft-ai"
-          if [ ! -f "$INSTALLED_BIN" ]; then
-            INSTALLED_BIN=$(which podcastcraft-ai || echo "")
+          INSTALLED_BIN=""
+          if [ -f "/opt/PodcastCraft AI/podcastcraft-ai" ]; then
+            INSTALLED_BIN="/opt/PodcastCraft AI/podcastcraft-ai"
+          elif [ -f "/opt/podcastcraft-ai/podcastcraft-ai" ]; then
+            INSTALLED_BIN="/opt/podcastcraft-ai/podcastcraft-ai"
+          else
+            INSTALLED_BIN=$(command -v podcastcraft-ai || true)
           fi
 
           echo "Ruta de binario instalado: $INSTALLED_BIN"
+          if [ -z "$INSTALLED_BIN" ] || [ ! -x "$INSTALLED_BIN" ]; then
+            echo "::error::No se encontró el ejecutable instalado del paquete .deb"
+            exit 1
+          fi
+
           xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" \
             node .github/scripts/smoke-test.js \
               --app-path "$INSTALLED_BIN" \
@@ -224,6 +236,9 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
 
       - name: Install root dependencies
         run: npm ci
@@ -293,23 +308,29 @@ jobs:
           fi
 
           DMG_FILE=$(ls dist/PodcastCraft-AI-*-mac-arm64.dmg | head -n 1)
-          MOUNT_DIR="/tmp/pc_mount_arm64"
-          mkdir -p "$MOUNT_DIR"
-          hdiutil attach "$DMG_FILE" -mountpoint "$MOUNT_DIR" -nobrowse -quiet
+          MOUNT_OUTPUT=$(hdiutil attach "$DMG_FILE" -nobrowse -readonly || true)
+          MOUNT_DIR=$(echo "$MOUNT_OUTPUT" | grep -E -o '/Volumes/.*' | tail -n 1)
+          echo "Punto de montaje reportado: $MOUNT_DIR"
 
-          MAIN_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
-          FFMPEG_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/Resources/backend/node_modules/ffmpeg-static/ffmpeg"
+          if [ -n "$MOUNT_DIR" ] && [ -d "$MOUNT_DIR/PodcastCraft AI.app" ]; then
+            MAIN_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
+            FFMPEG_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/Resources/backend/node_modules/ffmpeg-static/ffmpeg"
+            rm -rf "/tmp/PodcastCraft-AI-arm64.app"
+            cp -R "$MOUNT_DIR/PodcastCraft AI.app" "/tmp/PodcastCraft-AI-arm64.app"
+            hdiutil detach "$MOUNT_DIR" -force || true
+          else
+            echo "Utilizando binario empaquetado en dist/mac-arm64/"
+            MAIN_BIN="dist/mac-arm64/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
+            FFMPEG_BIN="dist/mac-arm64/PodcastCraft AI.app/Contents/Resources/backend/node_modules/ffmpeg-static/ffmpeg"
+            rm -rf "/tmp/PodcastCraft-AI-arm64.app"
+            cp -R "dist/mac-arm64/PodcastCraft AI.app" "/tmp/PodcastCraft-AI-arm64.app"
+          fi
 
           MAIN_FILE_DESC=$(file "$MAIN_BIN")
           FFMPEG_FILE_DESC=$(file "$FFMPEG_BIN")
 
           echo "Binario principal: $MAIN_FILE_DESC"
           echo "Binario FFmpeg: $FFMPEG_FILE_DESC"
-
-          # Copiar la app a carpeta temporal para la prueba de humo antes de desmontar
-          rm -rf "/tmp/PodcastCraft-AI-arm64.app"
-          cp -R "$MOUNT_DIR/PodcastCraft AI.app" "/tmp/PodcastCraft-AI-arm64.app"
-          hdiutil detach "$MOUNT_DIR" -force
 
           if ! echo "$MAIN_FILE_DESC" | grep -q "arm64"; then
             echo "::error::El ejecutable de Electron no es arm64: $MAIN_FILE_DESC"
@@ -373,6 +394,9 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
 
       - name: Install root dependencies
         run: npm ci
@@ -442,23 +466,29 @@ jobs:
           fi
 
           DMG_FILE=$(ls dist/PodcastCraft-AI-*-mac-x64.dmg | head -n 1)
-          MOUNT_DIR="/tmp/pc_mount_x64"
-          mkdir -p "$MOUNT_DIR"
-          hdiutil attach "$DMG_FILE" -mountpoint "$MOUNT_DIR" -nobrowse -quiet
+          MOUNT_OUTPUT=$(hdiutil attach "$DMG_FILE" -nobrowse -readonly || true)
+          MOUNT_DIR=$(echo "$MOUNT_OUTPUT" | grep -E -o '/Volumes/.*' | tail -n 1)
+          echo "Punto de montaje reportado: $MOUNT_DIR"
 
-          MAIN_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
-          FFMPEG_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/Resources/backend/node_modules/ffmpeg-static/ffmpeg"
+          if [ -n "$MOUNT_DIR" ] && [ -d "$MOUNT_DIR/PodcastCraft AI.app" ]; then
+            MAIN_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
+            FFMPEG_BIN="$MOUNT_DIR/PodcastCraft AI.app/Contents/Resources/backend/node_modules/ffmpeg-static/ffmpeg"
+            rm -rf "/tmp/PodcastCraft-AI-x64.app"
+            cp -R "$MOUNT_DIR/PodcastCraft AI.app" "/tmp/PodcastCraft-AI-x64.app"
+            hdiutil detach "$MOUNT_DIR" -force || true
+          else
+            echo "Utilizando binario empaquetado en dist/mac/"
+            MAIN_BIN="dist/mac/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
+            FFMPEG_BIN="dist/mac/PodcastCraft AI.app/Contents/Resources/backend/node_modules/ffmpeg-static/ffmpeg"
+            rm -rf "/tmp/PodcastCraft-AI-x64.app"
+            cp -R "dist/mac/PodcastCraft AI.app" "/tmp/PodcastCraft-AI-x64.app"
+          fi
 
           MAIN_FILE_DESC=$(file "$MAIN_BIN")
           FFMPEG_FILE_DESC=$(file "$FFMPEG_BIN")
 
           echo "Binario principal: $MAIN_FILE_DESC"
           echo "Binario FFmpeg: $FFMPEG_FILE_DESC"
-
-          # Copiar la app a carpeta temporal para la prueba de humo antes de desmontar
-          rm -rf "/tmp/PodcastCraft-AI-x64.app"
-          cp -R "$MOUNT_DIR/PodcastCraft AI.app" "/tmp/PodcastCraft-AI-x64.app"
-          hdiutil detach "$MOUNT_DIR" -force
 
           if ! echo "$MAIN_FILE_DESC" | grep -q "x86_64"; then
             echo "::error::El ejecutable de Electron no es x86_64: $MAIN_FILE_DESC"
