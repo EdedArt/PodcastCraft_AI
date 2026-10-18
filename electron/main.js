@@ -396,12 +396,21 @@ process.on('exit', () => {
   killBackend();
 });
 
-process.on('SIGINT', () => {
+function handleGracefulExit() {
   killBackend();
-  process.exit(0);
+  app.quit();
+  const forceTimer = setTimeout(() => {
+    process.exit(0);
+  }, 5000);
+  if (typeof forceTimer.unref === 'function') {
+    forceTimer.unref();
+  }
+}
+
+process.on('SIGINT', () => {
+  handleGracefulExit();
 });
 
 process.on('SIGTERM', () => {
-  killBackend();
-  process.exit(0);
+  handleGracefulExit();
 });
