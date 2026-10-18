@@ -24,7 +24,7 @@ Este repositorio contiene la **Versión Oficial v1.1.0 (Fase 27 - Release Final 
 ## ✨ Qué incluye la versión v1.1.0
 
 - 🎚️ **Motor de audio multipista profesional:** Reproducción estéreo continua de baja latencia con Web Audio API, soporte de múltiples carriles simultáneos y aislamiento de canales.
-- 🔊 **Control de ganancia y volumen dinámico:** Faders reactivos con ajuste de volumen individual por carril (0% a 150%) y balance estéreo.
+- 🔊 **Control de ganancia y volumen dinámico:** Faders reactivos con ajuste de volumen individual por carril (0 % a 200 %).
 - ✂️ **Edición precisa y atajos de teclado de estudio:**
   - División de clips en el cursor con la tecla `S` (*Split*).
   - Reproducción / Pausa instantánea con `Espacio`.
@@ -35,11 +35,12 @@ Este repositorio contiene la **Versión Oficial v1.1.0 (Fase 27 - Release Final 
   - Scrubbing continuo y arrastre directo desde cualquier punto de la regla de tiempo con captura de puntero (`setPointerCapture`), evitando pérdidas al salir del elemento.
   - Actualización a 60 FPS mediante `requestAnimationFrame` sin sobrecargar el estado de React/DOM.
   - Alineación matemática perfecta garantizada en `0.00 px` entre playhead, regla y clips.
-- 🤖 **Asistente de IA con Google Gemini:** Transcripción de audio, análisis semántico, detección de muletillas/silencios y sugerencias de corte automatizadas.
-- 🎵 **Exportación nativa a MP3:** Mezcla multicanal real procesada mediante binario independiente de `ffmpeg` (empaquetado fuera del `.asar`), con diálogo nativo de Windows para seleccionar destino y metadatos ID3.
+- 👁️ **Visibilidad de contraseña accesible ("El Ojito"):** Botón integrado en los 5 campos de contraseña de la pantalla de bloqueo (login, registro y recuperación), con íconos Lucide, navegación por teclado (`Tab`, `Espacio`, `Enter`), soporte i18n (ES/EN) y reseteo automático a oculto por seguridad.
+- 🤖 **Asistente de IA con Google Gemini:** Transcripción de audio, análisis semántico y sugerencias de corte automatizadas.
+- 🎵 **Exportación nativa a MP3:** Mezcla multicanal real procesada mediante binario independiente de `ffmpeg` (empaquetado fuera del `.asar`), con diálogo nativo de Windows para seleccionar destino de guardado.
 - 👥 **Acceso y perfiles multi-cuenta:** Hasta 10 cuentas locales independientes en el mismo equipo, compartiendo de forma colaborativa el proyecto del estudio.
 - 🔑 **Sesión persistente "Recordarme":** Inicio de sesión automático sin parpadeos mediante tokens criptográficos SHA-256 resistentes a reinicios.
-- 🛡️ **Código de recuperación de un solo uso:** Código alfanumérico de 16 caracteres (`XXXX-XXXX-XXXX-XXXX`) generado con `crypto.randomBytes` para recuperar contraseñas sin necesidad de correo ni SMS.
+- 🛡️ **Código de recuperación de un solo uso:** Código alfanumérico de 12 caracteres (`XXXX-XXXX-XXXX`) generado con `crypto.randomBytes` para recuperar contraseñas sin necesidad de correo ni SMS.
 - 🧱 **Protección anti-saturación y fuerza bruta:** Límites estrictos de payload (2 KB), bloqueo de fuerza bruta (HTTP 429) y control de concurrencia para proteger el CPU local.
 
 ---
@@ -66,10 +67,13 @@ Este repositorio contiene la **Versión Oficial v1.1.0 (Fase 27 - Release Final 
 ## ⚠️ Limitaciones honestas de la versión
 
 Para mantener total transparencia con el usuario y evaluadores:
-1. **Reducción de ruido con IA:** No está implementada en esta versión (el asistente de IA se enfoca en transcripción, detección de muletillas y cortes asistidos).
-2. **Sistema Operativo:** Diseñado y optimizado exclusivamente para **Windows 10 y Windows 11 (64 bits)**.
-3. **Audios extensos:** Archivos de audio continuos de más de 30 a 60 minutos pueden demandar alto consumo de memoria RAM y tiempo de procesamiento durante la decodificación de forma de onda.
-4. **Nivel de servicio de IA:** La integración con Google Gemini opera bajo la cuota del nivel de desarrollo / gratuito (Free Tier), sujeta a los límites de peticiones por minuto de Google AI Studio.
+1. **Reducción de ruido y detección de silencios con IA:** No están implementadas en esta versión (el asistente de IA se enfoca en transcripción y sugerencias de corte).
+2. **Balance / Panning:** El motor de mezcla procesa audio estéreo directo con control de volumen por canal (0 % a 200 %), sin control independiente de panorama estéreo (*panning*).
+3. **Etiquetas de audio ID3:** La exportación genera un archivo MP3 estéreo limpio a 192 kbps sin incrustación de metadatos o carátulas ID3 complejas.
+4. **Aceleración por hardware desactivada:** Electron opera con aceleración gráfica por hardware desactivada (`app.disableHardwareAcceleration()`) para evitar fallos de renderizado en drivers gráficos diversos.
+5. **Sistema Operativo:** Diseñado y optimizado exclusivamente para **Windows 10 y Windows 11 (64 bits)**.
+6. **Audios extensos:** Archivos de audio continuos de más de 30 a 60 minutos pueden demandar alto consumo de memoria RAM y tiempo de procesamiento durante la decodificación de forma de onda.
+7. **Nivel de servicio de IA:** La integración con Google Gemini opera bajo la cuota del nivel de desarrollo / gratuito (Free Tier), sujeta a los límites de peticiones por minuto de Google AI Studio.
 
 ---
 
@@ -1753,9 +1757,9 @@ Construido de forma determinística en una sola ejecución para producción:
 |---|---|
 | **Nombre del Archivo** | `PodcastCraft AI.exe` |
 | **Ruta de Salida** | `dist/PodcastCraft AI.exe` |
-| **Tamaño Exacto** | `105,666,783 bytes` (~100.77 MB) |
-| **Checksum SHA-256** | `7E3D817B02390328E182C254A84BF843C25258991030D0297B79BA12E293BEB6` |
-| **Tiempo de Construcción** | `155,332 ms` (~2 min 35 s) |
+| **Tamaño Exacto** | `105,667,667 bytes` (~100.77 MB) |
+| **Checksum SHA-256** | `7CE74821E4D846818EC977CF38E0B17BCFB398C60A9A0FA2D036B3FFD2EA6F86` |
+| **Tiempo de Construcción** | `179,055 ms` (~2 min 59 s) |
 | **Arquitectura de Empaquetado** | Electron 33.4.11 / NSIS x64 |
 | **Binario FFmpeg** | Extraído fuera del `.asar` en `resources/backend/node_modules/ffmpeg-static/ffmpeg.exe` (81.1 MB) |
 | **Variables de Entorno** | `backend/.env` incluido con `GEMINI_API_KEY` activa y protegida |
@@ -1769,15 +1773,43 @@ Verificación automatizada sobre el binario real instalado en `%LOCALAPPDATA%\Pr
 
 | Componente Evaluado | Parámetro Medido | Resultado Numérico Real | Estado |
 |---|---|---|:---:|
-| **Arranque del Backend** | Tiempo de respuesta en `GET /health` | **696 ms** (límite <25,000 ms) | ✅ APROBADO |
-| **Ajuste de Ventana** | Dimensiones en monitor $1366 \times 768$ | **$1297 \times 684\text{ px}$** (visible, sin desborde) | ✅ APROBADO |
+| **Arranque del Backend** | Tiempo de respuesta en `GET /health` | **654 ms** (límite <25,000 ms) | ✅ APROBADO |
+| **Ajuste de Ventana** | Dimensiones en monitor $1366 \times 768$ | **$1297 \times 684\text{ px}$** (visible, exactas) | ✅ APROBADO |
 | **Identidad de Proceso** | Nombre de proceso y título de ventana | `"PodcastCraft AI"` | ✅ APROBADO |
-| **Primer Uso (UI Real)** | Creación de cuenta y modal criptográfico | Registro exitoso en **167 ms**, código `XXXX-XXXX-XXXX-XXXX` confirmado | ✅ APROBADO |
+| **Primer Uso (UI Real)** | Creación de cuenta y modal criptográfico | Registro exitoso en **157 ms**, código de 12 caracteres (`XXXX-XXXX-XXXX`) confirmado | ✅ APROBADO |
+| **Botón Mostrar Contraseña** | Alternancia de visibilidad en app instalada | `type="button"`, $32 \times 32\text{ px}$, alterna `password`/`text`, valor preservado | ✅ APROBADO |
 | **Transición al Editor** | Desbloqueo y renderizado de la interfaz DAW | Bloqueo oculto, topbar y regla activas de inmediato | ✅ APROBADO |
-| **Subida de Audio** | `POST /api/audio` (2 tonos senoidales) | Tono 1 (440Hz) en **7 ms**, Tono 2 (880Hz) en **2 ms** | ✅ APROBADO |
-| **Mezcla y Exportación FFmpeg** | `POST /api/export` (2 pistas con volúmenes 0.8 y 0.5) | **133,617 bytes** renderizados en **195 ms** | ✅ APROBADO |
+| **Subida de Audio** | `POST /api/audio` (2 tonos senoidales) | Tono 1 (440Hz) en **6 ms**, Tono 2 (880Hz) en **2 ms** | ✅ APROBADO |
+| **Mezcla y Exportación FFmpeg** | `POST /api/export` (2 pistas con volúmenes 0.8 y 0.5) | **133,614 bytes** renderizados en **200 ms** | ✅ APROBADO |
 | **Calidad del MP3 Exportado** | Duración medida vs esperada | **5.54 s** vs **5.50 s** esperada ($\Delta = 0.04\text{ s}$) | ✅ APROBADO |
 | **Bitrate de Exportación** | Tasa de bits de codificación estéreo | **193 kbps** (nominal 192 kbps, 44.1 kHz) | ✅ APROBADO |
 | **Integridad de Decodificación** | `ffmpeg -v error -i <file> -f null -` | **0 errores** de audio reportados | ✅ APROBADO |
+| **Empaquetado Seguro** | `backend/.env` presente y carpeta `tests/` excluida | `GEMINI_API_KEY` definida; `tests/` ausente en todos los recursos | ✅ APROBADO |
 | **Cierre y Limpieza** | Procesos residuales y puerto 3001 | **0 procesos vivos**, puerto 3001 liberado | ✅ APROBADO |
 | **Seguridad de Datos del Usuario** | Integridad de `%APPDATA%\podcastcraft-ai` | **15 elementos raíz / 67 recursivos intactos** (Sin cambios) | ✅ APROBADO |
+
+---
+
+### 27.4 Fase 27b: Visibilidad Accesible de Contraseña ("El Ojito")
+
+Como cierre definitivo del frontend, se integró el conmutador de visibilidad en los 5 campos de contraseña de la pantalla de bloqueo (login, registro y recuperación):
+
+1. **Campos Protegidos (5 de 5):**
+   - Iniciar sesión: `#auth-password` (botón `#auth-password-toggle`).
+   - Crear cuenta: `#auth-reg-password` y `#auth-reg-confirm` (botones `-toggle`).
+   - Recuperación de acceso: `#auth-rec-password` y `#auth-rec-confirm` (botones `-toggle`).
+2. **Arquitectura y Accesibilidad WCAG:**
+   - Atributo contractual `type="button"` que previene cualquier envío involuntario del formulario por pulsación accidental.
+   - Ícono contextual Lucide (`eye` cuando está oculta, `eye-off` cuando está visible) renderizado con `lucide.createIcons()`.
+   - Dimensiones táctiles de **$32 \times 32\text{ px}$** con centrado exacto y `padding-right` de 2.5rem (`pr-10`) en los inputs para evitar solapamiento con textos largos.
+   - Navegación completa por teclado (`Tab`), activación por tecla `Espacio` y `Enter`, y anillo de enfoque visible en violeta (`focus:ring-2 focus:ring-violet-500`).
+   - Soporte i18n bidireccional (ES / EN) en `aria-label` y `title`: *"Mostrar contraseña"* / *"Ocultar contraseña"* (*"Show password"* / *"Hide password"*), sincronizado con el atributo `aria-pressed`.
+3. **Regla Cromática y Contraste Medido:**
+   - Color del glifo neutro en `slate-400` (modo oscuro) y `slate-500` (modo claro), eliminando tonos fucsia o violeta del icono (reservados exclusivamente para el anillo de foco).
+   - Contraste medido en producción:
+     - **Modo Claro:** **4.76:1** (`#64748b` sobre `#ffffff`), superando el umbral de 3:1 de WCAG AA.
+     - **Modo Oscuro:** **6.96:1** (`#94a3b8` sobre `#0f172a`), superando el umbral de 3:1 de WCAG AA.
+4. **Seguridad y Confidencialidad de Credenciales:**
+   - Restablecimiento automático a estado oculto (`type="password"`) al conmutar entre vistas de login/crear/recuperar, al enviar peticiones y al abrir el modal con el código de recuperación.
+   - Cero registro de contraseñas en consola o logs del sistema.
+   - Preservación íntegra de `maxlength="128"`, contadores de caracteres, y soporte de autocompletado (`current-password` / `new-password`).
