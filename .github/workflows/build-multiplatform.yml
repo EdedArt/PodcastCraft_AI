@@ -6,6 +6,10 @@ on:
     branches:
       - ci/multiplatform-build
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -13,6 +17,7 @@ jobs:
   build-linux-x64:
     name: Linux x64 (AppImage & deb)
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -115,8 +120,10 @@ jobs:
           echo "=== Verificación estricta de arquitectura x64 ==="
           RUNNER_ARCH=$(uname -m)
           echo "Arquitectura del runner: $RUNNER_ARCH"
-          if [ "$RUNNER_ARCH" != "x86_64" ]; then
-            echo "::error::El runner no es x86_64 (es $RUNNER_ARCH)"
+          if [ "$RUNNER_ARCH" = "x86_64" ]; then
+            echo "ARCH_CHECK=PASS runner=x86_64"
+          else
+            echo "ARCH_CHECK=FAIL runner=$RUNNER_ARCH expected=x86_64"
             exit 1
           fi
 
@@ -136,32 +143,63 @@ jobs:
           echo "Binario principal: $MAIN_FILE_DESC"
           echo "Binario FFmpeg: $FFMPEG_FILE_DESC"
 
-          if ! echo "$MAIN_FILE_DESC" | grep -q "x86-64"; then
-            echo "::error::El binario de Electron no es x86-64: $MAIN_FILE_DESC"
+          if echo "$MAIN_FILE_DESC" | grep -q "x86-64"; then
+            echo "ARCH_CHECK=PASS file=electron target=x86-64 desc=\"$MAIN_FILE_DESC\""
+          else
+            echo "ARCH_CHECK=FAIL file=electron target=x86-64 desc=\"$MAIN_FILE_DESC\""
             exit 1
           fi
 
-          if ! echo "$FFMPEG_FILE_DESC" | grep -q "x86-64"; then
-            echo "::error::El binario de FFmpeg no es x86-64: $FFMPEG_FILE_DESC"
+          if echo "$FFMPEG_FILE_DESC" | grep -q "x86-64"; then
+            echo "ARCH_CHECK=PASS file=ffmpeg target=x86-64 desc=\"$FFMPEG_FILE_DESC\""
+          else
+            echo "ARCH_CHECK=FAIL file=ffmpeg target=x86-64 desc=\"$FFMPEG_FILE_DESC\""
             exit 1
           fi
 
-          dpkg-deb -I dist/PodcastCraft-AI-1.1.0-linux-x64.deb | grep "Architecture: amd64"
+          DEB_ARCH=$(dpkg-deb -I dist/PodcastCraft-AI-1.1.0-linux-x64.deb | grep "Architecture:" | tr -d ' ')
+          if echo "$DEB_ARCH" | grep -q "amd64"; then
+            echo "ARCH_CHECK=PASS file=deb target=amd64 info=\"$DEB_ARCH\""
+          else
+            echo "ARCH_CHECK=FAIL file=deb target=amd64 info=\"$DEB_ARCH\""
+            exit 1
+          fi
           echo "Arquitectura x64 confirmada en ejecutable, FFmpeg y metadatos de .deb."
 
+      - name: Upload Linux Installers Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: podcastcraft-linux-x64
+          path: |
+            dist/PodcastCraft-AI-1.1.0-linux-x64.AppImage
+            dist/PodcastCraft-AI-1.1.0-linux-x64.deb
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Smoke Test 1 — AppImage (Packaged Binary)
+        timeout-minutes: 10
         run: |
           echo "=== Ejecutando Prueba de Humo en AppImage ==="
           APPIMAGE_FILE="dist/PodcastCraft-AI-1.1.0-linux-x64.AppImage"
           xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" \
             node .github/scripts/smoke-test.js \
               --app-path "$APPIMAGE_FILE" \
+              --target appimage \
               --resources-path "dist/squashfs-root/resources" \
               --ffmpeg-path "dist/squashfs-root/resources/backend/node_modules/ffmpeg-static/ffmpeg" \
               --env-path "dist/squashfs-root/resources/backend/.env" \
               --no-sandbox
 
+      - name: Cleanup between Linux Smoke Tests
+        run: |
+          echo "=== Limpieza previa a la prueba de deb ==="
+          pkill -9 -f "podcastcraft-ai" || true
+          pkill -9 -f "PodcastCraft AI" || true
+          fuser -k 3001/tcp || true
+          sleep 1
+
       - name: Smoke Test 2 — Debian Package (.deb installed)
+        timeout-minutes: 10
         run: |
           echo "=== Instalando y ejecutando Prueba de Humo en paquete .deb ==="
           DEB_FILE="dist/PodcastCraft-AI-1.1.0-linux-x64.deb"
@@ -179,26 +217,29 @@ jobs:
           echo "Ruta de binario instalado: $INSTALLED_BIN"
           if [ -z "$INSTALLED_BIN" ] || [ ! -x "$INSTALLED_BIN" ]; then
             echo "::error::No se encontró el ejecutable instalado del paquete .deb"
+            echo "SMOKE_RESULT=FAIL target=deb"
             exit 1
           fi
 
           xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" \
             node .github/scripts/smoke-test.js \
               --app-path "$INSTALLED_BIN" \
+              --target deb \
               --no-sandbox
 
           echo "Desinstalando paquete .deb tras prueba exitosa..."
           sudo dpkg -r podcastcraft-ai || true
 
-      - name: Upload Linux Installers Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: podcastcraft-linux-x64
-          path: |
-            dist/PodcastCraft-AI-1.1.0-linux-x64.AppImage
-            dist/PodcastCraft-AI-1.1.0-linux-x64.deb
-          if-no-files-found: error
-          retention-days: 14
+      - name: Final Process Cleanup (Linux)
+        if: always()
+        run: |
+          echo "=== Limpieza final de procesos en Linux ==="
+          pkill -9 -f "podcastcraft-ai" || true
+          pkill -9 -f "PodcastCraft AI" || true
+          pkill -9 -f "ffmpeg" || true
+          fuser -k 3001/tcp || true
+          pkill -9 -f "Xvfb" || true
+          echo "Limpieza final completada."
 
       - name: Save Diagnostic Logs (on failure or always)
         if: always()
@@ -218,6 +259,7 @@ jobs:
   build-macos-arm64:
     name: macOS Apple Silicon (arm64 dmg)
     runs-on: macos-15
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -300,14 +342,16 @@ jobs:
           echo "=== Verificación estricta de arquitectura arm64 ==="
           RUNNER_ARCH=$(uname -m)
           echo "Arquitectura del runner: $RUNNER_ARCH"
-          if [ "$RUNNER_ARCH" != "arm64" ]; then
-            echo "::error::El runner no es arm64 (es $RUNNER_ARCH)"
+          if [ "$RUNNER_ARCH" = "arm64" ]; then
+            echo "ARCH_CHECK=PASS runner=arm64"
+          else
+            echo "ARCH_CHECK=FAIL runner=$RUNNER_ARCH expected=arm64"
             exit 1
           fi
 
           APP_DIR="dist/mac-arm64/PodcastCraft AI.app"
           if [ ! -d "$APP_DIR" ]; then
-            echo "::error::No se encontró el bundle de aplicación en $APP_DIR"
+            echo "ARCH_CHECK=FAIL missing_app_dir=$APP_DIR"
             exit 1
           fi
 
@@ -320,23 +364,21 @@ jobs:
           echo "Binario principal: $MAIN_FILE_DESC"
           echo "Binario FFmpeg: $FFMPEG_FILE_DESC"
 
-          if ! echo "$MAIN_FILE_DESC" | grep -q "arm64"; then
-            echo "::error::El ejecutable de Electron no es arm64: $MAIN_FILE_DESC"
+          if echo "$MAIN_FILE_DESC" | grep -q "arm64"; then
+            echo "ARCH_CHECK=PASS file=electron target=arm64 desc=\"$MAIN_FILE_DESC\""
+          else
+            echo "ARCH_CHECK=FAIL file=electron target=arm64 desc=\"$MAIN_FILE_DESC\""
             exit 1
           fi
 
-          if ! echo "$FFMPEG_FILE_DESC" | grep -q "arm64"; then
-            echo "::error::El binario de FFmpeg no es arm64: $FFMPEG_FILE_DESC"
+          if echo "$FFMPEG_FILE_DESC" | grep -q "arm64"; then
+            echo "ARCH_CHECK=PASS file=ffmpeg target=arm64 desc=\"$FFMPEG_FILE_DESC\""
+          else
+            echo "ARCH_CHECK=FAIL file=ffmpeg target=arm64 desc=\"$FFMPEG_FILE_DESC\""
             exit 1
           fi
 
           echo "Arquitectura arm64 confirmada en ejecutable y FFmpeg."
-
-      - name: Smoke Test — macOS Apple Silicon (Packaged App)
-        run: |
-          echo "=== Ejecutando Prueba de Humo en macOS arm64 ==="
-          node .github/scripts/smoke-test.js \
-            --app-path "dist/mac-arm64/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
 
       - name: Upload macOS arm64 Installer Artifact
         uses: actions/upload-artifact@v4
@@ -345,6 +387,24 @@ jobs:
           path: dist/PodcastCraft-AI-1.1.0-mac-arm64.dmg
           if-no-files-found: error
           retention-days: 14
+
+      - name: Smoke Test — macOS Apple Silicon (Packaged App)
+        timeout-minutes: 10
+        run: |
+          echo "=== Ejecutando Prueba de Humo en macOS arm64 ==="
+          node .github/scripts/smoke-test.js \
+            --app-path "dist/mac-arm64/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI" \
+            --target mac-arm64
+
+      - name: Final Process Cleanup (macOS arm64)
+        if: always()
+        run: |
+          echo "=== Limpieza final de procesos en macOS arm64 ==="
+          pkill -9 -f "PodcastCraft AI" || true
+          pkill -9 -f "podcastcraft-ai" || true
+          pkill -9 -f "ffmpeg" || true
+          lsof -ti :3001 | xargs kill -9 2>/dev/null || true
+          echo "Limpieza final completada."
 
       - name: Save Diagnostic Logs (on failure or always)
         if: always()
@@ -363,6 +423,7 @@ jobs:
   build-macos-x64:
     name: macOS Intel (x64 dmg)
     runs-on: macos-15-intel
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -445,14 +506,16 @@ jobs:
           echo "=== Verificación estricta de arquitectura Intel x64 ==="
           RUNNER_ARCH=$(uname -m)
           echo "Arquitectura del runner: $RUNNER_ARCH"
-          if [ "$RUNNER_ARCH" != "x86_64" ]; then
-            echo "::error::El runner no es x86_64 (es $RUNNER_ARCH)"
+          if [ "$RUNNER_ARCH" = "x86_64" ]; then
+            echo "ARCH_CHECK=PASS runner=x86_64"
+          else
+            echo "ARCH_CHECK=FAIL runner=$RUNNER_ARCH expected=x86_64"
             exit 1
           fi
 
           APP_DIR="dist/mac/PodcastCraft AI.app"
           if [ ! -d "$APP_DIR" ]; then
-            echo "::error::No se encontró el bundle de aplicación en $APP_DIR"
+            echo "ARCH_CHECK=FAIL missing_app_dir=$APP_DIR"
             exit 1
           fi
 
@@ -465,23 +528,21 @@ jobs:
           echo "Binario principal: $MAIN_FILE_DESC"
           echo "Binario FFmpeg: $FFMPEG_FILE_DESC"
 
-          if ! echo "$MAIN_FILE_DESC" | grep -q "x86_64"; then
-            echo "::error::El ejecutable de Electron no es x86_64: $MAIN_FILE_DESC"
+          if echo "$MAIN_FILE_DESC" | grep -q "x86_64"; then
+            echo "ARCH_CHECK=PASS file=electron target=x86_64 desc=\"$MAIN_FILE_DESC\""
+          else
+            echo "ARCH_CHECK=FAIL file=electron target=x86_64 desc=\"$MAIN_FILE_DESC\""
             exit 1
           fi
 
-          if ! echo "$FFMPEG_FILE_DESC" | grep -q "x86_64"; then
-            echo "::error::El binario de FFmpeg no es x86_64: $FFMPEG_FILE_DESC"
+          if echo "$FFMPEG_FILE_DESC" | grep -q "x86_64"; then
+            echo "ARCH_CHECK=PASS file=ffmpeg target=x86_64 desc=\"$FFMPEG_FILE_DESC\""
+          else
+            echo "ARCH_CHECK=FAIL file=ffmpeg target=x86_64 desc=\"$FFMPEG_FILE_DESC\""
             exit 1
           fi
 
           echo "Arquitectura Intel x64 confirmada en ejecutable y FFmpeg."
-
-      - name: Smoke Test — macOS Intel (Packaged App)
-        run: |
-          echo "=== Ejecutando Prueba de Humo en macOS Intel ==="
-          node .github/scripts/smoke-test.js \
-            --app-path "dist/mac/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI"
 
       - name: Upload macOS x64 Installer Artifact
         uses: actions/upload-artifact@v4
@@ -490,6 +551,24 @@ jobs:
           path: dist/PodcastCraft-AI-1.1.0-mac-x64.dmg
           if-no-files-found: error
           retention-days: 14
+
+      - name: Smoke Test — macOS Intel (Packaged App)
+        timeout-minutes: 10
+        run: |
+          echo "=== Ejecutando Prueba de Humo en macOS Intel ==="
+          node .github/scripts/smoke-test.js \
+            --app-path "dist/mac/PodcastCraft AI.app/Contents/MacOS/PodcastCraft AI" \
+            --target mac-x64
+
+      - name: Final Process Cleanup (macOS x64)
+        if: always()
+        run: |
+          echo "=== Limpieza final de procesos en macOS x64 ==="
+          pkill -9 -f "PodcastCraft AI" || true
+          pkill -9 -f "podcastcraft-ai" || true
+          pkill -9 -f "ffmpeg" || true
+          lsof -ti :3001 | xargs kill -9 2>/dev/null || true
+          echo "Limpieza final completada."
 
       - name: Save Diagnostic Logs (on failure or always)
         if: always()
