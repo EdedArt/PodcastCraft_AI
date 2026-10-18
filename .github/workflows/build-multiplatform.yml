@@ -193,9 +193,8 @@ jobs:
       - name: Cleanup between Linux Smoke Tests
         run: |
           echo "=== Limpieza previa a la prueba de deb ==="
-          pkill -9 -f "podcastcraft-ai" || true
-          pkill -9 -f "PodcastCraft AI" || true
-          fuser -k 3001/tcp || true
+          pkill -9 -x "podcastcraft-ai" 2>/dev/null || true
+          fuser -k 3001/tcp 2>/dev/null || true
           sleep 1
 
       - name: Smoke Test 2 — Debian Package (.deb installed)
@@ -234,11 +233,10 @@ jobs:
         if: always()
         run: |
           echo "=== Limpieza final de procesos en Linux ==="
-          pkill -9 -f "podcastcraft-ai" || true
-          pkill -9 -f "PodcastCraft AI" || true
-          pkill -9 -f "ffmpeg" || true
-          fuser -k 3001/tcp || true
-          pkill -9 -f "Xvfb" || true
+          pkill -9 -x "podcastcraft-ai" 2>/dev/null || true
+          pkill -9 -x "ffmpeg" 2>/dev/null || true
+          fuser -k 3001/tcp 2>/dev/null || true
+          pkill -9 -x "Xvfb" 2>/dev/null || true
           echo "Limpieza final completada."
 
       - name: Save Diagnostic Logs (on failure or always)
@@ -400,10 +398,9 @@ jobs:
         if: always()
         run: |
           echo "=== Limpieza final de procesos en macOS arm64 ==="
-          pkill -9 -f "PodcastCraft AI" || true
-          pkill -9 -f "podcastcraft-ai" || true
-          pkill -9 -f "ffmpeg" || true
-          lsof -ti :3001 | xargs kill -9 2>/dev/null || true
+          pkill -9 -x "PodcastCraft AI" 2>/dev/null || true
+          pkill -9 -x "ffmpeg" 2>/dev/null || true
+          lsof -ti :3001 -sTCP:LISTEN | xargs kill -9 2>/dev/null || true
           echo "Limpieza final completada."
 
       - name: Save Diagnostic Logs (on failure or always)
@@ -564,10 +561,9 @@ jobs:
         if: always()
         run: |
           echo "=== Limpieza final de procesos en macOS x64 ==="
-          pkill -9 -f "PodcastCraft AI" || true
-          pkill -9 -f "podcastcraft-ai" || true
-          pkill -9 -f "ffmpeg" || true
-          lsof -ti :3001 | xargs kill -9 2>/dev/null || true
+          pkill -9 -x "PodcastCraft AI" 2>/dev/null || true
+          pkill -9 -x "ffmpeg" 2>/dev/null || true
+          lsof -ti :3001 -sTCP:LISTEN | xargs kill -9 2>/dev/null || true
           echo "Limpieza final completada."
 
       - name: Save Diagnostic Logs (on failure or always)
