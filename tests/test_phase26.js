@@ -13,6 +13,9 @@ let backendProcess = null;
 const BACKEND_PORT = '3001';
 const HEALTH_URL = `http://127.0.0.1:${BACKEND_PORT}/health`;
 const tempStorageDir = path.join(os.tmpdir(), `podcastcraft_phase26_test_${Date.now()}`);
+const tempUserDataDir = path.join(os.tmpdir(), `pc_p26_userdata_${Date.now()}`);
+fs.mkdirSync(tempUserDataDir, { recursive: true });
+app.setPath('userData', tempUserDataDir);
 
 function sendRequest(method, endpoint, body = null, headers = {}) {
   return new Promise((resolve, reject) => {
@@ -929,6 +932,10 @@ app.whenReady().then(async () => {
       if (fs.existsSync(tempStorageDir)) {
         console.log('[Test Runner] Eliminando almacenamiento temporal:', tempStorageDir);
         fs.rmSync(tempStorageDir, { recursive: true, force: true });
+      }
+      if (fs.existsSync(tempUserDataDir)) {
+        console.log('[Test Runner] Eliminando userData temporal:', tempUserDataDir);
+        fs.rmSync(tempUserDataDir, { recursive: true, force: true });
       }
     } catch (e) {
       console.warn('[Test Runner] Advertencia al limpiar directorio temporal:', e.message);

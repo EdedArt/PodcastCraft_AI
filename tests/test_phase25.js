@@ -3,17 +3,28 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
+const os = require('os');
 const { fork, execSync } = require('child_process');
 
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
+const rootDir = path.join(__dirname, '..');
+const tempStorageDir = path.join(os.tmpdir(), `pc_p25_storage_${Date.now()}`);
+const tempUserDataDir = path.join(os.tmpdir(), `pc_p25_userdata_${Date.now()}`);
+fs.mkdirSync(tempStorageDir, { recursive: true });
+fs.mkdirSync(tempUserDataDir, { recursive: true });
+app.setPath('userData', tempUserDataDir);
+process.env.PODCASTCRAFT_STORAGE_DIR = tempStorageDir;
+
 let backendProcess = null;
 const BACKEND_PORT = '3001';
 const HEALTH_URL = `http://127.0.0.1:${BACKEND_PORT}/health`;
 const ffmpegPath = require(path.join(__dirname, '..', 'backend', 'node_modules', 'ffmpeg-static'));
-const audioDir = path.join(__dirname, '..', 'backend', 'storage', 'audio-files');
-const tmpDir = path.join(__dirname, '..', 'backend', 'storage', 'tmp');
+const audioDir = path.join(tempStorageDir, 'audio-files');
+const tmpDir = path.join(tempStorageDir, 'tmp');
+fs.mkdirSync(audioDir, { recursive: true });
+fs.mkdirSync(tmpDir, { recursive: true });
 
 function startBackend() {
   return new Promise((resolve, reject) => {
@@ -25,7 +36,6 @@ function startBackend() {
     });
     req.on('error', () => {
       console.log('[Test Runner] Iniciando backend...');
-      const rootDir = path.join(__dirname, '..');
       const backendEntry = path.join(rootDir, 'backend', 'src', 'server.js');
       backendProcess = fork(backendEntry, [], {
         cwd: path.join(rootDir, 'backend'),
@@ -33,7 +43,7 @@ function startBackend() {
         env: {
           ...process.env,
           PORT: BACKEND_PORT,
-          PODCASTCRAFT_STORAGE_DIR: path.join(rootDir, 'backend', 'storage'),
+          PODCASTCRAFT_STORAGE_DIR: tempStorageDir,
           ELECTRON_RUN_AS_NODE: '1'
         }
       });
@@ -615,11 +625,19 @@ app.whenReady().then(async () => {
     try { fs.unlinkSync(sineDualPath); } catch (_) {}
 
     killBackendProcess();
+    try {
+      if (fs.existsSync(tempStorageDir)) fs.rmSync(tempStorageDir, { recursive: true, force: true });
+      if (fs.existsSync(tempUserDataDir)) fs.rmSync(tempUserDataDir, { recursive: true, force: true });
+    } catch (_) {}
     app.exit(testResults.passed ? 0 : 1);
   } catch (err) {
     fs.writeFileSync(path.join(__dirname, 'test_phase25_error.txt'), String(err.stack || err), 'utf-8');
     console.error('Error fatal durante la ejecución de pruebas:', err);
     killBackendProcess();
+    try {
+      if (fs.existsSync(tempStorageDir)) fs.rmSync(tempStorageDir, { recursive: true, force: true });
+      if (fs.existsSync(tempUserDataDir)) fs.rmSync(tempUserDataDir, { recursive: true, force: true });
+    } catch (_) {}
     app.exit(1);
   }
 });

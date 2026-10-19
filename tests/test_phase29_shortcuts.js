@@ -356,6 +356,90 @@ async function runTestSuite() {
       })()
     `);
     assert(otherEditableFocus.safe === true, '1.19 Guardia estricta en textarea, select y contentEditable confirmada');
+
+    // 1.20 Demostración Fase 29b: Escape NO interfiere con diálogos, campos de texto ni arrastre
+    // (i) Modal del código de recuperación (no se cierra con Escape)
+    const recModalTest = await win.webContents.executeJavaScript(`
+      (function() {
+        const modal = document.getElementById('auth-recovery-modal');
+        if (!modal) return { exists: false, stillOpen: false };
+        const origHidden = modal.classList.contains('hidden');
+        modal.classList.remove('hidden');
+
+        // Disparar Escape tanto en el modal como en document
+        const evt = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true });
+        modal.dispatchEvent(evt);
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }));
+
+        const stillOpen = !modal.classList.contains('hidden');
+        if (origHidden) modal.classList.add('hidden');
+        return { exists: true, stillOpen };
+      })()
+    `);
+    assert(recModalTest.exists && recModalTest.stillOpen, '1.20 Demostración 2e(i): Escape NO cierra el modal del código de recuperación');
+
+    // (ii) Campos de texto: foco en <input> con Escape NO deselecciona clip
+    const inputEscapeTest = await win.webContents.executeJavaScript(`
+      (function() {
+        window.testSetupTracks();
+        const pc = window.PodcastCraft;
+        pc.setState({ selection: { clipId: 'clip-1', trackId: 't-1' } });
+        const input = document.getElementById('timeline-project-title') || document.querySelector('input');
+        input.focus();
+
+        const evt = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true });
+        input.dispatchEvent(evt);
+
+        const selAfter = pc.getState().selection?.clipId;
+        return { clipStillSelected: selAfter === 'clip-1' };
+      })()
+    `);
+    assert(inputEscapeTest.clipStillSelected, '1.21 Demostración 2e(ii): Escape con foco en campo de texto NO deselecciona clip');
+
+    // (iii) Otros diálogos: auth-lock-screen no se cierra ni evade con Escape
+    const lockScreenEscapeTest = await win.webContents.executeJavaScript(`
+      (function() {
+        const lock = document.getElementById('auth-lock-screen');
+        if (!lock) return { exists: false, stillVisible: false };
+        const wasHidden = lock.classList.contains('hidden');
+        lock.classList.remove('hidden');
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }));
+        const stillVisible = !lock.classList.contains('hidden');
+        if (wasHidden) lock.classList.add('hidden');
+        return { exists: true, stillVisible };
+      })()
+    `);
+    assert(lockScreenEscapeTest.exists && lockScreenEscapeTest.stillVisible, '1.22 Demostración 2e(iii): Escape NO cierra ni evade otros diálogos (auth-lock-screen)');
+
+    // (iv) Arrastre en curso: Escape cancela el arrastre y restaura el clip a su posición inicial
+    const dragCancelEscapeTest = await win.webContents.executeJavaScript(`
+      (function() {
+        window.testSetupTracks();
+        const pc = window.PodcastCraft;
+        const clipEl = document.getElementById('timeline-clip-clip-1');
+        if (!clipEl) return { clipFound: false };
+
+        clipEl.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 100, clientY: 100, button: 0, pointerId: 1 }));
+        clipEl.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 280, clientY: 100, pointerId: 1 }));
+
+        const wasDragging = document.body.classList.contains('is-clip-dragging') || clipEl.classList.contains('is-dragging-clip');
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }));
+
+        const isStillDragging = document.body.classList.contains('is-clip-dragging') || clipEl.classList.contains('is-dragging-clip');
+        const clipPosAfter = pc.getState().tracks[0].clips.find(c => c.id === 'clip-1')?.start;
+
+        return {
+          clipFound: true,
+          wasDragging,
+          dragCancelled: !isStillDragging,
+          restoredToInitial: clipPosAfter === 0
+        };
+      })()
+    `);
+    assert(dragCancelEscapeTest.clipFound && dragCancelEscapeTest.dragCancelled && dragCancelEscapeTest.restoredToInitial,
+      '1.23 Demostración 2e(iv): Escape durante arrastre en curso lo cancela y restaura el clip a 0s');
   } finally {
     win.destroy();
   }

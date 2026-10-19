@@ -1,10 +1,31 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const http = require('http');
+const fs = require('fs');
+const os = require('os');
 const { fork } = require('child_process');
 
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
+const rootDir = path.join(__dirname, '..');
+const tempStorageDir = path.join(os.tmpdir(), `pc_p24_storage_${Date.now()}`);
+const tempUserDataDir = path.join(os.tmpdir(), `pc_p24_userdata_${Date.now()}`);
+fs.mkdirSync(tempStorageDir, { recursive: true });
+fs.mkdirSync(tempUserDataDir, { recursive: true });
+app.setPath('userData', tempUserDataDir);
+
+// Copiar audios de muestra al almacenamiento temporal
+const audioDir = path.join(tempStorageDir, 'audio-files');
+fs.mkdirSync(audioDir, { recursive: true });
+const srcAudioDir = path.join(rootDir, 'backend', 'storage', 'audio-files');
+if (fs.existsSync(srcAudioDir)) {
+  for (const f of fs.readdirSync(srcAudioDir)) {
+    if (f !== '.gitkeep') {
+      try { fs.copyFileSync(path.join(srcAudioDir, f), path.join(audioDir, f)); } catch (_) {}
+    }
+  }
+}
 
 let backendProcess = null;
 const BACKEND_PORT = '3001';
@@ -20,7 +41,6 @@ function startBackend() {
     });
     req.on('error', () => {
       console.log('[Test Runner] Iniciando backend...');
-      const rootDir = path.join(__dirname, '..');
       const backendEntry = path.join(rootDir, 'backend', 'src', 'server.js');
       backendProcess = fork(backendEntry, [], {
         cwd: path.join(rootDir, 'backend'),
@@ -28,7 +48,7 @@ function startBackend() {
         env: {
           ...process.env,
           PORT: BACKEND_PORT,
-          PODCASTCRAFT_STORAGE_DIR: path.join(rootDir, 'backend', 'storage'),
+          PODCASTCRAFT_STORAGE_DIR: tempStorageDir,
           ELECTRON_RUN_AS_NODE: '1'
         }
       });
@@ -496,12 +516,20 @@ app.whenReady().then(async () => {
     if (backendProcess) {
       backendProcess.kill();
     }
+    try {
+      if (fs.existsSync(tempStorageDir)) fs.rmSync(tempStorageDir, { recursive: true, force: true });
+      if (fs.existsSync(tempUserDataDir)) fs.rmSync(tempUserDataDir, { recursive: true, force: true });
+    } catch (_) {}
     app.exit(testResults.passed ? 0 : 1);
   } catch (err) {
     const fs = require('fs');
     fs.writeFileSync(path.join(__dirname, 'test_phase24_error.txt'), String(err.stack || err), 'utf-8');
     console.error('Error fatal durante la ejecución de pruebas:', err);
     if (backendProcess) backendProcess.kill();
+    try {
+      if (fs.existsSync(tempStorageDir)) fs.rmSync(tempStorageDir, { recursive: true, force: true });
+      if (fs.existsSync(tempUserDataDir)) fs.rmSync(tempUserDataDir, { recursive: true, force: true });
+    } catch (_) {}
     app.exit(1);
   }
 });
