@@ -228,13 +228,18 @@ async function cleanupProcesses(child, opts) {
   }
 
   // 2. Terminar grupo de procesos lanzado (POSIX) o árbol de procesos (Windows)
+  let cleanupInfo = { stage: 'NO_PROCESS', elapsedMs: 0 };
   if (pid) {
     if (isWindows) {
       const winStart = Date.now();
       try {
         execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
       } catch (_) {}
-      console.log(`[Cleanup] taskkill en Windows completado en ${Date.now() - winStart} ms.`);
+      const winElapsedMs = Date.now() - winStart;
+      cleanupInfo = { stage: 'TASKKILL_OK', elapsedMs: winElapsedMs };
+      console.log(`[Cleanup] taskkill en Windows completado en ${winElapsedMs} ms.`);
+      const line = `CLEANUP_STAGE=TASKKILL_OK elapsedMs=${winElapsedMs}\n`;
+      try { fs.writeSync(1, line); } catch (_) { console.log(line.trim()); }
     } else {
       // POSIX: SIGTERM al grupo de procesos (-pgid)
       console.log(`[Cleanup] Enviando SIGTERM al grupo de procesos (-${pgid})...`);
@@ -264,9 +269,12 @@ async function cleanupProcesses(child, opts) {
       console.log(`[Cleanup] Etapa SIGTERM finalizada en ${termElapsedMs} ms. Proceso líder ${pid} sigue activo: ${alive}`);
 
       if (!alive) {
-        console.log(`CLEANUP_STAGE=SIGTERM_OK elapsedMs=${termElapsedMs}`);
+        cleanupInfo = { stage: 'SIGTERM_OK', elapsedMs: termElapsedMs };
+        const line = `CLEANUP_STAGE=SIGTERM_OK elapsedMs=${termElapsedMs}\n`;
+        try { fs.writeSync(1, line); } catch (_) { console.log(line.trim()); }
       } else {
-        console.log(`CLEANUP_STAGE=SIGKILL_NEEDED elapsedMs=${termElapsedMs}`);
+        const lineNeeded = `CLEANUP_STAGE=SIGKILL_NEEDED elapsedMs=${termElapsedMs}\n`;
+        try { fs.writeSync(1, lineNeeded); } catch (_) { console.log(lineNeeded.trim()); }
         console.log(`[Cleanup] Proceso líder ${pid} no terminó con SIGTERM en 10s. Forzando SIGKILL al grupo (-${pgid})...`);
         const killStart = Date.now();
         try {
@@ -288,10 +296,15 @@ async function cleanupProcesses(child, opts) {
           }
         }
         const killElapsedMs = Date.now() - killStart;
+        const totalElapsedMs = termElapsedMs + killElapsedMs;
+        cleanupInfo = { stage: alive ? 'SIGKILL_FAILED' : 'SIGKILL_NEEDED', elapsedMs: totalElapsedMs };
         console.log(`[Cleanup] Etapa SIGKILL al grupo finalizada en ${killElapsedMs} ms. Proceso líder ${pid} sigue activo: ${alive}`);
+        const lineFinal = `CLEANUP_STAGE=${cleanupInfo.stage} elapsedMs=${totalElapsedMs}\n`;
+        try { fs.writeSync(1, lineFinal); } catch (_) { console.log(lineFinal.trim()); }
       }
     }
   }
+  return cleanupInfo;
 
   // 3. Respaldo por nombre ANCLADO al ejecutable exacto (filtrando por PID, NUNCA pkill -f genérico)
   if (!isWindows && opts && opts.appPath) {
@@ -734,8 +747,9 @@ async function main() {
     flushOutput();
   } finally {
     // 8. Cierre robusto de procesos y limpieza sin afectar el resultado de la prueba
+    let cleanupInfo = { stage: 'NO DISPONIBLE', elapsedMs: 0 };
     try {
-      await cleanupProcesses(child, opts);
+      cleanupInfo = await cleanupProcesses(child, opts);
     } catch (cleanErr) {
       console.warn(`[Cleanup Warning] Advertencia en cleanupProcesses: ${cleanErr.message}`);
     }
@@ -746,9 +760,36 @@ async function main() {
       console.warn(`[Cleanup Warning] Advertencia al remover temporales: ${rmErr.message}`);
     }
 
+    // Persistir métricas de prueba de humo para el resumen de CI
+    try {
+      const summaryDir = path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'podcastcraft_ci');
+      fs.mkdirSync(summaryDir, { recursive: true });
+      const summaryPayload = {
+        target,
+        passed: Boolean(testPassed),
+        smokeResult: testPassed ? 'PASS' : 'FAIL',
+        cleanupStage: cleanupInfo ? cleanupInfo.stage : 'NO DISPONIBLE',
+        cleanupElapsedMs: cleanupInfo ? cleanupInfo.elapsedMs : 0,
+        healthElapsedMs: results.healthElapsedMs || 0,
+        exportBytes: results.exportBytes || 0,
+        exportDurationSec: results.exportDurationSec || 0,
+        exportBitrateKbps: results.exportBitrateKbps || 0
+      };
+      fs.writeFileSync(path.join(summaryDir, `smoke_${target}.json`), JSON.stringify(summaryPayload, null, 2), 'utf8');
+
+      const distDir = path.join(process.cwd(), 'dist');
+      if (fs.existsSync(distDir)) {
+        fs.writeFileSync(path.join(distDir, `smoke_${target}.json`), JSON.stringify(summaryPayload, null, 2), 'utf8');
+      }
+    } catch (saveErr) {
+      console.warn(`[Smoke Warning] No se pudo guardar json de métricas: ${saveErr.message}`);
+    }
+
     flushOutput();
   }
 
+  // Pequeña pausa para permitir drenado del stream stdout en pipes CI
+  await new Promise(r => setTimeout(r, 100));
   process.exit(testPassed ? 0 : 1);
 }
 
