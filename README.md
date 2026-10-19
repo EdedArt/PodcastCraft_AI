@@ -6,14 +6,26 @@ Este repositorio contiene la **Versión Oficial v1.1.0 (Fase 27 - Release Final 
 
 ---
 
-## 📦 Descarga e Instalación (v1.1.0)
+## 📦 Descarga e Instalación (v1.2.0)
 
-[![Descargar PodcastCraft AI v1.1.0](https://img.shields.io/badge/Descargar-PodcastCraft%20AI%20v1.1.0%20(Windows%20x64)-6366f1?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/EdedArt/PodcastCraft_AI/releases/latest)
+[![Descargar PodcastCraft AI](https://img.shields.io/badge/Descargar-PodcastCraft%20AI%20(Windows%20x64)-6366f1?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/EdedArt/PodcastCraft_AI/releases)
 
-> 🔗 **Último Release Oficial:** [GitHub Releases — PodcastCraft AI v1.1.0](https://github.com/EdedArt/PodcastCraft_AI/releases/latest)
+> 🔗 **Releases Oficiales:** [GitHub Releases — PodcastCraft AI](https://github.com/EdedArt/PodcastCraft_AI/releases)
 
-### 🪟 Windows (x64) — Release Oficial de Producción
-1. **Descarga:** Descarga el instalador ejecutable oficial [`PodcastCraft AI.exe`](https://github.com/EdedArt/PodcastCraft_AI/releases/latest) (105.6 MB).
+### 📋 Tabla de Archivos e Instaladores por Plataforma (v1.2.0)
+
+| Plataforma | Nombre del Archivo | SHA-256 | Estado / Disponibilidad |
+|---|---|---|---|
+| **Windows (x64)** | `PodcastCraft AI.exe`<br>*(GitHub lo mostrará como `PodcastCraft.AI.exe`)* | `730eef0d20937f161bc82b68e9a64b1251ff0e3b8557b1acdf1318f2507f8ccf` | Compilado e instalado localmente (105,668,172 bytes) |
+| **Linux (x64)** | `PodcastCraft-AI-1.2.0-linux-x64.AppImage` | *(Se calculará al publicar)* | Generado en CI (Artifacts) |
+| **Linux (x64)** | `PodcastCraft-AI-1.2.0-linux-x64.deb` | *(Se calculará al publicar)* | Generado en CI (Artifacts) |
+| **macOS (Apple Silicon)** | `PodcastCraft-AI-1.2.0-mac-arm64.dmg` | *(Se calculará al publicar)* | Generado en CI (Artifacts) |
+| **macOS (Intel)** | `PodcastCraft-AI-1.2.0-mac-x64.dmg` | *(Se calculará al publicar)* | Generado en CI (Artifacts) |
+
+---
+
+### 🪟 Windows (x64) — Instalador Oficial (v1.2.0)
+1. **Descarga:** El instalador ejecutable oficial es `PodcastCraft AI.exe` (105.7 MB, 105,668,172 bytes; en GitHub se mostrará como `PodcastCraft.AI.exe`).
 2. **Instalación:** Ejecuta el archivo descargado para iniciar el asistente de instalación de Windows. Por defecto se instala en modo de usuario (`%LOCALAPPDATA%\Programs\PodcastCraft AI`) sin requerir privilegios de administrador.
 3. **Advertencia de Windows SmartScreen:** Dado que el ejecutable es un proyecto de código abierto independiente que no dispone de un certificado digital corporativo de pago (EV Certificate), Windows Defender SmartScreen mostrará la ventana preventiva *"Windows protegió su equipo"*:
    - Haz clic en el enlace **"Más información"**.
@@ -26,14 +38,14 @@ Este repositorio contiene la **Versión Oficial v1.1.0 (Fase 27 - Release Final 
 Los instaladores para distribuciones GNU/Linux de 64 bits son generados automáticamente en el workflow de CI en dos formatos:
 
 1. **Paquete AppImage (`.AppImage`):**
-   - Descarga el archivo `PodcastCraft-AI-1.1.0-linux-x64.AppImage` desde los Artifacts de GitHub Actions.
+   - Descarga el archivo `PodcastCraft-AI-1.2.0-linux-x64.AppImage` desde los Artifacts de GitHub Actions.
    - Otorga permisos de ejecución desde la terminal:
      ```bash
-     chmod +x PodcastCraft-AI-1.1.0-linux-x64.AppImage
+     chmod +x PodcastCraft-AI-1.2.0-linux-x64.AppImage
      ```
    - Ejecuta la aplicación:
      ```bash
-     ./PodcastCraft-AI-1.1.0-linux-x64.AppImage
+     ./PodcastCraft-AI-1.2.0-linux-x64.AppImage
      ```
    - **Nota sobre dependencias FUSE:** En distribuciones modernas (como Ubuntu 22.04 o Ubuntu 24.04), si el sistema no incluye `libfuse2`, instálalo con:
      ```bash
@@ -41,18 +53,18 @@ Los instaladores para distribuciones GNU/Linux de 64 bits son generados automát
      ```
    - *Alternativa sin FUSE:* Puedes ejecutar la AppImage mediante extracción directa en memoria ejecutando:
      ```bash
-     APPIMAGE_EXTRACT_AND_RUN=1 ./PodcastCraft-AI-1.1.0-linux-x64.AppImage
+     APPIMAGE_EXTRACT_AND_RUN=1 ./PodcastCraft-AI-1.2.0-linux-x64.AppImage
      ```
 
 2. **Paquete Debian (`.deb`):**
-   - Descarga `PodcastCraft-AI-1.1.0-linux-x64.deb`.
+   - Descarga `PodcastCraft-AI-1.2.0-linux-x64.deb`.
    - Instala el paquete y sus dependencias con APT:
      ```bash
-     sudo apt install ./PodcastCraft-AI-1.1.0-linux-x64.deb
+     sudo apt install ./PodcastCraft-AI-1.2.0-linux-x64.deb
      ```
    - O mediante dpkg:
      ```bash
-     sudo dpkg -i PodcastCraft-AI-1.1.0-linux-x64.deb
+     sudo dpkg -i PodcastCraft-AI-1.2.0-linux-x64.deb
      ```
 
 ---
@@ -61,8 +73,8 @@ Los instaladores para distribuciones GNU/Linux de 64 bits son generados automát
 Se generan dos paquetes `.dmg` independientes según la arquitectura del procesador:
 
 1. **Elección del paquete según el chip:**
-   - **Apple Silicon (M1 / M2 / M3 / M4 / arm64):** Descarga `PodcastCraft-AI-1.1.0-mac-arm64.dmg`.
-   - **Intel (x86_64):** Descarga `PodcastCraft-AI-1.1.0-mac-x64.dmg`.
+   - **Apple Silicon (M1 / M2 / M3 / M4 / arm64):** Descarga `PodcastCraft-AI-1.2.0-mac-arm64.dmg`.
+   - **Intel (x86_64):** Descarga `PodcastCraft-AI-1.2.0-mac-x64.dmg`.
 2. **Instalación:**
    - Abre el archivo `.dmg` descargado y arrastra el icono de **PodcastCraft AI** a la carpeta **Aplicaciones** (`/Applications`).
 3. **Advertencia de Apple Gatekeeper (App sin firma ni notarización corporativa):**
@@ -83,9 +95,9 @@ Los instaladores de Linux y macOS se compilan mediante el workflow automatizado 
 2. En la barra lateral izquierda, selecciona el workflow **"Build Multiplatform"**.
 3. Haz clic en **"Run workflow"**, selecciona la rama deseada (p. ej. `ci/multiplatform-build`) y pulsa el botón verde **"Run workflow"** (también se dispara automáticamente al hacer push a dicha rama).
 4. Una vez finalizada la ejecución de los tres jobs (`ubuntu-24.04`, `macos-15` y `macos-15-intel`), desplázate a la sección **Artifacts** en el resumen de la corrida:
-   - `podcastcraft-linux-x64`: Contiene `PodcastCraft-AI-1.1.0-linux-x64.AppImage` y `PodcastCraft-AI-1.1.0-linux-x64.deb`.
-   - `podcastcraft-macos-arm64`: Contiene `PodcastCraft-AI-1.1.0-mac-arm64.dmg`.
-   - `podcastcraft-macos-x64`: Contiene `PodcastCraft-AI-1.1.0-mac-x64.dmg`.
+   - `podcastcraft-linux-x64`: Contiene `PodcastCraft-AI-1.2.0-linux-x64.AppImage` y `PodcastCraft-AI-1.2.0-linux-x64.deb`.
+   - `podcastcraft-macos-arm64`: Contiene `PodcastCraft-AI-1.2.0-mac-arm64.dmg`.
+   - `podcastcraft-macos-x64`: Contiene `PodcastCraft-AI-1.2.0-mac-x64.dmg`.
    - *Los paquetes generados se conservan durante 14 días.*
 
 ---
@@ -153,6 +165,7 @@ Para mantener total transparencia con el usuario y evaluadores:
 5. **Sistema Operativo:** Diseñado y optimizado exclusivamente para **Windows 10 y Windows 11 (64 bits)**.
 6. **Audios extensos:** Archivos de audio continuos de más de 30 a 60 minutos pueden demandar alto consumo de memoria RAM y tiempo de procesamiento durante la decodificación de forma de onda.
 7. **Nivel de servicio de IA:** La integración con Google Gemini opera bajo la cuota del nivel de desarrollo / gratuito (Free Tier), sujeta a los límites de peticiones por minuto de Google AI Studio.
+8. En la prueba automática de Linux (.deb) y macOS, la app necesitó cierre forzado al terminarla con la señal SIGTERM; el cierre normal (cerrar la ventana o Cmd+Q) no se ha verificado en esos sistemas.
 
 ---
 
